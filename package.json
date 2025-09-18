@@ -3,9 +3,11 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "vite build", 
     "preview": "wrangler pages dev",
     "deploy": "npm run build && wrangler pages deploy",
+    "pages:build": "vite build",
+    "pages:dev": "wrangler pages dev dist --ip 0.0.0.0 --port 8788",
     "cf-typegen": "wrangler types --env-interface CloudflareBindings"
   },
   "dependencies": {
