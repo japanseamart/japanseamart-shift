@@ -1,8 +1,14 @@
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { serveStatic } from 'hono/cloudflare-workers'
+import { getCookie, setCookie } from 'hono/cookie'
 
 // 型定義
+type AdminAuth = {
+  password: string
+  created_at: string
+  updated_at: string
+}
 type Store = {
   id: number
   name: string
@@ -69,6 +75,27 @@ let employees: Employee[] = [
 let shifts: Shift[] = []
 let shiftRequests: ShiftRequest[] = []
 
+// 管理者認証データ
+let adminAuth: AdminAuth = {
+  password: 'admin123', // デフォルトパスワード（初回設定時に変更可能）
+  created_at: new Date().toISOString(),
+  updated_at: new Date().toISOString()
+}
+
+// アクティブなセッション
+let activeSessions: Set<string> = new Set()
+
+// セッション生成関数
+const generateSession = (): string => {
+  return Math.random().toString(36).substring(2) + Date.now().toString(36)
+}
+
+// 認証チェック関数
+const isAuthenticated = (c: any): boolean => {
+  const session = getCookie(c, 'admin_session')
+  return session ? activeSessions.has(session) : false
+}
+
 // HTMLテンプレート作成関数
 const createHtmlTemplate = (title: string, bodyContent: string) => `
 <!DOCTYPE html>
@@ -131,8 +158,114 @@ const createHtmlTemplate = (title: string, bodyContent: string) => `
 </body>
 </html>`
 
+// ログイン画面
+app.get('/login', (c) => {
+  const bodyContent = `
+    <div id="app" v-cloak class="min-h-screen bg-gray-100 flex items-center justify-center">
+      <div class="max-w-md w-full bg-white rounded-lg shadow-lg p-8">
+        <div class="text-center mb-8">
+          <i class="fas fa-shield-alt text-blue-600 text-4xl mb-4"></i>
+          <h1 class="text-2xl font-bold text-gray-800">管理者ログイン</h1>
+          <p class="text-gray-600 mt-2">シフト管理システム</p>
+        </div>
+
+        <form @submit.prevent="login">
+          <div class="mb-6">
+            <label class="block text-gray-700 text-sm font-bold mb-2">
+              <i class="fas fa-lock mr-2"></i>パスワード
+            </label>
+            <input 
+              v-model="password" 
+              type="password" 
+              class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
+              placeholder="パスワードを入力してください"
+              required
+            >
+          </div>
+
+          <div v-if="errorMessage" class="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded">
+            <i class="fas fa-exclamation-triangle mr-2"></i>{{ errorMessage }}
+          </div>
+
+          <button 
+            type="submit" 
+            :disabled="loading"
+            class="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-bold py-2 px-4 rounded-lg transition duration-200"
+          >
+            <i class="fas fa-sign-in-alt mr-2"></i>
+            <span v-if="loading">ログイン中...</span>
+            <span v-else>ログイン</span>
+          </button>
+        </form>
+
+        <div class="mt-6 text-center">
+          <a href="/employee" class="text-blue-600 hover:text-blue-800 text-sm">
+            <i class="fas fa-users mr-1"></i>従業員画面へ
+          </a>
+          <span class="mx-2 text-gray-400">|</span>
+          <a href="/request" class="text-blue-600 hover:text-blue-800 text-sm">
+            <i class="fas fa-clipboard-list mr-1"></i>シフト希望画面へ
+          </a>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      const { createApp } = Vue
+      createApp({
+        data() {
+          return {
+            password: '',
+            loading: false,
+            errorMessage: ''
+          }
+        },
+        methods: {
+          async login() {
+            if (!this.password) {
+              this.errorMessage = 'パスワードを入力してください'
+              return
+            }
+
+            this.loading = true
+            this.errorMessage = ''
+
+            try {
+              const response = await fetch('/api/auth/login', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ password: this.password })
+              })
+
+              const result = await response.json()
+
+              if (result.success) {
+                window.location.href = '/'
+              } else {
+                this.errorMessage = result.message || 'ログインに失敗しました'
+              }
+            } catch (error) {
+              this.errorMessage = 'ネットワークエラーが発生しました'
+            } finally {
+              this.loading = false
+            }
+          }
+        }
+      }).mount('#app')
+    </script>
+  `
+  
+  return c.html(createHtmlTemplate('管理者ログイン - シフト管理システム', bodyContent))
+})
+
 // メインページ（管理者用）
 app.get('/', (c) => {
+  // 認証チェック
+  if (!isAuthenticated(c)) {
+    return c.redirect('/login')
+  }
   const bodyContent = `
     <div id="app" v-cloak>
       <!-- ヘッダー -->
@@ -145,9 +278,27 @@ app.get('/', (c) => {
             </h1>
             <p class="text-blue-200">{{ selectedStore ? selectedStore.name : '店舗を選択してください' }}</p>
           </div>
-          <div class="text-right">
-            <p class="text-sm">{{ currentDate }}</p>
-            <p class="text-xs text-blue-200">7店舗対応版</p>
+          <div class="flex items-center space-x-4">
+            <div class="text-right">
+              <p class="text-sm">{{ currentDate }}</p>
+              <p class="text-xs text-blue-200">管理者モード</p>
+            </div>
+            <div class="flex space-x-2">
+              <button 
+                @click="showPasswordModal = true"
+                class="bg-blue-500 hover:bg-blue-700 px-3 py-1 rounded text-sm"
+                title="パスワード変更"
+              >
+                <i class="fas fa-key"></i>
+              </button>
+              <button 
+                @click="logout"
+                class="bg-red-500 hover:bg-red-700 px-3 py-1 rounded text-sm"
+                title="ログアウト"
+              >
+                <i class="fas fa-sign-out-alt"></i>
+              </button>
+            </div>
           </div>
         </div>
       </header>
@@ -185,6 +336,17 @@ app.get('/', (c) => {
                   ]"
                 >
                   <i class="fas fa-chart-gantt mr-2"></i>ガントチャート
+                </button>
+              </li>
+              <li>
+                <button 
+                  @click="currentView = 'stores'"
+                  :class="[
+                    'w-full text-left p-2 rounded transition-colors',
+                    currentView === 'stores' ? 'bg-blue-100 text-blue-700' : 'hover:bg-gray-50'
+                  ]"
+                >
+                  <i class="fas fa-store mr-2"></i>店舗管理
                 </button>
               </li>
               <li>
@@ -276,6 +438,69 @@ app.get('/', (c) => {
             </div>
           </div>
 
+          <!-- 店舗管理表示 -->
+          <div v-if="currentView === 'stores'" class="space-y-6">
+            <div class="flex justify-between items-center">
+              <h2 class="text-2xl font-bold">店舗管理</h2>
+              <button 
+                @click="openStoreModal()"
+                class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700"
+              >
+                <i class="fas fa-store mr-2"></i>店舗追加
+              </button>
+            </div>
+
+            <div class="bg-white rounded-lg shadow overflow-hidden">
+              <table class="min-w-full">
+                <thead class="bg-gray-50">
+                  <tr>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">ID</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">店舗名</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">住所</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">従業員数</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">作成日</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">操作</th>
+                  </tr>
+                </thead>
+                <tbody class="bg-white divide-y divide-gray-200">
+                  <tr v-for="store in stores" :key="store.id">
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                      {{ store.id }}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                      {{ store.name }}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {{ store.address }}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {{ getStoreEmployeeCount(store.id) }}人
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {{ formatDate(store.created_at) }}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
+                      <button 
+                        @click="openStoreModal(store)"
+                        class="text-blue-600 hover:text-blue-900"
+                      >
+                        <i class="fas fa-edit"></i>
+                      </button>
+                      <button 
+                        @click="deleteStore(store.id)"
+                        class="text-red-600 hover:text-red-900"
+                        :disabled="getStoreEmployeeCount(store.id) > 0"
+                        :title="getStoreEmployeeCount(store.id) > 0 ? '従業員が所属している店舗は削除できません' : ''"
+                      >
+                        <i class="fas fa-trash"></i>
+                      </button>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
           <!-- 従業員管理表示 -->
           <div v-if="currentView === 'employees'" class="space-y-6">
             <div class="flex justify-between items-center">
@@ -346,6 +571,34 @@ app.get('/', (c) => {
             </div>
           </div>
         </main>
+      </div>
+
+      <!-- 店舗追加/編集モーダル -->
+      <div v-if="showStoreModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div class="bg-white p-6 rounded-lg max-w-md w-full mx-4">
+          <h3 class="text-lg font-semibold mb-4">{{ editingStore.id ? '店舗編集' : '店舗追加' }}</h3>
+          
+          <div class="space-y-4">
+            <div>
+              <label class="block text-sm font-medium mb-1">店舗名</label>
+              <input type="text" v-model="editingStore.name" class="w-full border rounded px-3 py-2" placeholder="例：新宿店">
+            </div>
+            
+            <div>
+              <label class="block text-sm font-medium mb-1">住所</label>
+              <input type="text" v-model="editingStore.address" class="w-full border rounded px-3 py-2" placeholder="例：東京都新宿区新宿1-1-1">
+            </div>
+          </div>
+
+          <div class="flex justify-end space-x-2 mt-6">
+            <button @click="showStoreModal = false" class="px-4 py-2 text-gray-600 hover:text-gray-800">
+              キャンセル
+            </button>
+            <button @click="saveStore" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
+              {{ editingStore.id ? '更新' : '追加' }}
+            </button>
+          </div>
+        </div>
       </div>
 
       <!-- 従業員追加/編集モーダル -->
@@ -464,6 +717,10 @@ createApp({
     const selectedStore = ref(null)
     const selectedDate = ref(new Date().toISOString().split('T')[0])
     const currentView = ref('gantt')
+    
+    // 店舗管理
+    const showStoreModal = ref(false)
+    const editingStore = ref({ name: '', address: '' })
     
     // モーダル制御
     const showEmployeeModal = ref(false)
@@ -700,6 +957,58 @@ createApp({
       await loadMonthlyReport()
     })
 
+    // 店舗管理関数
+    const openStoreModal = (store = null) => {
+      editingStore.value = store ? { ...store } : { name: '', address: '' }
+      showStoreModal.value = true
+    }
+
+    const saveStore = async () => {
+      try {
+        if (editingStore.value.id) {
+          await api.put(\`/stores/\${editingStore.value.id}\`, editingStore.value)
+        } else {
+          await api.post('/stores', editingStore.value)
+        }
+        await loadStores()
+        showStoreModal.value = false
+        alert('店舗を保存しました')
+      } catch (error) {
+        alert('保存に失敗しました')
+      }
+    }
+
+    const deleteStore = async (storeId) => {
+      if (getStoreEmployeeCount(storeId) > 0) {
+        alert('従業員が所属している店舗は削除できません')
+        return
+      }
+      if (!confirm('この店舗を削除しますか？')) return
+      try {
+        await api.delete(\`/stores/\${storeId}\`)
+        await loadStores()
+        alert('店舗を削除しました')
+      } catch (error) {
+        alert('削除に失敗しました')
+      }
+    }
+
+    const getStoreEmployeeCount = (storeId) => {
+      return employees.value.filter(emp => emp.store_ids.includes(storeId)).length
+    }
+
+    // 認証関数
+    const logout = async () => {
+      if (confirm('ログアウトしますか？')) {
+        try {
+          await api.post('/auth/logout', {})
+          window.location.href = '/login'
+        } catch (error) {
+          window.location.href = '/login'
+        }
+      }
+    }
+
     return {
       stores,
       employees,
@@ -709,8 +1018,10 @@ createApp({
       currentView,
       showEmployeeModal,
       showShiftModal,
+      showStoreModal,
       editingEmployee,
       editingShift,
+      editingStore,
       monthlyReport,
       timeSlots,
       storeEmployees,
@@ -719,6 +1030,10 @@ createApp({
       openEmployeeModal,
       saveEmployee,
       deleteEmployee,
+      openStoreModal,
+      saveStore,
+      deleteStore,
+      getStoreEmployeeCount,
       openShiftModal,
       saveShift,
       deleteShift,
@@ -728,7 +1043,8 @@ createApp({
       getTimeColorClass,
       getStoreName,
       loadShifts,
-      loadMonthlyReport
+      loadMonthlyReport,
+      logout
     }
   }
 }).mount('#app')`
@@ -749,8 +1065,6 @@ app.get('/employee', (c) => {
           <div class="text-right">
             <p class="text-sm">{{ currentDate }}</p>
             <div class="flex space-x-2 mt-2">
-              <a href="/" class="text-green-200 hover:text-white text-sm">
-                <i class="fas fa-cog mr-1"></i>管理画面
               </a>
               <a href="/request" class="text-green-200 hover:text-white text-sm">
                 <i class="fas fa-paper-plane mr-1"></i>シフト希望
@@ -1002,7 +1316,6 @@ app.get('/request', (c) => {
           <div class="text-right">
             <p class="text-sm">{{ currentDate }}</p>
             <div class="flex space-x-2 mt-2">
-              <a href="/" class="text-purple-200 hover:text-white text-sm">
                 <i class="fas fa-cog mr-1"></i>管理画面
               </a>
               <a href="/employee" class="text-purple-200 hover:text-white text-sm">
@@ -1052,11 +1365,11 @@ app.get('/request', (c) => {
                 <label class="block text-sm font-medium mb-1">時間帯</label>
                 <select v-model="newRequest.time_period" class="w-full border rounded px-3 py-2">
                   <option value="">選択してください</option>
-                  <option value="morning">午前 (4:00-11:00)</option>
-                  <option value="afternoon">午後 (11:00-14:00)</option>
-                  <option value="evening">夕方 (14:00-18:00)</option>
-                  <option value="night">夜 (18:00-23:00)</option>
-                  <option value="allday">終日 (4:00-23:00)</option>
+                  <option value="morning">午前</option>
+                  <option value="afternoon">午後</option>
+                  <option value="evening">夕方</option>
+                  <option value="night">夜</option>
+                  <option value="allday">終日</option>
                 </select>
               </div>
 
@@ -1311,11 +1624,11 @@ createApp({
 
     const getTimePeriodText = (period) => {
       const periods = {
-        'morning': '午前 (4:00-11:00)',
-        'afternoon': '午後 (11:00-14:00)',
-        'evening': '夕方 (14:00-18:00)',
-        'night': '夜 (18:00-23:00)',
-        'allday': '終日 (4:00-23:00)'
+        'morning': '午前',
+        'afternoon': '午後',
+        'evening': '夕方',
+        'night': '夜',
+        'allday': '終日'
       }
       return periods[period] || period
     }
@@ -1367,6 +1680,67 @@ createApp({
 }).mount('#request-app')`
 
 // === API Routes ===
+
+// 認証関連API
+app.post('/api/auth/login', async (c) => {
+  const { password } = await c.req.json()
+  
+  if (password === adminAuth.password) {
+    const sessionId = generateSession()
+    activeSessions.add(sessionId)
+    
+    setCookie(c, 'admin_session', sessionId, {
+      httpOnly: true,
+      maxAge: 24 * 60 * 60 * 1000, // 24時間
+      path: '/'
+    })
+    
+    return c.json({ success: true, message: 'ログイン成功' })
+  } else {
+    return c.json({ success: false, message: 'パスワードが正しくありません' }, 401)
+  }
+})
+
+app.post('/api/auth/logout', (c) => {
+  const session = getCookie(c, 'admin_session')
+  if (session) {
+    activeSessions.delete(session)
+  }
+  
+  setCookie(c, 'admin_session', '', {
+    httpOnly: true,
+    maxAge: 0,
+    path: '/'
+  })
+  
+  return c.json({ success: true, message: 'ログアウトしました' })
+})
+
+app.post('/api/auth/change-password', async (c) => {
+  if (!isAuthenticated(c)) {
+    return c.json({ success: false, message: '認証が必要です' }, 401)
+  }
+  
+  const { currentPassword, newPassword } = await c.req.json()
+  
+  if (currentPassword !== adminAuth.password) {
+    return c.json({ success: false, message: '現在のパスワードが正しくありません' }, 400)
+  }
+  
+  if (!newPassword || newPassword.length < 4) {
+    return c.json({ success: false, message: 'パスワードは4文字以上で設定してください' }, 400)
+  }
+  
+  adminAuth.password = newPassword
+  adminAuth.updated_at = new Date().toISOString()
+  
+  return c.json({ success: true, message: 'パスワードを変更しました' })
+})
+
+app.get('/api/auth/status', (c) => {
+  const isAuth = isAuthenticated(c)
+  return c.json({ authenticated: isAuth })
+})
 
 // 店舗関連API
 app.get('/api/stores', (c) => {

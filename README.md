@@ -74,10 +74,12 @@ shift_requests: id, employee_id, store_id, date, time_period, request_type, stat
 - **データベース**: メモリベース（本番時はCloudflare D1推奨）
 - **UI**: FontAwesome Icons + レスポンシブデザイン
 
-## 🌐 公開URL
-- **管理者画面**: https://3000-ia5l8bc3o57y5kbppmkxu-6532622b.e2b.dev
-- **従業員閲覧**: https://3000-ia5l8bc3o57y5kbppmkxu-6532622b.e2b.dev/employee  
-- **シフト希望**: https://3000-ia5l8bc3o57y5kbppmkxu-6532622b.e2b.dev/request
+## 🌐 公開URL（本番環境）
+- **本番サイト**: https://japanseamart-shift.pages.dev
+- **管理者画面**: https://japanseamart-shift.pages.dev/
+- **従業員閲覧**: https://japanseamart-shift.pages.dev/employee  
+- **シフト希望**: https://japanseamart-shift.pages.dev/request
+- **GitHubリポジトリ**: https://github.com/japanseamart/japanseamart-shift
 
 ## 💰 給与計算機能
 
