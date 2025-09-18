@@ -1,7 +1,6 @@
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { serveStatic } from 'hono/cloudflare-workers'
-import { getCookie, setCookie } from 'hono/cookie'
 
 // 型定義
 type AdminAuth = {
@@ -82,19 +81,8 @@ let adminAuth: AdminAuth = {
   updated_at: new Date().toISOString()
 }
 
-// アクティブなセッション
-let activeSessions: Set<string> = new Set()
-
-// セッション生成関数
-const generateSession = (): string => {
-  return Math.random().toString(36).substring(2) + Date.now().toString(36)
-}
-
-// 認証チェック関数
-const isAuthenticated = (c: any): boolean => {
-  const session = getCookie(c, 'admin_session')
-  return session ? activeSessions.has(session) : false
-}
+// シンプルなセッション管理（開発用）
+let isAdminLoggedIn = false
 
 // HTMLテンプレート作成関数
 const createHtmlTemplate = (title: string, bodyContent: string) => `
@@ -263,7 +251,7 @@ app.get('/login', (c) => {
 // メインページ（管理者用）
 app.get('/', (c) => {
   // 認証チェック
-  if (!isAuthenticated(c)) {
+  if (!isAdminLoggedIn) {
     return c.redirect('/login')
   }
   const bodyContent = `
@@ -966,7 +954,7 @@ createApp({
     const saveStore = async () => {
       try {
         if (editingStore.value.id) {
-          await api.put(\`/stores/\${editingStore.value.id}\`, editingStore.value)
+          await api.put('/stores/' + editingStore.value.id, editingStore.value)
         } else {
           await api.post('/stores', editingStore.value)
         }
@@ -985,7 +973,7 @@ createApp({
       }
       if (!confirm('この店舗を削除しますか？')) return
       try {
-        await api.delete(\`/stores/\${storeId}\`)
+        await api.delete('/stores/' + storeId)
         await loadStores()
         alert('店舗を削除しました')
       } catch (error) {
@@ -1686,15 +1674,7 @@ app.post('/api/auth/login', async (c) => {
   const { password } = await c.req.json()
   
   if (password === adminAuth.password) {
-    const sessionId = generateSession()
-    activeSessions.add(sessionId)
-    
-    setCookie(c, 'admin_session', sessionId, {
-      httpOnly: true,
-      maxAge: 24 * 60 * 60 * 1000, // 24時間
-      path: '/'
-    })
-    
+    isAdminLoggedIn = true
     return c.json({ success: true, message: 'ログイン成功' })
   } else {
     return c.json({ success: false, message: 'パスワードが正しくありません' }, 401)
@@ -1702,22 +1682,12 @@ app.post('/api/auth/login', async (c) => {
 })
 
 app.post('/api/auth/logout', (c) => {
-  const session = getCookie(c, 'admin_session')
-  if (session) {
-    activeSessions.delete(session)
-  }
-  
-  setCookie(c, 'admin_session', '', {
-    httpOnly: true,
-    maxAge: 0,
-    path: '/'
-  })
-  
+  isAdminLoggedIn = false
   return c.json({ success: true, message: 'ログアウトしました' })
 })
 
 app.post('/api/auth/change-password', async (c) => {
-  if (!isAuthenticated(c)) {
+  if (!isAdminLoggedIn) {
     return c.json({ success: false, message: '認証が必要です' }, 401)
   }
   
@@ -1738,8 +1708,7 @@ app.post('/api/auth/change-password', async (c) => {
 })
 
 app.get('/api/auth/status', (c) => {
-  const isAuth = isAuthenticated(c)
-  return c.json({ authenticated: isAuth })
+  return c.json({ authenticated: isAdminLoggedIn })
 })
 
 // 店舗関連API
