@@ -31,6 +31,15 @@ function App() {
 
   const checkSession = async () => {
     try {
+      // ログアウトフラグをチェック（セキュリティ確保のため）
+      const hasLoggedOut = localStorage.getItem('hasLoggedOut');
+      
+      if (hasLoggedOut === 'true') {
+        // ログアウト済みの場合は自動ログイン（セッション復元）をしない
+        setLoading(false);
+        return;
+      }
+      
       const res = await fetch('/api/auth/session', {
         credentials: 'include',
       });
@@ -60,6 +69,10 @@ function App() {
         const data = await res.json();
         setRole(data.role);
         setStoreId(data.storeId);
+        
+        // ログイン成功時にログアウトフラグをクリア
+        localStorage.removeItem('hasLoggedOut');
+        
         return true;
       }
       return false;
@@ -77,6 +90,9 @@ function App() {
       });
       setRole(null);
       setStoreId(null);
+      
+      // セキュリティのため、ログアウトフラグを設定（再ログイン必須にする）
+      localStorage.setItem('hasLoggedOut', 'true');
       
       // 自動ログアウトの場合は通知
       if (auto) {
