@@ -147,6 +147,22 @@ export function initializeDatabase() {
     )
   `);
 
+  // 週次シフト公開管理
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS weekly_publications (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      store_id INTEGER NOT NULL,
+      week_start_date TEXT NOT NULL,
+      is_published INTEGER DEFAULT 0,
+      published_at TEXT,
+      published_by TEXT,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (store_id) REFERENCES stores(id) ON DELETE CASCADE,
+      UNIQUE(store_id, week_start_date)
+    )
+  `);
+
   // 初期データ投入
   insertInitialData();
 }

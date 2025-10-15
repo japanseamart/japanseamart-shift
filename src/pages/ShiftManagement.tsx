@@ -31,6 +31,8 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
   const [showShiftForm, setShowShiftForm] = useState(false);
   const [totalLaborCost, setTotalLaborCost] = useState(0);
   const [saving, setSaving] = useState(false);
+  const [isPublished, setIsPublished] = useState(false);
+  const [autoFilling, setAutoFilling] = useState(false);
 
   useEffect(() => {
     fetchStores();
@@ -42,6 +44,7 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
       fetchStore(selectedStoreId);
       fetchEmployees(selectedStoreId);
       fetchShifts();
+      fetchPublicationStatus();
     }
   }, [selectedStoreId, targetWeekStart]);
 
@@ -105,6 +108,86 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
       setShifts(data);
     } catch (error) {
       console.error('シフト取得エラー:', error);
+    }
+  };
+
+  const fetchPublicationStatus = async () => {
+    if (!selectedStoreId) return;
+    
+    try {
+      const res = await fetch(
+        `/api/weekly-publications?store_id=${selectedStoreId}&week_start_date=${format(targetWeekStart, 'yyyy-MM-dd')}`
+      );
+      const data = await res.json();
+      setIsPublished(data.length > 0 && data[0].is_published === 1);
+    } catch (error) {
+      console.error('公開状態取得エラー:', error);
+    }
+  };
+
+  const handleTogglePublication = async () => {
+    if (!selectedStoreId) return;
+    
+    const newStatus = !isPublished;
+    const confirmMessage = newStatus
+      ? 'この週のシフトを従業員に公開しますか？'
+      : 'この週のシフトを非公開にしますか？';
+    
+    if (!confirm(confirmMessage)) return;
+    
+    try {
+      await fetch('/api/weekly-publications', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          store_id: selectedStoreId,
+          week_start_date: format(targetWeekStart, 'yyyy-MM-dd'),
+          is_published: newStatus
+        })
+      });
+      
+      setIsPublished(newStatus);
+      alert(newStatus ? 'シフトを公開しました' : 'シフトを非公開にしました');
+    } catch (error) {
+      console.error('公開設定エラー:', error);
+      alert('公開設定に失敗しました');
+    }
+  };
+
+  const handleAutoFillRequests = async () => {
+    if (!selectedStoreId) return;
+    
+    if (!confirm('この週のシフト希望を自動的にシフトに反映しますか？\n既存のシフトは保持され、新しいシフトのみが追加されます。')) {
+      return;
+    }
+    
+    setAutoFilling(true);
+    
+    try {
+      const res = await fetch('/api/shifts/auto-fill-requests', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          store_id: selectedStoreId,
+          week_start_date: format(targetWeekStart, 'yyyy-MM-dd')
+        })
+      });
+      
+      const result = await res.json();
+      
+      if (result.success) {
+        alert(`シフト希望の自動反映が完了しました\n作成されたシフト: ${result.createdCount}件 / 希望総数: ${result.totalRequests}件`);
+        fetchShifts();
+      } else {
+        alert('シフト希望の自動反映に失敗しました');
+      }
+    } catch (error) {
+      console.error('自動反映エラー:', error);
+      alert('シフト希望の自動反映に失敗しました');
+    } finally {
+      setAutoFilling(false);
     }
   };
 
@@ -256,12 +339,32 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
       <div className="space-y-6">
         <div className="flex justify-between items-center">
           <h1 className="text-2xl font-bold text-gray-800">シフト管理</h1>
-          <button
-            onClick={() => window.print()}
-            className="btn-secondary no-print"
-          >
-            🖨️ 印刷
-          </button>
+          <div className="flex gap-2 no-print">
+            <button
+              onClick={handleAutoFillRequests}
+              disabled={autoFilling}
+              className="btn-primary disabled:opacity-50"
+              title="シフト希望を自動的にシフトに反映します"
+            >
+              {autoFilling ? '反映中...' : '✨ シフト希望を自動反映'}
+            </button>
+            <button
+              onClick={handleTogglePublication}
+              className={`px-4 py-2 rounded-lg font-medium transition ${
+                isPublished
+                  ? 'bg-yellow-500 hover:bg-yellow-600 text-white'
+                  : 'bg-green-500 hover:bg-green-600 text-white'
+              }`}
+            >
+              {isPublished ? '🔓 公開中 (非公開にする)' : '🔒 未公開 (公開する)'}
+            </button>
+            <button
+              onClick={() => window.print()}
+              className="btn-secondary"
+            >
+              🖨️ 印刷
+            </button>
+          </div>
         </div>
 
         {/* コントロールパネル */}
@@ -328,6 +431,35 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
                   </div>
                 )}
               </div>
+            </div>
+          </div>
+
+          {/* 公開状態インジケーター */}
+          <div className={`mt-4 p-3 rounded-lg border-2 no-print ${
+            isPublished
+              ? 'bg-green-50 border-green-300'
+              : 'bg-yellow-50 border-yellow-300'
+          }`}>
+            <div className="flex items-center gap-2">
+              {isPublished ? (
+                <>
+                  <svg className="w-5 h-5 text-green-600" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M10 2a5 5 0 00-5 5v2a2 2 0 00-2 2v5a2 2 0 002 2h10a2 2 0 002-2v-5a2 2 0 00-2-2H7V7a3 3 0 015.905-.75 1 1 0 001.937-.5A5.002 5.002 0 0010 2z" />
+                  </svg>
+                  <span className="text-sm font-medium text-green-800">
+                    この週のシフトは従業員に<strong>公開されています</strong>
+                  </span>
+                </>
+              ) : (
+                <>
+                  <svg className="w-5 h-5 text-yellow-600" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
+                  </svg>
+                  <span className="text-sm font-medium text-yellow-800">
+                    この週のシフトは<strong>未公開</strong>です（従業員は閲覧できません）
+                  </span>
+                </>
+              )}
             </div>
           </div>
         </div>
