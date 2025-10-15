@@ -24,6 +24,8 @@ export default function ShiftRequestManagement({ role, storeId, onLogout }: Shif
   const [submissionStatuses, setSubmissionStatuses] = useState<EmployeeSubmissionStatus[]>([]);
   const [loading, setLoading] = useState(false);
   const [deadline, setDeadline] = useState<string | null>(null);
+  const [isEditingDeadline, setIsEditingDeadline] = useState(false);
+  const [deadlineInput, setDeadlineInput] = useState('');
 
   useEffect(() => {
     fetchStores();
@@ -114,11 +116,13 @@ export default function ShiftRequestManagement({ role, storeId, onLogout }: Shif
     }
   };
 
-  const handleSetDeadline = async () => {
-    if (!selectedStoreId) return;
+  const handleOpenDeadlineEdit = () => {
+    setDeadlineInput(deadline || format(new Date(), 'yyyy-MM-dd'));
+    setIsEditingDeadline(true);
+  };
 
-    const deadlineInput = prompt('シフト希望提出の締切日を入力してください (例: 2025-10-20)');
-    if (!deadlineInput) return;
+  const handleSaveDeadline = async () => {
+    if (!selectedStoreId || !deadlineInput) return;
 
     try {
       const targetMonth = format(targetWeekStart, 'yyyy-MM');
@@ -149,7 +153,7 @@ export default function ShiftRequestManagement({ role, storeId, onLogout }: Shif
         });
       }
 
-      alert('締切を設定しました');
+      setIsEditingDeadline(false);
       fetchDeadline();
     } catch (error) {
       console.error('締切設定エラー:', error);
@@ -214,17 +218,40 @@ export default function ShiftRequestManagement({ role, storeId, onLogout }: Shif
             {/* 締切設定 */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">提出締切</label>
-              <div className="flex gap-2">
-                <div className="flex-1 px-3 py-2 bg-gray-50 rounded-lg text-sm">
-                  {deadline ? format(new Date(deadline), 'yyyy/MM/dd', { locale: ja }) : '未設定'}
+              {!isEditingDeadline ? (
+                <div className="flex gap-2">
+                  <div className="flex-1 px-3 py-2 bg-gray-50 rounded-lg text-sm">
+                    {deadline ? format(new Date(deadline), 'yyyy年M月d日(E)', { locale: ja }) : '未設定'}
+                  </div>
+                  <button
+                    onClick={handleOpenDeadlineEdit}
+                    className="btn-secondary whitespace-nowrap"
+                  >
+                    設定
+                  </button>
                 </div>
-                <button
-                  onClick={handleSetDeadline}
-                  className="btn-secondary"
-                >
-                  変更
-                </button>
-              </div>
+              ) : (
+                <div className="flex gap-2">
+                  <input
+                    type="date"
+                    value={deadlineInput}
+                    onChange={(e) => setDeadlineInput(e.target.value)}
+                    className="input-field flex-1"
+                  />
+                  <button
+                    onClick={handleSaveDeadline}
+                    className="btn-primary whitespace-nowrap"
+                  >
+                    保存
+                  </button>
+                  <button
+                    onClick={() => setIsEditingDeadline(false)}
+                    className="btn-secondary whitespace-nowrap"
+                  >
+                    キャンセル
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </div>

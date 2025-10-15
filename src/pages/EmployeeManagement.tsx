@@ -12,7 +12,6 @@ interface EmployeeManagementProps {
 export default function EmployeeManagement({ role, storeId, onLogout }: EmployeeManagementProps) {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [stores, setStores] = useState<Store[]>([]);
-  const [filterStoreId, setFilterStoreId] = useState<number | string>('all');
   const [sortBy, setSortBy] = useState<'store' | 'wage'>('store');
   const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
   const [isCreating, setIsCreating] = useState(false);
@@ -225,12 +224,8 @@ export default function EmployeeManagement({ role, storeId, onLogout }: Employee
     }
   };
 
-  // フィルタリング・ソート
+  // ソート（店舗管理者は既にバックエンドでフィルタ済み）
   const filteredEmployees = employees
-    .filter(emp => {
-      if (filterStoreId === 'all') return true;
-      return emp.store_id === Number(filterStoreId);
-    })
     .sort((a, b) => {
       if (sortBy === 'store') {
         return a.store_id - b.store_id;
@@ -366,22 +361,17 @@ export default function EmployeeManagement({ role, storeId, onLogout }: Employee
           </div>
         )}
 
-        {/* フィルター・ソート */}
+        {/* ソート（店舗管理者の場合はフィルター不要） */}
         <div className="card">
           <div className="flex flex-col md:flex-row gap-4">
-            <div className="flex-1">
-              <label className="block text-sm font-medium text-gray-700 mb-2">店舗でフィルター</label>
-              <select
-                value={filterStoreId}
-                onChange={(e) => setFilterStoreId(e.target.value === 'all' ? 'all' : Number(e.target.value))}
-                className="input-field"
-              >
-                <option value="all">全店舗</option>
-                {stores.map(store => (
-                  <option key={store.id} value={store.id}>{store.name}</option>
-                ))}
-              </select>
-            </div>
+            {role === 'admin' && (
+              <div className="flex-1">
+                <label className="block text-sm font-medium text-gray-700 mb-2">表示店舗</label>
+                <div className="px-3 py-2 bg-gray-50 rounded-lg text-sm text-gray-700">
+                  全店舗表示中
+                </div>
+              </div>
+            )}
             <div className="flex-1">
               <label className="block text-sm font-medium text-gray-700 mb-2">並び替え</label>
               <select
