@@ -158,7 +158,11 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
   const handleAutoFillRequests = async () => {
     if (!selectedStoreId) return;
     
-    if (!confirm('この週のシフト希望を自動的にシフトに反映しますか？\n既存のシフトは保持され、新しいシフトのみが追加されます。')) {
+    // 表示中の週の期間を明示
+    const weekEnd = endOfWeek(targetWeekStart, { locale: ja });
+    const weekPeriod = `${format(targetWeekStart, 'M月d日', { locale: ja })}〜${format(weekEnd, 'M月d日', { locale: ja })}`;
+    
+    if (!confirm(`【表示中の週のみ反映】\n対象期間: ${weekPeriod}\n\nこの週のシフト希望を自動的にシフトに反映しますか？\n既存のシフトは保持され、新しいシフトのみが追加されます。`)) {
       return;
     }
     
@@ -178,7 +182,7 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
       const result = await res.json();
       
       if (result.success) {
-        alert(`シフト希望の自動反映が完了しました\n作成されたシフト: ${result.createdCount}件 / 希望総数: ${result.totalRequests}件`);
+        alert(`【${weekPeriod}】シフト希望の自動反映が完了しました\n作成されたシフト: ${result.createdCount}件 / 希望総数: ${result.totalRequests}件`);
         fetchShifts();
       } else {
         alert('シフト希望の自動反映に失敗しました');
@@ -344,9 +348,9 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
               onClick={handleAutoFillRequests}
               disabled={autoFilling}
               className="btn-primary disabled:opacity-50"
-              title="シフト希望を自動的にシフトに反映します"
+              title="表示中の週のシフト希望のみを自動的にシフトに反映します"
             >
-              {autoFilling ? '反映中...' : '✨ シフト希望を自動反映'}
+              {autoFilling ? '反映中...' : '✨ シフト希望を自動反映（表示週のみ）'}
             </button>
             <button
               onClick={handleTogglePublication}
