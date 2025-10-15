@@ -159,8 +159,9 @@ export default function EmployeeShiftView() {
 
         {/* 店舗選択と週選択 */}
         <div className="card">
-          <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
-            <div className="w-full md:w-auto">
+          <div className="flex flex-col gap-4">
+            {/* 店舗選択 */}
+            <div className="w-full md:w-64">
               <label className="block text-sm font-medium text-gray-700 mb-2">店舗選択</label>
               <select
                 value={selectedStoreId}
@@ -173,16 +174,9 @@ export default function EmployeeShiftView() {
               </select>
             </div>
 
-            <div className="flex items-center gap-4">
-              <button
-                onClick={() => setCurrentWeek(subWeeks(currentWeek, 1))}
-                className="p-2 rounded-lg hover:bg-gray-100"
-              >
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                </svg>
-              </button>
-              <div className="text-center min-w-[200px]">
+            {/* 週選択 */}
+            <div className="flex flex-col md:flex-row items-center gap-4">
+              <div className="text-center flex-1">
                 <div className="text-lg font-bold text-gray-800">
                   {format(weekStart, 'M月d日', { locale: ja })} - {format(weekEnd, 'M月d日', { locale: ja })}
                 </div>
@@ -190,22 +184,34 @@ export default function EmployeeShiftView() {
                   {format(currentWeek, 'yyyy年', { locale: ja })}
                 </div>
               </div>
-              <button
-                onClick={() => setCurrentWeek(addWeeks(currentWeek, 1))}
-                className="p-2 rounded-lg hover:bg-gray-100"
-              >
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                </svg>
-              </button>
+              
+              <div className="flex gap-2 no-print">
+                <button
+                  onClick={() => setCurrentWeek(subWeeks(currentWeek, 1))}
+                  className="btn-secondary flex items-center gap-1 px-4 py-2"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                  </svg>
+                  前週
+                </button>
+                <button
+                  onClick={() => setCurrentWeek(new Date())}
+                  className="btn-primary px-6 py-2"
+                >
+                  今週
+                </button>
+                <button
+                  onClick={() => setCurrentWeek(addWeeks(currentWeek, 1))}
+                  className="btn-secondary flex items-center gap-1 px-4 py-2"
+                >
+                  次週
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                </button>
+              </div>
             </div>
-
-            <button
-              onClick={() => setCurrentWeek(new Date())}
-              className="btn-secondary"
-            >
-              今週
-            </button>
           </div>
         </div>
 
