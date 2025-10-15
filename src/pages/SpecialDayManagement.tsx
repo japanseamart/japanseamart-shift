@@ -25,7 +25,7 @@ export default function SpecialDayManagement({ role, onLogout }: SpecialDayManag
 
   const fetchSpecialDays = async () => {
     try {
-      const res = await fetch('http://localhost:3001/api/special-days');
+      const res = await fetch('/api/special-days');
       const data = await res.json();
       setSpecialDays(data);
     } catch (error) {
@@ -37,7 +37,7 @@ export default function SpecialDayManagement({ role, onLogout }: SpecialDayManag
     e.preventDefault();
 
     try {
-      const res = await fetch('http://localhost:3001/api/special-days', {
+      const res = await fetch('/api/special-days', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -61,7 +61,7 @@ export default function SpecialDayManagement({ role, onLogout }: SpecialDayManag
     if (!confirm('この特別日を削除してもよろしいですか？')) return;
 
     try {
-      const res = await fetch(`http://localhost:3001/api/special-days/${id}`, {
+      const res = await fetch(`/api/special-days/${id}`, {
         method: 'DELETE',
         credentials: 'include',
       });

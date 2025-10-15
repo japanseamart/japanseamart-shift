@@ -13,6 +13,8 @@ import ShiftManagement from './pages/ShiftManagement';
 import ShiftRequestManagement from './pages/ShiftRequestManagement';
 import MonthlyReport from './pages/MonthlyReport';
 import SpecialDayManagement from './pages/SpecialDayManagement';
+import AnnouncementManagement from './pages/AnnouncementManagement';
+import PasswordManagement from './pages/PasswordManagement';
 
 function App() {
   const [role, setRole] = useState<Role | null>(null);
@@ -26,7 +28,7 @@ function App() {
 
   const checkSession = async () => {
     try {
-      const res = await fetch('http://localhost:3001/api/auth/session', {
+      const res = await fetch('/api/auth/session', {
         credentials: 'include',
       });
       const data = await res.json();
@@ -41,7 +43,7 @@ function App() {
 
   const handleLogin = async (password: string) => {
     try {
-      const res = await fetch('http://localhost:3001/api/auth/login', {
+      const res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -63,7 +65,7 @@ function App() {
 
   const handleLogout = async () => {
     try {
-      await fetch('http://localhost:3001/api/auth/logout', {
+      await fetch('/api/auth/logout', {
         method: 'POST',
         credentials: 'include',
       });
@@ -163,6 +165,26 @@ function App() {
           element={
             role ? (
               <SpecialDayManagement role={role} onLogout={handleLogout} />
+            ) : (
+              <Navigate to="/admin/login" replace />
+            )
+          }
+        />
+        <Route
+          path="/admin/announcements"
+          element={
+            role ? (
+              <AnnouncementManagement role={role} onLogout={handleLogout} />
+            ) : (
+              <Navigate to="/admin/login" replace />
+            )
+          }
+        />
+        <Route
+          path="/admin/passwords"
+          element={
+            role ? (
+              <PasswordManagement role={role} storeId={storeId} onLogout={handleLogout} />
             ) : (
               <Navigate to="/admin/login" replace />
             )

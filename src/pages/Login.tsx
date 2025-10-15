@@ -35,7 +35,7 @@ export default function Login({ onLogin }: LoginProps) {
         <div className="absolute bottom-0 right-0 w-96 h-96 bg-fish-orange rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-pulse delay-1000"></div>
       </div>
 
-      <div className="card max-w-md w-full mx-4 relative z-10 shadow-2xl">
+      <div className="card max-w-md w-full mx-4 relative z-50 shadow-2xl">
         <div className="text-center mb-8">
           <div className="inline-block p-4 bg-ocean-100 rounded-full mb-4">
             <svg className="w-16 h-16 text-ocean-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -53,6 +53,7 @@ export default function Login({ onLogin }: LoginProps) {
             </label>
             <input
               id="password"
+              name="password"
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
@@ -60,6 +61,8 @@ export default function Login({ onLogin }: LoginProps) {
               placeholder="パスワードを入力"
               required
               autoFocus
+              autoComplete="current-password"
+              disabled={loading}
             />
           </div>
 

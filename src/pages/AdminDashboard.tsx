@@ -13,19 +13,19 @@ export default function AdminDashboard({ role, storeId, onLogout }: AdminDashboa
   const navigate = useNavigate();
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [stores, setStores] = useState<Store[]>([]);
-  const [pendingRequests, setPendingRequests] = useState<ShiftRequest[]>([]);
+  const [unsubmittedCount, setUnsubmittedCount] = useState(0);
   const [newAnnouncement, setNewAnnouncement] = useState({ title: '', content: '' });
   const [showAnnouncementForm, setShowAnnouncementForm] = useState(false);
 
   useEffect(() => {
     fetchAnnouncements();
     fetchStores();
-    fetchPendingRequests();
+    fetchUnsubmittedCount();
   }, []);
 
   const fetchAnnouncements = async () => {
     try {
-      const res = await fetch('http://localhost:3001/api/announcements');
+      const res = await fetch('/api/announcements');
       const data = await res.json();
       setAnnouncements(data);
     } catch (error) {
@@ -35,7 +35,7 @@ export default function AdminDashboard({ role, storeId, onLogout }: AdminDashboa
 
   const fetchStores = async () => {
     try {
-      const res = await fetch('http://localhost:3001/api/stores');
+      const res = await fetch('/api/stores');
       const data = await res.json();
       setStores(data);
     } catch (error) {
@@ -43,17 +43,17 @@ export default function AdminDashboard({ role, storeId, onLogout }: AdminDashboa
     }
   };
 
-  const fetchPendingRequests = async () => {
+  const fetchUnsubmittedCount = async () => {
     try {
-      let url = 'http://localhost:3001/api/shift-requests?status=pending';
+      let url = '/api/submission-status/unsubmitted-count';
       if (role === 'store_manager' && storeId) {
-        url += `&store_id=${storeId}`;
+        url += `?store_id=${storeId}`;
       }
-      const res = await fetch(url);
+      const res = await fetch(url, { credentials: 'include' });
       const data = await res.json();
-      setPendingRequests(data);
+      setUnsubmittedCount(data.count || 0);
     } catch (error) {
-      console.error('シフト希望取得エラー:', error);
+      console.error('未提出者数取得エラー:', error);
     }
   };
 
@@ -61,7 +61,7 @@ export default function AdminDashboard({ role, storeId, onLogout }: AdminDashboa
     e.preventDefault();
     
     try {
-      const res = await fetch('http://localhost:3001/api/announcements', {
+      const res = await fetch('/api/announcements', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -114,9 +114,9 @@ export default function AdminDashboard({ role, storeId, onLogout }: AdminDashboa
             onClick={() => navigate('/admin/shift-requests')}
             className="card hover:shadow-xl transition-shadow p-6 text-left group relative"
           >
-            {pendingRequests.length > 0 && (
+            {unsubmittedCount > 0 && (
               <div className="absolute top-4 right-4 bg-fish-red text-white text-xs font-bold px-2 py-1 rounded-full">
-                {pendingRequests.length}
+                {unsubmittedCount}
               </div>
             )}
             <div className="flex items-center justify-between mb-4">
@@ -127,8 +127,8 @@ export default function AdminDashboard({ role, storeId, onLogout }: AdminDashboa
               </div>
               <span className="text-2xl font-bold text-fish-orange">→</span>
             </div>
-            <h3 className="text-lg font-semibold text-gray-800 mb-1">シフト希望管理</h3>
-            <p className="text-sm text-gray-600">承認待ち: {pendingRequests.length}件</p>
+            <h3 className="text-lg font-semibold text-gray-800 mb-1">シフト提出状況</h3>
+            <p className="text-sm text-gray-600">未提出者: {unsubmittedCount}名</p>
           </button>
 
           <button

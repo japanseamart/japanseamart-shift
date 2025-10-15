@@ -27,7 +27,7 @@ export default function EmployeeShiftView() {
 
   const fetchStores = async () => {
     try {
-      const res = await fetch('http://localhost:3001/api/stores');
+      const res = await fetch('/api/stores');
       const data = await res.json();
       setStores(data);
     } catch (error) {
@@ -37,7 +37,7 @@ export default function EmployeeShiftView() {
 
   const fetchAnnouncements = async () => {
     try {
-      const res = await fetch('http://localhost:3001/api/announcements');
+      const res = await fetch('/api/announcements');
       const data = await res.json();
       setAnnouncements(data);
     } catch (error) {
@@ -52,7 +52,7 @@ export default function EmployeeShiftView() {
       const weekEnd = endOfWeek(currentWeek, { weekStartsOn: 1 });
       
       const res = await fetch(
-        `http://localhost:3001/api/shifts?store_id=${selectedStoreId}&start_date=${format(weekStart, 'yyyy-MM-dd')}&end_date=${format(weekEnd, 'yyyy-MM-dd')}`
+        `/api/shifts?store_id=${selectedStoreId}&start_date=${format(weekStart, 'yyyy-MM-dd')}&end_date=${format(weekEnd, 'yyyy-MM-dd')}`
       );
       const data = await res.json();
       setShifts(data);
@@ -65,7 +65,7 @@ export default function EmployeeShiftView() {
 
   const fetchEmployees = async () => {
     try {
-      const res = await fetch(`http://localhost:3001/api/employees?store_id=${selectedStoreId}`);
+      const res = await fetch(`/api/employees?store_id=${selectedStoreId}`);
       const data = await res.json();
       setEmployees(data);
     } catch (error) {
@@ -102,10 +102,16 @@ export default function EmployeeShiftView() {
               </div>
             </div>
             <div className="flex gap-2">
-              <Link to="/employee/request" className="btn-primary text-sm">
+              <button
+                onClick={() => window.print()}
+                className="btn-secondary text-sm no-print"
+              >
+                🖨️ 印刷
+              </button>
+              <Link to="/employee/request" className="btn-primary text-sm no-print">
                 シフト希望提出
               </Link>
-              <Link to="/admin/login" className="btn-secondary text-sm">
+              <Link to="/admin/login" className="btn-secondary text-sm no-print">
                 管理者ログイン
               </Link>
             </div>

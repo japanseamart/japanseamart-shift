@@ -34,7 +34,7 @@ export default function StoreManagement({ role, onLogout }: StoreManagementProps
 
   const fetchStores = async () => {
     try {
-      const res = await fetch('http://localhost:3001/api/stores');
+      const res = await fetch('/api/stores');
       const data = await res.json();
       setStores(data);
     } catch (error) {
@@ -47,8 +47,8 @@ export default function StoreManagement({ role, onLogout }: StoreManagementProps
 
     try {
       const url = editingStore
-        ? `http://localhost:3001/api/stores/${editingStore.id}`
-        : 'http://localhost:3001/api/stores';
+        ? `/api/stores/${editingStore.id}`
+        : '/api/stores';
       
       const method = editingStore ? 'PUT' : 'POST';
 
@@ -93,7 +93,7 @@ export default function StoreManagement({ role, onLogout }: StoreManagementProps
     if (!confirm('この店舗を削除してもよろしいですか？')) return;
 
     try {
-      const res = await fetch(`http://localhost:3001/api/stores/${id}`, {
+      const res = await fetch(`/api/stores/${id}`, {
         method: 'DELETE',
         credentials: 'include',
       });

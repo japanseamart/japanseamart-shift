@@ -40,10 +40,86 @@ body {
   }
   
   .input-field {
-    @apply w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-ocean-500;
+    @apply w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-ocean-500 bg-white text-gray-900;
+    pointer-events: auto !important;
+    user-select: text !important;
   }
   
   .gantt-cell {
     @apply border border-gray-200 min-h-[60px] relative;
+  }
+}
+
+/* 印刷用スタイル */
+@media print {
+  /* ヘッダーとサイドバーを非表示 */
+  header, aside, nav, .no-print {
+    display: none !important;
+  }
+
+  /* メインコンテンツを全幅に */
+  main {
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  /* ページ設定 */
+  @page {
+    size: A4 portrait;
+    margin: 10mm;
+  }
+
+  /* 改ページ制御 */
+  .page-break {
+    page-break-after: always;
+  }
+
+  .avoid-break {
+    page-break-inside: avoid;
+  }
+
+  /* カラー印刷対応 */
+  .card {
+    box-shadow: none !important;
+    border: 1px solid #e5e7eb !important;
+  }
+
+  /* ボタンを非表示 */
+  button {
+    display: none !important;
+  }
+
+  /* リンクの下線を削除 */
+  a {
+    text-decoration: none !important;
+  }
+
+  /* テーブルを見やすく */
+  table {
+    border-collapse: collapse !important;
+  }
+
+  th, td {
+    border: 1px solid #d1d5db !important;
+    padding: 4px 8px !important;
+  }
+
+  /* 給与情報を非表示（data-salary属性がある要素） */
+  [data-salary] {
+    display: none !important;
+  }
+
+  /* フォントサイズ調整 */
+  body {
+    font-size: 10pt !important;
+  }
+
+  h1 {
+    font-size: 16pt !important;
+  }
+
+  h2 {
+    font-size: 14pt !important;
   }
 }
