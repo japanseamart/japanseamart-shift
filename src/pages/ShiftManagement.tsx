@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { format, addWeeks, startOfWeek, endOfWeek, eachDayOfInterval, parseISO, differenceInMinutes } from 'date-fns';
 import { ja } from 'date-fns/locale';
-import { Role, Employee, Shift, Store, SpecialDay } from '../types';
+import { Role, Employee, Shift, Store, SpecialDay, ShiftRequest } from '../types';
 import AdminLayout from '../components/AdminLayout';
 
 interface ShiftManagementProps {
@@ -25,6 +25,7 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
   const [selectedStore, setSelectedStore] = useState<Store | null>(null);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [shifts, setShifts] = useState<Shift[]>([]);
+  const [shiftRequests, setShiftRequests] = useState<ShiftRequest[]>([]);
   const [specialDays, setSpecialDays] = useState<SpecialDay[]>([]);
   const [targetWeekStart, setTargetWeekStart] = useState(startOfWeek(new Date(), { locale: ja }));
   const [editingShift, setEditingShift] = useState<ShiftInput | null>(null);
@@ -33,6 +34,7 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
   const [saving, setSaving] = useState(false);
   const [isPublished, setIsPublished] = useState(false);
   const [autoFilling, setAutoFilling] = useState(false);
+  const [showRequestsPanel, setShowRequestsPanel] = useState(true);
 
   useEffect(() => {
     fetchStores();
@@ -44,6 +46,7 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
       fetchStore(selectedStoreId);
       fetchEmployees(selectedStoreId);
       fetchShifts();
+      fetchShiftRequests();
       fetchPublicationStatus();
     }
   }, [selectedStoreId, targetWeekStart]);
@@ -108,6 +111,21 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
       setShifts(data);
     } catch (error) {
       console.error('シフト取得エラー:', error);
+    }
+  };
+
+  const fetchShiftRequests = async () => {
+    if (!selectedStoreId) return;
+    
+    try {
+      const weekEnd = endOfWeek(targetWeekStart, { locale: ja });
+      const res = await fetch(
+        `/api/shift-requests?store_id=${selectedStoreId}&start_date=${format(targetWeekStart, 'yyyy-MM-dd')}&end_date=${format(weekEnd, 'yyyy-MM-dd')}`
+      );
+      const data = await res.json();
+      setShiftRequests(data);
+    } catch (error) {
+      console.error('シフト希望取得エラー:', error);
     }
   };
 
@@ -329,14 +347,40 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
     return shifts.find(s => s.employee_id === employeeId && s.date === date);
   };
 
+  const getShiftRequestForEmployeeAndDate = (employeeId: number, date: string): ShiftRequest | undefined => {
+    return shiftRequests.find(r => r.employee_id === employeeId && r.date === date);
+  };
+
   const getSpecialDayInfo = (date: Date) => {
     const dateStr = format(date, 'yyyy-MM-dd');
     return specialDays.find(sd => sd.date === dateStr);
   };
 
+  const formatShiftRequestPatterns = (request: ShiftRequest): string => {
+    try {
+      const patterns = JSON.parse(request.patterns);
+      if (request.custom_start && request.custom_end) {
+        return `${request.custom_start}-${request.custom_end}`;
+      }
+      const patternNames: { [key: string]: string } = {
+        morning: '朝',
+        afternoon: '昼',
+        evening: '夜',
+        full: '終日',
+        off: '休み'
+      };
+      return patterns.map((p: string) => patternNames[p] || p).join('/');
+    } catch {
+      return '−';
+    }
+  };
+
   const budgetPercentage = selectedStore?.monthly_budget
     ? Math.round((totalLaborCost / selectedStore.monthly_budget) * 100)
     : 0;
+
+  const weeklyBudget = selectedStore?.monthly_budget ? Math.round(selectedStore.monthly_budget / 4) : 0;
+  const isBudgetExceeded = weeklyBudget > 0 && totalLaborCost > weeklyBudget;
 
   return (
     <AdminLayout role={role} storeId={storeId} onLogout={onLogout}>
@@ -414,29 +458,67 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
 
             {/* 人件費サマリー */}
             <div data-salary>
-              <label className="block text-sm font-medium text-gray-700 mb-2">週間人件費</label>
-              <div className="bg-gradient-to-r from-ocean-50 to-ocean-100 rounded-lg p-3">
-                <div className="text-2xl font-bold text-ocean-900">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                週間人件費予想
+                {isBudgetExceeded && (
+                  <span className="ml-2 text-xs text-red-600 font-bold">⚠️ 予算超過</span>
+                )}
+              </label>
+              <div className={`rounded-lg p-3 ${
+                isBudgetExceeded 
+                  ? 'bg-gradient-to-r from-red-50 to-red-100 border-2 border-red-300' 
+                  : 'bg-gradient-to-r from-ocean-50 to-ocean-100'
+              }`}>
+                <div className={`text-2xl font-bold ${isBudgetExceeded ? 'text-red-900' : 'text-ocean-900'}`}>
                   ¥{totalLaborCost.toLocaleString()}
                 </div>
-                {selectedStore?.monthly_budget && (
+                {weeklyBudget > 0 && (
                   <div className="text-xs text-gray-600 mt-1">
-                    月間予算の {budgetPercentage}%
-                    <div className="w-full bg-gray-200 rounded-full h-2 mt-1">
+                    <div className="flex justify-between items-center mb-1">
+                      <span>週間予算: ¥{weeklyBudget.toLocaleString()}</span>
+                      <span className={`font-bold ${isBudgetExceeded ? 'text-red-600' : 'text-gray-700'}`}>
+                        {Math.round((totalLaborCost / weeklyBudget) * 100)}%
+                      </span>
+                    </div>
+                    <div className="w-full bg-gray-200 rounded-full h-2">
                       <div
-                        className={`h-2 rounded-full ${
-                          budgetPercentage > 100 ? 'bg-red-500' :
-                          budgetPercentage > 80 ? 'bg-yellow-500' :
+                        className={`h-2 rounded-full transition-all ${
+                          isBudgetExceeded ? 'bg-red-500' :
+                          totalLaborCost / weeklyBudget > 0.8 ? 'bg-yellow-500' :
                           'bg-green-500'
                         }`}
-                        style={{ width: `${Math.min(budgetPercentage, 100)}%` }}
+                        style={{ width: `${Math.min((totalLaborCost / weeklyBudget) * 100, 100)}%` }}
                       />
                     </div>
+                    {isBudgetExceeded && (
+                      <div className="text-xs text-red-600 font-medium mt-1">
+                        超過額: ¥{(totalLaborCost - weeklyBudget).toLocaleString()}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
             </div>
           </div>
+
+          {/* 予算超過アラート */}
+          {isBudgetExceeded && (
+            <div className="mt-4 p-4 rounded-lg border-2 bg-red-50 border-red-300 no-print">
+              <div className="flex items-start gap-3">
+                <svg className="w-6 h-6 text-red-600 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                </svg>
+                <div className="flex-1">
+                  <h4 className="text-sm font-bold text-red-900 mb-1">⚠️ 週間人件費予算を超過しています</h4>
+                  <p className="text-xs text-red-700">
+                    現在の予想人件費（¥{totalLaborCost.toLocaleString()}）が週間予算（¥{weeklyBudget.toLocaleString()}）を
+                    <strong className="text-red-900"> ¥{(totalLaborCost - weeklyBudget).toLocaleString()}</strong> 超過しています。
+                    シフトの見直しを検討してください。
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* 公開状態インジケーター */}
           <div className={`mt-4 p-3 rounded-lg border-2 no-print ${
@@ -537,6 +619,74 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
             </div>
           </div>
         )}
+
+        {/* シフト希望表示パネル */}
+        <div className="card no-print">
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="font-bold text-gray-800 flex items-center gap-2">
+              <svg className="w-5 h-5 text-ocean-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+              </svg>
+              シフト希望一覧
+            </h3>
+            <button
+              onClick={() => setShowRequestsPanel(!showRequestsPanel)}
+              className="btn-secondary text-sm"
+            >
+              {showRequestsPanel ? '非表示' : '表示'}
+            </button>
+          </div>
+          
+          {showRequestsPanel && (
+            <div className="overflow-x-auto">
+              <table className="min-w-full text-sm">
+                <thead className="bg-ocean-50">
+                  <tr>
+                    <th className="px-3 py-2 text-left font-medium text-gray-700">従業員名</th>
+                    {weekDates.map(date => (
+                      <th key={date.toISOString()} className="px-3 py-2 text-center font-medium text-gray-700">
+                        {format(date, 'M/d (E)', { locale: ja })}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200">
+                  {employees.map(employee => (
+                    <tr key={employee.id} className="hover:bg-gray-50">
+                      <td className="px-3 py-2 font-medium text-gray-800">
+                        {employee.name}
+                      </td>
+                      {weekDates.map(date => {
+                        const dateStr = format(date, 'yyyy-MM-dd');
+                        const request = getShiftRequestForEmployeeAndDate(employee.id, dateStr);
+                        const hasShift = getShiftForEmployeeAndDate(employee.id, dateStr);
+                        
+                        return (
+                          <td key={date.toISOString()} className="px-3 py-2 text-center">
+                            {request ? (
+                              <div className={`text-xs px-2 py-1 rounded ${
+                                hasShift 
+                                  ? 'bg-green-100 text-green-800 border border-green-300'
+                                  : 'bg-blue-100 text-blue-800 border border-blue-300'
+                              }`}>
+                                {formatShiftRequestPatterns(request)}
+                                {hasShift && (
+                                  <div className="text-[10px] text-green-600 mt-0.5">✓ 反映済</div>
+                                )}
+                              </div>
+                            ) : (
+                              <span className="text-gray-400">−</span>
+                            )}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
 
         {/* ガントチャート */}
         <div className="card overflow-x-auto">
