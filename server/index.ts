@@ -33,6 +33,7 @@ declare module 'express-session' {
     role: 'admin' | 'store_manager' | null;
     storeId: number | null;
     lastActivity: number;
+    autoLogoutMinutes: number;
   }
 }
 
@@ -71,8 +72,13 @@ app.post('/api/auth/login', (req, res) => {
   if (adminPassword && bcrypt.compareSync(password, adminPassword.password_hash)) {
     req.session.role = 'admin';
     req.session.storeId = null;
+    req.session.autoLogoutMinutes = adminPassword.auto_logout_minutes || 5;
     req.session.lastActivity = Date.now();
-    return res.json({ role: 'admin', storeId: null });
+    return res.json({ 
+      role: 'admin', 
+      storeId: null,
+      autoLogoutMinutes: adminPassword.auto_logout_minutes || 5
+    });
   }
 
   // 店舗責任者チェック
@@ -81,8 +87,13 @@ app.post('/api/auth/login', (req, res) => {
     if (bcrypt.compareSync(password, storePassword.password_hash)) {
       req.session.role = 'store_manager';
       req.session.storeId = storePassword.store_id;
+      req.session.autoLogoutMinutes = storePassword.auto_logout_minutes || 5;
       req.session.lastActivity = Date.now();
-      return res.json({ role: 'store_manager', storeId: storePassword.store_id });
+      return res.json({ 
+        role: 'store_manager', 
+        storeId: storePassword.store_id,
+        autoLogoutMinutes: storePassword.auto_logout_minutes || 5
+      });
     }
   }
 
@@ -102,18 +113,12 @@ app.post('/api/auth/logout', (req, res) => {
 // セッション確認
 app.get('/api/auth/session', (req, res) => {
   if (req.session.role) {
-    // 自動ログアウトチェック
-    const now = Date.now();
-    const lastActivity = req.session.lastActivity || now;
-    const autoLogoutMs = 5 * 60 * 1000;
-    
-    if (now - lastActivity > autoLogoutMs) {
-      req.session.destroy(() => {});
-      return res.json({ role: null, storeId: null });
-    }
-    
-    req.session.lastActivity = now;
-    return res.json({ role: req.session.role, storeId: req.session.storeId });
+    const autoLogoutMinutes = req.session.autoLogoutMinutes || 5;
+    return res.json({ 
+      role: req.session.role, 
+      storeId: req.session.storeId,
+      autoLogoutMinutes
+    });
   }
   res.json({ role: null, storeId: null });
 });
@@ -700,10 +705,15 @@ app.delete('/api/announcements/:id', requireAuth, (req, res) => {
 
 // パスワード変更
 app.post('/api/passwords/change', requireAuth, (req, res) => {
-  const { role: targetRole, store_id, new_password } = req.body;
+  const { role: targetRole, store_id, new_password, auto_logout_minutes } = req.body;
   
   if (!new_password || new_password.length < 4) {
     return res.status(400).json({ error: 'パスワードは4文字以上で設定してください' });
+  }
+  
+  // 自動ログアウト時間のバリデーション（指定された場合のみ）
+  if (auto_logout_minutes !== undefined && (auto_logout_minutes < 1 || auto_logout_minutes > 120)) {
+    return res.status(400).json({ error: '自動ログアウト時間は1～120分の範囲で設定してください' });
   }
   
   // 権限チェック
@@ -722,11 +732,18 @@ app.post('/api/passwords/change', requireAuth, (req, res) => {
     const hashedPassword = bcrypt.hashSync(new_password, 10);
     
     if (targetRole === 'admin') {
-      // 本部管理者パスワード更新
-      db.prepare(`
-        UPDATE passwords SET password_hash = ?, updated_at = CURRENT_TIMESTAMP 
-        WHERE role = 'admin'
-      `).run(hashedPassword);
+      // 本部管理者パスワード更新（auto_logout_minutesも含める）
+      if (auto_logout_minutes !== undefined) {
+        db.prepare(`
+          UPDATE passwords SET password_hash = ?, auto_logout_minutes = ?, updated_at = CURRENT_TIMESTAMP 
+          WHERE role = 'admin'
+        `).run(hashedPassword, auto_logout_minutes);
+      } else {
+        db.prepare(`
+          UPDATE passwords SET password_hash = ?, updated_at = CURRENT_TIMESTAMP 
+          WHERE role = 'admin'
+        `).run(hashedPassword);
+      }
     } else {
       // 店舗責任者パスワード更新
       db.prepare(`

@@ -15,6 +15,7 @@ export default function PasswordManagement({ role, storeId, onLogout }: Password
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [currentPassword, setCurrentPassword] = useState('');
+  const [autoLogoutMinutes, setAutoLogoutMinutes] = useState<number>(5);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -54,7 +55,8 @@ export default function PasswordManagement({ role, storeId, onLogout }: Password
     try {
       const requestData: any = {
         role: selectedPasswordType === 'admin' ? 'admin' : 'store_manager',
-        new_password: newPassword
+        new_password: newPassword,
+        auto_logout_minutes: autoLogoutMinutes
       };
 
       if (selectedPasswordType === 'store') {
@@ -183,6 +185,30 @@ export default function PasswordManagement({ role, storeId, onLogout }: Password
                 required
               />
             </div>
+
+            {/* 自動ログアウト時間（本部管理者のみ） */}
+            {selectedPasswordType === 'admin' && role === 'admin' && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  自動ログアウト時間
+                </label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    value={autoLogoutMinutes}
+                    onChange={(e) => setAutoLogoutMinutes(Number(e.target.value))}
+                    className="input-field flex-1"
+                    min="1"
+                    max="120"
+                    required
+                  />
+                  <span className="text-gray-700">分</span>
+                </div>
+                <p className="text-xs text-gray-500 mt-1">
+                  無操作時に自動的にログアウトされるまでの時間（1～120分）
+                </p>
+              </div>
+            )}
 
             {/* メッセージ表示 */}
             {message && (

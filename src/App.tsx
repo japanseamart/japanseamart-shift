@@ -1,5 +1,5 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Role } from './types';
 
 // Pages
@@ -20,6 +20,9 @@ function App() {
   const [role, setRole] = useState<Role | null>(null);
   const [storeId, setStoreId] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
+  const [autoLogoutMinutes, setAutoLogoutMinutes] = useState<number>(5);
+  const logoutTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const lastActivityRef = useRef<number>(Date.now());
 
   // セッション確認
   useEffect(() => {
@@ -34,6 +37,9 @@ function App() {
       const data = await res.json();
       setRole(data.role);
       setStoreId(data.storeId);
+      if (data.autoLogoutMinutes) {
+        setAutoLogoutMinutes(data.autoLogoutMinutes);
+      }
     } catch (error) {
       console.error('セッション確認エラー:', error);
     } finally {
@@ -63,7 +69,7 @@ function App() {
     }
   };
 
-  const handleLogout = async () => {
+  const handleLogout = async (auto = false) => {
     try {
       await fetch('/api/auth/logout', {
         method: 'POST',
@@ -71,10 +77,59 @@ function App() {
       });
       setRole(null);
       setStoreId(null);
+      
+      // 自動ログアウトの場合は通知
+      if (auto) {
+        alert('無操作のため自動的にログアウトしました');
+      }
     } catch (error) {
       console.error('ログアウトエラー:', error);
     }
   };
+
+  // 自動ログアウトタイマーをリセット
+  const resetLogoutTimer = useCallback(() => {
+    lastActivityRef.current = Date.now();
+    
+    if (logoutTimerRef.current) {
+      clearTimeout(logoutTimerRef.current);
+    }
+    
+    if (role) {
+      logoutTimerRef.current = setTimeout(() => {
+        handleLogout(true);
+      }, autoLogoutMinutes * 60 * 1000);
+    }
+  }, [role, autoLogoutMinutes]);
+
+  // ユーザー操作を検知
+  useEffect(() => {
+    if (!role) return;
+
+    const events = ['mousedown', 'mousemove', 'keypress', 'scroll', 'touchstart', 'click'];
+    
+    const handleActivity = () => {
+      resetLogoutTimer();
+    };
+
+    // イベントリスナーを登録
+    events.forEach(event => {
+      document.addEventListener(event, handleActivity);
+    });
+
+    // 初期タイマー設定
+    resetLogoutTimer();
+
+    // クリーンアップ
+    return () => {
+      events.forEach(event => {
+        document.removeEventListener(event, handleActivity);
+      });
+      if (logoutTimerRef.current) {
+        clearTimeout(logoutTimerRef.current);
+      }
+    };
+  }, [role, resetLogoutTimer]);
 
   if (loading) {
     return (
