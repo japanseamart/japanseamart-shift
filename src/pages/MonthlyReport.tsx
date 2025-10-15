@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
-import { format, startOfMonth, endOfMonth, eachDayOfInterval, parseISO } from 'date-fns';
-import { ja } from 'date-fns/locale';
+import { format, startOfMonth, endOfMonth, parseISO } from 'date-fns';
 import Papa from 'papaparse';
 import { Role, Store, Employee, Shift } from '../types';
 import AdminLayout from '../components/AdminLayout';
@@ -28,6 +27,34 @@ interface EmployeeStats {
   totalCost: number;
 }
 
+interface HeatmapData {
+  hour: number;
+  weekday: number; // 0=日, 1=月, ..., 6=土
+  staffCount: number;
+  laborCost: number;
+}
+
+interface DailyData {
+  date: string;
+  laborCost: number;
+  staffCount: number;
+  weekday: number;
+}
+
+interface HourlyStats {
+  hour: number;
+  avgStaffCount: number;
+  avgLaborCost: number;
+  totalShifts: number;
+}
+
+interface WeekdayStats {
+  weekday: number;
+  totalLaborCost: number;
+  totalShifts: number;
+  avgLaborCost: number;
+}
+
 export default function MonthlyReport({ role, storeId, onLogout }: MonthlyReportProps) {
   const [stores, setStores] = useState<Store[]>([]);
   const [selectedStoreId, setSelectedStoreId] = useState<number | null>(storeId);
@@ -35,9 +62,13 @@ export default function MonthlyReport({ role, storeId, onLogout }: MonthlyReport
   const [targetMonth, setTargetMonth] = useState(format(new Date(), 'yyyy-MM'));
   const [stats, setStats] = useState<MonthlyStats | null>(null);
   const [employeeStats, setEmployeeStats] = useState<EmployeeStats[]>([]);
-  const [shifts, setShifts] = useState<Shift[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(false);
+  const [heatmapData, setHeatmapData] = useState<HeatmapData[]>([]);
+  const [dailyData, setDailyData] = useState<DailyData[]>([]);
+  const [hourlyStats, setHourlyStats] = useState<HourlyStats[]>([]);
+  const [weekdayStats, setWeekdayStats] = useState<WeekdayStats[]>([]);
+  const [heatmapMode, setHeatmapMode] = useState<'staff' | 'cost'>('staff');
 
   useEffect(() => {
     fetchStores();
@@ -98,7 +129,6 @@ export default function MonthlyReport({ role, storeId, onLogout }: MonthlyReport
         `/api/shifts?store_id=${selectedStoreId}&start_date=${format(monthStart, 'yyyy-MM-dd')}&end_date=${format(monthEnd, 'yyyy-MM-dd')}`
       );
       const shiftsData: Shift[] = await res.json();
-      setShifts(shiftsData);
 
       // 統計計算
       const totalLaborCost = shiftsData.reduce((sum, shift) => sum + (shift.labor_cost || 0), 0);
@@ -156,6 +186,86 @@ export default function MonthlyReport({ role, storeId, onLogout }: MonthlyReport
       const empStatsArray = Array.from(empStatsMap.values()).sort((a, b) => b.totalCost - a.totalCost);
       setEmployeeStats(empStatsArray);
 
+      // ヒートマップデータの計算（時間帯 × 曜日）
+      const heatmapMap = new Map<string, HeatmapData>();
+      shiftsData.forEach(shift => {
+        const shiftDate = parseISO(shift.date);
+        const weekday = shiftDate.getDay();
+        const startHour = parseInt(shift.start_time.split(':')[0]);
+        const endHour = parseInt(shift.end_time.split(':')[0]);
+        
+        // シフトの開始時間から終了時間まで各時間をカウント
+        for (let hour = startHour; hour < endHour; hour++) {
+          const key = `${hour}-${weekday}`;
+          if (!heatmapMap.has(key)) {
+            heatmapMap.set(key, { hour, weekday, staffCount: 0, laborCost: 0 });
+          }
+          const data = heatmapMap.get(key)!;
+          data.staffCount += 1;
+          // 時間あたりの人件費を按分
+          const shiftHours = endHour - startHour;
+          data.laborCost += (shift.labor_cost || 0) / shiftHours;
+        }
+      });
+      setHeatmapData(Array.from(heatmapMap.values()));
+
+      // 日別データの計算
+      const dailyMap = new Map<string, DailyData>();
+      shiftsData.forEach(shift => {
+        if (!dailyMap.has(shift.date)) {
+          const shiftDate = parseISO(shift.date);
+          dailyMap.set(shift.date, {
+            date: shift.date,
+            laborCost: 0,
+            staffCount: 0,
+            weekday: shiftDate.getDay()
+          });
+        }
+        const data = dailyMap.get(shift.date)!;
+        data.laborCost += shift.labor_cost || 0;
+        data.staffCount += 1;
+      });
+      const sortedDailyData = Array.from(dailyMap.values()).sort((a, b) => a.date.localeCompare(b.date));
+      setDailyData(sortedDailyData);
+
+      // 時間帯別統計
+      const hourlyMap = new Map<number, { staffCount: number; laborCost: number; days: number }>();
+      for (let hour = 0; hour < 24; hour++) {
+        hourlyMap.set(hour, { staffCount: 0, laborCost: 0, days: 0 });
+      }
+      heatmapMap.forEach(data => {
+        const hourData = hourlyMap.get(data.hour)!;
+        hourData.staffCount += data.staffCount;
+        hourData.laborCost += data.laborCost;
+        hourData.days += 1;
+      });
+      const hourlyStatsArray: HourlyStats[] = Array.from(hourlyMap.entries()).map(([hour, data]) => ({
+        hour,
+        avgStaffCount: data.days > 0 ? Math.round(data.staffCount / data.days * 10) / 10 : 0,
+        avgLaborCost: data.days > 0 ? Math.round(data.laborCost / data.days) : 0,
+        totalShifts: data.staffCount
+      }));
+      setHourlyStats(hourlyStatsArray);
+
+      // 曜日別統計
+      const weekdayMap = new Map<number, { laborCost: number; shifts: number }>();
+      for (let day = 0; day < 7; day++) {
+        weekdayMap.set(day, { laborCost: 0, shifts: 0 });
+      }
+      shiftsData.forEach(shift => {
+        const weekday = parseISO(shift.date).getDay();
+        const data = weekdayMap.get(weekday)!;
+        data.laborCost += shift.labor_cost || 0;
+        data.shifts += 1;
+      });
+      const weekdayStatsArray: WeekdayStats[] = Array.from(weekdayMap.entries()).map(([weekday, data]) => ({
+        weekday,
+        totalLaborCost: data.laborCost,
+        totalShifts: data.shifts,
+        avgLaborCost: data.shifts > 0 ? Math.round(data.laborCost / data.shifts) : 0
+      }));
+      setWeekdayStats(weekdayStatsArray);
+
     } catch (error) {
       console.error('月間データ取得エラー:', error);
     } finally {
@@ -202,6 +312,32 @@ export default function MonthlyReport({ role, storeId, onLogout }: MonthlyReport
   const handlePrint = () => {
     window.print();
   };
+
+  // ヒートマップのカラー計算
+  const getHeatmapColor = (value: number, max: number) => {
+    if (max === 0) return 'bg-gray-100';
+    const intensity = Math.min(value / max, 1);
+    if (intensity === 0) return 'bg-gray-50';
+    if (intensity < 0.2) return 'bg-blue-100';
+    if (intensity < 0.4) return 'bg-blue-200';
+    if (intensity < 0.6) return 'bg-blue-300';
+    if (intensity < 0.8) return 'bg-blue-400';
+    return 'bg-blue-500';
+  };
+
+  const getHeatmapValue = (hour: number, weekday: number): number => {
+    const data = heatmapData.find(d => d.hour === hour && d.weekday === weekday);
+    if (!data) return 0;
+    return heatmapMode === 'staff' ? data.staffCount : data.laborCost;
+  };
+
+  const getMaxHeatmapValue = (): number => {
+    if (heatmapData.length === 0) return 1;
+    return Math.max(...heatmapData.map(d => heatmapMode === 'staff' ? d.staffCount : d.laborCost));
+  };
+
+  const weekdayLabels = ['日', '月', '火', '水', '木', '金', '土'];
+  const weekdayColors = ['text-red-600', 'text-gray-700', 'text-gray-700', 'text-gray-700', 'text-gray-700', 'text-gray-700', 'text-blue-600'];
 
   return (
     <AdminLayout role={role} storeId={storeId} onLogout={onLogout}>
@@ -420,6 +556,211 @@ export default function MonthlyReport({ role, storeId, onLogout }: MonthlyReport
                     </tr>
                   </tfoot>
                 </table>
+              </div>
+            </div>
+
+            {/* 時間帯×曜日ヒートマップ */}
+            <div className="card">
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-lg font-bold text-gray-800">時間帯別分析（ヒートマップ）</h2>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setHeatmapMode('staff')}
+                    className={`px-3 py-1 rounded text-sm font-medium transition ${
+                      heatmapMode === 'staff'
+                        ? 'bg-ocean-600 text-white'
+                        : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                    }`}
+                  >
+                    👥 人数
+                  </button>
+                  <button
+                    onClick={() => setHeatmapMode('cost')}
+                    className={`px-3 py-1 rounded text-sm font-medium transition ${
+                      heatmapMode === 'cost'
+                        ? 'bg-ocean-600 text-white'
+                        : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                    }`}
+                  >
+                    💰 人件費
+                  </button>
+                </div>
+              </div>
+              
+              <div className="overflow-x-auto">
+                <table className="min-w-full border-collapse">
+                  <thead>
+                    <tr>
+                      <th className="border border-gray-300 px-2 py-2 bg-gray-50 text-xs font-medium text-gray-700">
+                        時間
+                      </th>
+                      {weekdayLabels.map((label, idx) => (
+                        <th key={idx} className={`border border-gray-300 px-2 py-2 bg-gray-50 text-xs font-medium ${weekdayColors[idx]}`}>
+                          {label}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {Array.from({ length: 24 }, (_, hour) => (
+                      <tr key={hour}>
+                        <td className="border border-gray-300 px-2 py-2 bg-gray-50 text-xs font-medium text-gray-700 text-center">
+                          {hour}:00
+                        </td>
+                        {Array.from({ length: 7 }, (_, weekday) => {
+                          const value = getHeatmapValue(hour, weekday);
+                          const maxValue = getMaxHeatmapValue();
+                          return (
+                            <td
+                              key={weekday}
+                              className={`border border-gray-300 px-2 py-2 text-center text-xs font-medium ${getHeatmapColor(value, maxValue)}`}
+                              title={heatmapMode === 'staff' ? `${value}人` : `¥${Math.round(value).toLocaleString()}`}
+                            >
+                              {value > 0 ? (heatmapMode === 'staff' ? value : `¥${Math.round(value / 1000)}k`) : '-'}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div className="mt-4 text-xs text-gray-500 flex items-center gap-4">
+                <span>濃い色ほど{heatmapMode === 'staff' ? '人数が多い' : '人件費が高い'}</span>
+                <div className="flex items-center gap-1">
+                  <div className="w-4 h-4 bg-gray-50 border border-gray-300"></div>
+                  <span>0</span>
+                  <div className="w-4 h-4 bg-blue-100 border border-gray-300"></div>
+                  <div className="w-4 h-4 bg-blue-200 border border-gray-300"></div>
+                  <div className="w-4 h-4 bg-blue-300 border border-gray-300"></div>
+                  <div className="w-4 h-4 bg-blue-400 border border-gray-300"></div>
+                  <div className="w-4 h-4 bg-blue-500 border border-gray-300"></div>
+                  <span>最大</span>
+                </div>
+              </div>
+            </div>
+
+            {/* 日別推移グラフ */}
+            <div className="card">
+              <h2 className="text-lg font-bold text-gray-800 mb-4">日別人件費推移</h2>
+              <div className="space-y-2">
+                {dailyData.map((day, idx) => {
+                  const maxCost = Math.max(...dailyData.map(d => d.laborCost), 1);
+                  const widthPercent = (day.laborCost / maxCost) * 100;
+                  const dayOfWeek = weekdayLabels[day.weekday];
+                  const isWeekend = day.weekday === 0 || day.weekday === 6;
+                  const budgetPerDay = selectedStore?.monthly_budget ? selectedStore.monthly_budget / dailyData.length : 0;
+                  const isOverBudget = day.laborCost > budgetPerDay;
+                  
+                  return (
+                    <div key={idx} className="flex items-center gap-2">
+                      <div className="w-16 text-xs text-gray-600">
+                        {format(parseISO(day.date), 'M/d')}({dayOfWeek})
+                      </div>
+                      <div className="flex-1 relative h-8 bg-gray-100 rounded overflow-hidden">
+                        <div
+                          className={`h-full ${isWeekend ? 'bg-blue-400' : 'bg-ocean-500'} transition-all`}
+                          style={{ width: `${widthPercent}%` }}
+                        />
+                        {budgetPerDay > 0 && (
+                          <div
+                            className="absolute top-0 bottom-0 w-0.5 bg-red-400"
+                            style={{ left: `${(budgetPerDay / maxCost) * 100}%` }}
+                            title={`予算ライン: ¥${Math.round(budgetPerDay).toLocaleString()}`}
+                          />
+                        )}
+                      </div>
+                      <div className={`w-24 text-xs text-right font-medium ${isOverBudget ? 'text-red-600' : 'text-gray-700'}`}>
+                        ¥{day.laborCost.toLocaleString()}
+                      </div>
+                      <div className="w-16 text-xs text-gray-500 text-right">
+                        {day.staffCount}人
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              {selectedStore?.monthly_budget && (
+                <div className="mt-4 text-xs text-gray-500">
+                  <span className="inline-block w-2 h-2 bg-red-400 mr-1"></span>
+                  赤線: 1日あたり予算目安 (¥{Math.round(selectedStore.monthly_budget / dailyData.length).toLocaleString()})
+                </div>
+              )}
+            </div>
+
+            {/* 時間帯別統計 */}
+            <div className="card">
+              <h2 className="text-lg font-bold text-gray-800 mb-4">時間帯別統計</h2>
+              <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2">
+                {hourlyStats.filter(h => h.totalShifts > 0).map(hourStat => {
+                  const maxAvgStaff = Math.max(...hourlyStats.map(h => h.avgStaffCount), 1);
+                  const isPeak = hourStat.avgStaffCount >= maxAvgStaff * 0.8;
+                  
+                  return (
+                    <div
+                      key={hourStat.hour}
+                      className={`p-3 rounded-lg border-2 ${
+                        isPeak ? 'border-orange-400 bg-orange-50' : 'border-gray-200 bg-white'
+                      }`}
+                    >
+                      <div className="text-sm font-bold text-gray-800 mb-1">
+                        {hourStat.hour}:00
+                        {isPeak && <span className="ml-1 text-orange-500">🔥</span>}
+                      </div>
+                      <div className="text-xs text-gray-600">
+                        平均: {hourStat.avgStaffCount}人
+                      </div>
+                      <div className="text-xs text-gray-600">
+                        ¥{hourStat.avgLaborCost.toLocaleString()}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="mt-4 text-xs text-gray-500">
+                🔥 ピーク時間帯（平均人数が多い時間）
+              </div>
+            </div>
+
+            {/* 曜日別分析 */}
+            <div className="card">
+              <h2 className="text-lg font-bold text-gray-800 mb-4">曜日別分析</h2>
+              <div className="space-y-3">
+                {weekdayStats.map(dayStat => {
+                  const maxCost = Math.max(...weekdayStats.map(d => d.totalLaborCost), 1);
+                  const widthPercent = (dayStat.totalLaborCost / maxCost) * 100;
+                  const isWeekend = dayStat.weekday === 0 || dayStat.weekday === 6;
+                  
+                  return (
+                    <div key={dayStat.weekday} className="space-y-1">
+                      <div className="flex items-center justify-between">
+                        <div className={`w-12 text-sm font-medium ${weekdayColors[dayStat.weekday]}`}>
+                          {weekdayLabels[dayStat.weekday]}曜日
+                        </div>
+                        <div className="text-xs text-gray-500">
+                          {dayStat.totalShifts}シフト
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="flex-1 relative h-10 bg-gray-100 rounded overflow-hidden">
+                          <div
+                            className={`h-full flex items-center px-2 text-white text-sm font-bold ${
+                              isWeekend ? 'bg-blue-500' : 'bg-ocean-500'
+                            }`}
+                            style={{ width: `${widthPercent}%` }}
+                          >
+                            {widthPercent > 30 && `¥${dayStat.totalLaborCost.toLocaleString()}`}
+                          </div>
+                        </div>
+                        {widthPercent <= 30 && (
+                          <div className="w-32 text-sm font-medium text-gray-700">
+                            ¥{dayStat.totalLaborCost.toLocaleString()}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           </>
