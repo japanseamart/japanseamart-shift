@@ -12,7 +12,7 @@ interface EmployeeManagementProps {
 export default function EmployeeManagement({ role, storeId, onLogout }: EmployeeManagementProps) {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [stores, setStores] = useState<Store[]>([]);
-  const [sortBy, setSortBy] = useState<'store' | 'wage'>('store');
+  const [sortBy, setSortBy] = useState<'wage_asc' | 'wage_desc' | 'employment_type'>('wage_desc');
   const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
   const [isCreating, setIsCreating] = useState(false);
   const [formData, setFormData] = useState({
@@ -227,10 +227,20 @@ export default function EmployeeManagement({ role, storeId, onLogout }: Employee
   // ソート（店舗管理者は既にバックエンドでフィルタ済み）
   const filteredEmployees = employees
     .sort((a, b) => {
-      if (sortBy === 'store') {
-        return a.store_id - b.store_id;
+      if (sortBy === 'wage_asc') {
+        // 時給（低い順）- 正社員は最後
+        const wageA = a.employment_type === 'full_time' ? 999999 : (a.hourly_wage || 0);
+        const wageB = b.employment_type === 'full_time' ? 999999 : (b.hourly_wage || 0);
+        return wageA - wageB;
+      } else if (sortBy === 'wage_desc') {
+        // 時給（高い順）- 正社員は最後
+        const wageA = a.employment_type === 'full_time' ? -1 : (a.hourly_wage || 0);
+        const wageB = b.employment_type === 'full_time' ? -1 : (b.hourly_wage || 0);
+        return wageB - wageA;
       } else {
-        return (b.hourly_wage || 0) - (a.hourly_wage || 0);
+        // 給与タイプ順（パート・アルバイト → パート社員 → 正社員）
+        const typeOrder = { part_time: 1, part_time_insured: 2, full_time: 3 };
+        return typeOrder[a.employment_type] - typeOrder[b.employment_type];
       }
     });
 
@@ -376,11 +386,12 @@ export default function EmployeeManagement({ role, storeId, onLogout }: Employee
               <label className="block text-sm font-medium text-gray-700 mb-2">並び替え</label>
               <select
                 value={sortBy}
-                onChange={(e) => setSortBy(e.target.value as 'store' | 'wage')}
+                onChange={(e) => setSortBy(e.target.value as 'wage_asc' | 'wage_desc' | 'employment_type')}
                 className="input-field"
               >
-                <option value="store">所属店舗順</option>
-                <option value="wage">時給順（高い順）</option>
+                <option value="wage_asc">時給（低い順）</option>
+                <option value="wage_desc">時給（高い順）</option>
+                <option value="employment_type">給与タイプ</option>
               </select>
             </div>
           </div>
