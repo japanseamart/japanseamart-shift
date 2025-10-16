@@ -2,25 +2,32 @@ import express from 'express';
 import session from 'express-session';
 import cors from 'cors';
 import bcrypt from 'bcryptjs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import db, { initializeDatabase } from './database.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app = express();
 const PORT = process.env.PORT || 3001;
+const isProduction = process.env.NODE_ENV === 'production';
 
 // ミドルウェア
 app.use(cors({
-  origin: 'http://localhost:5173',
+  origin: isProduction ? true : 'http://localhost:5173',
   credentials: true,
 }));
 app.use(express.json());
 app.use(session({
-  secret: 'shift-management-secret-key-2025',
+  secret: process.env.SESSION_SECRET || 'shift-management-secret-key-2025',
   resave: false,
   saveUninitialized: false,
   cookie: {
-    secure: false,
+    secure: isProduction,
     httpOnly: true,
     maxAge: 5 * 60 * 1000, // 5分
+    sameSite: isProduction ? 'none' : 'lax',
   }
 }));
 
@@ -1250,9 +1257,21 @@ app.post('/api/shifts/auto-fill-requests', requireAuth, (req, res) => {
   }
 });
 
+// 静的ファイル配信（プロダクション環境）
+if (isProduction) {
+  const distPath = path.join(__dirname, '../dist');
+  app.use(express.static(distPath));
+  
+  // すべてのGETリクエストをindex.htmlにリダイレクト（SPAルーティング対応）
+  app.get('*', (req, res) => {
+    res.sendFile(path.join(distPath, 'index.html'));
+  });
+}
+
 // サーバー起動
 app.listen(PORT, () => {
   console.log(`🚀 サーバーが起動しました: http://localhost:${PORT}`);
   console.log(`📊 データベース: shift_management.db`);
   console.log(`🔐 初期パスワード - 本部管理者: admin, 店舗1-7: store1 ~ store7`);
+  console.log(`🌍 環境: ${isProduction ? 'Production' : 'Development'}`);
 });

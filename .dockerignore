@@ -1,0 +1,14 @@
+node_modules
+dist
+npm-debug.log
+.git
+.gitignore
+README.md
+.env
+.DS_Store
+*.md
+!DEPLOYMENT.md
+shift_management.db
+*.log
+.vscode
+.idea

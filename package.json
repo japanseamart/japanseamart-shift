@@ -9,7 +9,8 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "server": "node --loader ts-node/esm server/index.ts",
-    "server:dev": "nodemon --watch server --exec node --loader ts-node/esm server/index.ts"
+    "server:dev": "nodemon --watch server --exec node --loader ts-node/esm server/index.ts",
+    "start": "npx tsx server/index.ts"
   },
   "dependencies": {
     "bcryptjs": "^3.0.2",
