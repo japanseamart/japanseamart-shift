@@ -3,6 +3,7 @@ import { format, addWeeks, startOfWeek, endOfWeek, eachDayOfInterval, difference
 import { ja } from 'date-fns/locale';
 import { Role, Employee, Shift, Store, SpecialDay, ShiftRequest } from '../types';
 import AdminLayout from '../components/AdminLayout';
+import { getApiUrl } from '../config/api';
 
 interface ShiftManagementProps {
   role: Role;
@@ -57,7 +58,7 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
 
   const fetchStores = async () => {
     try {
-      const res = await fetch('/api/stores');
+      const res = await fetch(getApiUrl('/api/stores'));
       const data = await res.json();
       setStores(data.filter((s: Store) => s.id !== 8));
       
@@ -71,7 +72,7 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
 
   const fetchStore = async (id: number) => {
     try {
-      const res = await fetch(`/api/stores/${id}`);
+      const res = await fetch(getApiUrl(`/api/stores/${id}`));
       const data = await res.json();
       setSelectedStore(data);
     } catch (error) {
@@ -81,7 +82,7 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
 
   const fetchEmployees = async (storeId: number) => {
     try {
-      const res = await fetch(`/api/employees?store_id=${storeId}`);
+      const res = await fetch(getApiUrl(`/api/employees?store_id=${storeId}`));
       const data = await res.json();
       setEmployees(data);
     } catch (error) {
@@ -91,7 +92,7 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
 
   const fetchSpecialDays = async () => {
     try {
-      const res = await fetch('/api/special-days');
+      const res = await fetch(getApiUrl('/api/special-days'));
       const data = await res.json();
       setSpecialDays(data);
     } catch (error) {
@@ -105,7 +106,7 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
     try {
       const weekEnd = endOfWeek(targetWeekStart, { locale: ja });
       const res = await fetch(
-        `/api/shifts?store_id=${selectedStoreId}&start_date=${format(targetWeekStart, 'yyyy-MM-dd')}&end_date=${format(weekEnd, 'yyyy-MM-dd')}`
+        getApiUrl(`/api/shifts?store_id=${selectedStoreId}&start_date=${format(targetWeekStart, 'yyyy-MM-dd')}&end_date=${format(weekEnd, 'yyyy-MM-dd')}`)
       );
       const data = await res.json();
       setShifts(data);
@@ -120,7 +121,7 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
     try {
       const weekEnd = endOfWeek(targetWeekStart, { locale: ja });
       const res = await fetch(
-        `/api/shift-requests?store_id=${selectedStoreId}&start_date=${format(targetWeekStart, 'yyyy-MM-dd')}&end_date=${format(weekEnd, 'yyyy-MM-dd')}`
+        getApiUrl(`/api/shift-requests?store_id=${selectedStoreId}&start_date=${format(targetWeekStart, 'yyyy-MM-dd')}&end_date=${format(weekEnd, 'yyyy-MM-dd')}`)
       );
       const data = await res.json();
       setShiftRequests(data);
@@ -154,7 +155,7 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
     if (!confirm(confirmMessage)) return;
     
     try {
-      await fetch('/api/weekly-publications', {
+      await fetch(getApiUrl('/api/weekly-publications'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -187,7 +188,7 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
     setAutoFilling(true);
     
     try {
-      const res = await fetch('/api/shifts/auto-fill-requests', {
+      const res = await fetch(getApiUrl('/api/shifts/auto-fill-requests'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -298,7 +299,7 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
 
       if (editingShift.id) {
         // 更新
-        await fetch(`/api/shifts/${editingShift.id}`, {
+        await fetch(getApiUrl(`/api/shifts/${editingShift.id}`), {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           credentials: 'include',
@@ -306,7 +307,7 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
         });
       } else {
         // 新規作成
-        await fetch('/api/shifts', {
+        await fetch(getApiUrl('/api/shifts'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           credentials: 'include',
@@ -329,7 +330,7 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
     if (!confirm('このシフトを削除しますか?')) return;
 
     try {
-      await fetch(`/api/shifts/${shiftId}`, {
+      await fetch(getApiUrl(`/api/shifts/${shiftId}`), {
         method: 'DELETE',
         credentials: 'include'
       });

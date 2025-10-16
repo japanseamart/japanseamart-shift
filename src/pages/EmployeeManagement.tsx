@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import Papa from 'papaparse';
 import { Role, Employee, Store, EmploymentType } from '../types';
 import AdminLayout from '../components/AdminLayout';
+import { getApiUrl } from '../config/api';
 
 interface EmployeeManagementProps {
   role: Role;
@@ -30,7 +31,7 @@ export default function EmployeeManagement({ role, storeId, onLogout }: Employee
 
   const fetchEmployees = async () => {
     try {
-      const res = await fetch('/api/employees');
+      const res = await fetch(getApiUrl('/api/employees'));
       const data = await res.json();
       setEmployees(data);
     } catch (error) {
@@ -40,7 +41,7 @@ export default function EmployeeManagement({ role, storeId, onLogout }: Employee
 
   const fetchStores = async () => {
     try {
-      const res = await fetch('/api/stores');
+      const res = await fetch(getApiUrl('/api/stores'));
       const data = await res.json();
       setStores(data);
     } catch (error) {
@@ -110,7 +111,7 @@ export default function EmployeeManagement({ role, storeId, onLogout }: Employee
     if (!confirm(`${employee.name} を削除してもよろしいですか？`)) return;
 
     try {
-      const res = await fetch(`/api/employees/${employee.id}`, {
+      const res = await fetch(getApiUrl(`/api/employees/${employee.id}`), {
         method: 'DELETE',
         credentials: 'include',
       });
@@ -195,14 +196,14 @@ export default function EmployeeManagement({ role, storeId, onLogout }: Employee
           try {
             // IDがある場合は更新、ない場合は新規作成
             if (row.従業員ID) {
-              await fetch(`/api/employees/${row.従業員ID}`, {
+              await fetch(getApiUrl(`/api/employees/${row.従業員ID}`), {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 credentials: 'include',
                 body: JSON.stringify(employeeData),
               });
             } else {
-              await fetch('/api/employees', {
+              await fetch(getApiUrl('/api/employees'), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 credentials: 'include',

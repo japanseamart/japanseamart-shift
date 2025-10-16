@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { format, addDays, startOfWeek, endOfWeek, eachDayOfInterval, isBefore, parseISO, addWeeks } from 'date-fns';
 import { ja } from 'date-fns/locale';
 import type { Store, Employee, ShiftRequest, SpecialDay } from '../types';
+import { getApiUrl } from '../config/api';
 
 interface ShiftPattern {
   id: string;
@@ -54,7 +55,7 @@ export default function EmployeeShiftRequest() {
 
   const fetchStores = async () => {
     try {
-      const res = await fetch('/api/stores');
+      const res = await fetch(getApiUrl('/api/stores'));
       const data = await res.json();
       setStores(data);
       if (data.length > 0) {
@@ -67,7 +68,7 @@ export default function EmployeeShiftRequest() {
 
   const fetchEmployees = async (storeId: number) => {
     try {
-      const res = await fetch(`/api/employees?store_id=${storeId}`);
+      const res = await fetch(getApiUrl(`/api/employees?store_id=${storeId}`));
       const data = await res.json();
       setEmployees(data);
     } catch (error) {
@@ -77,7 +78,7 @@ export default function EmployeeShiftRequest() {
 
   const fetchSpecialDays = async () => {
     try {
-      const res = await fetch('/api/special-days');
+      const res = await fetch(getApiUrl('/api/special-days'));
       const data = await res.json();
       setSpecialDays(data);
     } catch (error) {
@@ -88,7 +89,7 @@ export default function EmployeeShiftRequest() {
   const fetchDeadline = async (storeId: number) => {
     try {
       const targetMonth = format(addWeeks(currentWeekStart, 2), 'yyyy-MM');
-      const res = await fetch(`/api/shift-deadlines?store_id=${storeId}&target_month=${targetMonth}`);
+      const res = await fetch(getApiUrl(`/api/shift-deadlines?store_id=${storeId}&target_month=${targetMonth}`));
       const data = await res.json();
       if (data.length > 0) {
         setDeadline(data[0].deadline_date);
@@ -213,14 +214,14 @@ export default function EmployeeShiftRequest() {
         
         if (existingRequest) {
           // 更新
-          await fetch(`/api/shift-requests/${existingRequest.id}`, {
+          await fetch(getApiUrl(`/api/shift-requests/${existingRequest.id}`), {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(data)
           });
         } else {
           // 新規作成
-          await fetch('/api/shift-requests', {
+          await fetch(getApiUrl('/api/shift-requests'), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(data)

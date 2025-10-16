@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Role, Store } from '../types';
 import AdminLayout from '../components/AdminLayout';
+import { getApiUrl } from '../config/api';
 
 interface PasswordManagementProps {
   role: Role;
@@ -25,7 +26,7 @@ export default function PasswordManagement({ role, storeId, onLogout }: Password
 
   const fetchStores = async () => {
     try {
-      const res = await fetch('/api/stores');
+      const res = await fetch(getApiUrl('/api/stores'));
       const data = await res.json();
       setStores(data.filter((s: Store) => s.id !== 8)); // 本部以外
       if (data.length > 0) {
@@ -63,7 +64,7 @@ export default function PasswordManagement({ role, storeId, onLogout }: Password
         requestData.store_id = selectedStoreId;
       }
 
-      const res = await fetch('/api/passwords/change', {
+      const res = await fetch(getApiUrl('/api/passwords/change'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',

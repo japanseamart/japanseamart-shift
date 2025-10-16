@@ -1,0 +1,22 @@
+name = "japanseamart-shift"
+compatibility_date = "2024-01-01"
+main = "server/worker.ts"
+
+# Cloudflare D1 データベース
+[[d1_databases]]
+binding = "DB"
+database_name = "shift-management"
+database_id = "" # wrangler d1 create shift-management コマンドで取得
+
+# 環境変数
+[vars]
+NODE_ENV = "production"
+
+# セッションストレージ（KV）
+[[kv_namespaces]]
+binding = "SESSIONS"
+id = "" # wrangler kv:namespace create SESSIONS コマンドで取得
+
+# Pages統合
+[site]
+bucket = "./dist"

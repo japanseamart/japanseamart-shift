@@ -3,6 +3,7 @@ import { format, startOfMonth, endOfMonth, parseISO } from 'date-fns';
 import Papa from 'papaparse';
 import { Role, Store, Employee, Shift } from '../types';
 import AdminLayout from '../components/AdminLayout';
+import { getApiUrl } from '../config/api';
 
 interface MonthlyReportProps {
   role: Role;
@@ -84,7 +85,7 @@ export default function MonthlyReport({ role, storeId, onLogout }: MonthlyReport
 
   const fetchStores = async () => {
     try {
-      const res = await fetch('/api/stores');
+      const res = await fetch(getApiUrl('/api/stores'));
       const data = await res.json();
       setStores(data.filter((s: Store) => s.id !== 8));
       
@@ -98,7 +99,7 @@ export default function MonthlyReport({ role, storeId, onLogout }: MonthlyReport
 
   const fetchStore = async (id: number) => {
     try {
-      const res = await fetch(`/api/stores/${id}`);
+      const res = await fetch(getApiUrl(`/api/stores/${id}`));
       const data = await res.json();
       setSelectedStore(data);
     } catch (error) {
@@ -108,7 +109,7 @@ export default function MonthlyReport({ role, storeId, onLogout }: MonthlyReport
 
   const fetchEmployees = async (storeId: number) => {
     try {
-      const res = await fetch(`/api/employees?store_id=${storeId}`);
+      const res = await fetch(getApiUrl(`/api/employees?store_id=${storeId}`));
       const data = await res.json();
       setEmployees(data);
     } catch (error) {

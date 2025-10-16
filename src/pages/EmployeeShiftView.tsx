@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { format, startOfWeek, endOfWeek, eachDayOfInterval, addWeeks, subWeeks } from 'date-fns';
 import { ja } from 'date-fns/locale';
 import { Store, Employee, Shift, Announcement } from '../types';
+import { getApiUrl } from '../config/api';
 
 export default function EmployeeShiftView() {
   const [stores, setStores] = useState<Store[]>([]);
@@ -28,7 +29,7 @@ export default function EmployeeShiftView() {
 
   const fetchStores = async () => {
     try {
-      const res = await fetch('/api/stores');
+      const res = await fetch(getApiUrl('/api/stores'));
       const data = await res.json();
       setStores(data);
     } catch (error) {
@@ -38,7 +39,7 @@ export default function EmployeeShiftView() {
 
   const fetchAnnouncements = async () => {
     try {
-      const res = await fetch('/api/announcements');
+      const res = await fetch(getApiUrl('/api/announcements'));
       const data = await res.json();
       setAnnouncements(data);
     } catch (error) {
@@ -79,7 +80,7 @@ export default function EmployeeShiftView() {
 
   const fetchEmployees = async () => {
     try {
-      const res = await fetch(`/api/employees?store_id=${selectedStoreId}`);
+      const res = await fetch(getApiUrl(`/api/employees?store_id=${selectedStoreId}`));
       const data = await res.json();
       setEmployees(data);
     } catch (error) {

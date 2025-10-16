@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Role, Announcement, Store } from '../types';
 import AdminLayout from '../components/AdminLayout';
+import { getApiUrl } from '../config/api';
 
 interface AdminDashboardProps {
   role: Role;
@@ -25,7 +26,7 @@ export default function AdminDashboard({ role, storeId, onLogout }: AdminDashboa
 
   const fetchAnnouncements = async () => {
     try {
-      const res = await fetch('/api/announcements');
+      const res = await fetch(getApiUrl('/api/announcements'));
       const data = await res.json();
       setAnnouncements(data);
     } catch (error) {
@@ -35,7 +36,7 @@ export default function AdminDashboard({ role, storeId, onLogout }: AdminDashboa
 
   const fetchStores = async () => {
     try {
-      const res = await fetch('/api/stores');
+      const res = await fetch(getApiUrl('/api/stores'));
       const data = await res.json();
       setStores(data);
     } catch (error) {
@@ -49,7 +50,7 @@ export default function AdminDashboard({ role, storeId, onLogout }: AdminDashboa
       if (role === 'store_manager' && storeId) {
         url += `?store_id=${storeId}`;
       }
-      const res = await fetch(url, { credentials: 'include' });
+      const res = await fetch(getApiUrl(url), { credentials: 'include' });
       const data = await res.json();
       setUnsubmittedCount(data.count || 0);
     } catch (error) {
@@ -61,7 +62,7 @@ export default function AdminDashboard({ role, storeId, onLogout }: AdminDashboa
     e.preventDefault();
     
     try {
-      const res = await fetch('/api/announcements', {
+      const res = await fetch(getApiUrl('/api/announcements'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',

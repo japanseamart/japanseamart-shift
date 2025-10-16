@@ -1,6 +1,7 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Role } from './types';
+import { getApiUrl } from './config/api';
 
 // Pages
 import EmployeeShiftView from './pages/EmployeeShiftView';
@@ -40,7 +41,7 @@ function App() {
         return;
       }
       
-      const res = await fetch('/api/auth/session', {
+      const res = await fetch(getApiUrl('/api/auth/session'), {
         credentials: 'include',
       });
       const data = await res.json();
@@ -58,7 +59,7 @@ function App() {
 
   const handleLogin = async (password: string) => {
     try {
-      const res = await fetch('/api/auth/login', {
+      const res = await fetch(getApiUrl('/api/auth/login'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -84,7 +85,7 @@ function App() {
 
   const handleLogout = async (auto = false) => {
     try {
-      await fetch('/api/auth/logout', {
+      await fetch(getApiUrl('/api/auth/logout'), {
         method: 'POST',
         credentials: 'include',
       });

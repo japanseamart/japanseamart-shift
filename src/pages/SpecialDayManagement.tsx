@@ -3,6 +3,7 @@ import { format } from 'date-fns';
 import { ja } from 'date-fns/locale';
 import { Role, SpecialDay } from '../types';
 import AdminLayout from '../components/AdminLayout';
+import { getApiUrl } from '../config/api';
 
 interface SpecialDayManagementProps {
   role: Role;
@@ -25,7 +26,7 @@ export default function SpecialDayManagement({ role, onLogout }: SpecialDayManag
 
   const fetchSpecialDays = async () => {
     try {
-      const res = await fetch('/api/special-days');
+      const res = await fetch(getApiUrl('/api/special-days'));
       const data = await res.json();
       setSpecialDays(data);
     } catch (error) {
@@ -37,7 +38,7 @@ export default function SpecialDayManagement({ role, onLogout }: SpecialDayManag
     e.preventDefault();
 
     try {
-      const res = await fetch('/api/special-days', {
+      const res = await fetch(getApiUrl('/api/special-days'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -61,7 +62,7 @@ export default function SpecialDayManagement({ role, onLogout }: SpecialDayManag
     if (!confirm('この特別日を削除してもよろしいですか？')) return;
 
     try {
-      const res = await fetch(`/api/special-days/${id}`, {
+      const res = await fetch(getApiUrl(`/api/special-days/${id}`), {
         method: 'DELETE',
         credentials: 'include',
       });

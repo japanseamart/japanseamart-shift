@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Role, Announcement } from '../types';
 import AdminLayout from '../components/AdminLayout';
+import { getApiUrl } from '../config/api';
 
 interface AnnouncementManagementProps {
   role: Role;
@@ -27,7 +28,7 @@ export default function AnnouncementManagement({ role, onLogout }: AnnouncementM
 
   const fetchAnnouncements = async () => {
     try {
-      const res = await fetch('/api/announcements');
+      const res = await fetch(getApiUrl('/api/announcements'));
       const data = await res.json();
       setAnnouncements(data);
     } catch (error) {
@@ -41,7 +42,7 @@ export default function AnnouncementManagement({ role, onLogout }: AnnouncementM
     try {
       if (editingAnnouncement) {
         // 更新
-        await fetch(`/api/announcements/${editingAnnouncement.id}`, {
+        await fetch(getApiUrl(`/api/announcements/${editingAnnouncement.id}`), {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           credentials: 'include',
@@ -49,7 +50,7 @@ export default function AnnouncementManagement({ role, onLogout }: AnnouncementM
         });
       } else {
         // 新規作成
-        await fetch('/api/announcements', {
+        await fetch(getApiUrl('/api/announcements'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           credentials: 'include',
@@ -80,7 +81,7 @@ export default function AnnouncementManagement({ role, onLogout }: AnnouncementM
     if (!confirm('このお知らせを削除しますか?')) return;
 
     try {
-      await fetch(`/api/announcements/${id}`, {
+      await fetch(getApiUrl(`/api/announcements/${id}`), {
         method: 'DELETE',
         credentials: 'include'
       });
@@ -92,7 +93,7 @@ export default function AnnouncementManagement({ role, onLogout }: AnnouncementM
 
   const toggleActive = async (id: number, currentStatus: number) => {
     try {
-      await fetch(`/api/announcements/${id}`, {
+      await fetch(getApiUrl(`/api/announcements/${id}`), {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',

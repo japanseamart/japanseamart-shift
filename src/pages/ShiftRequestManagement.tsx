@@ -3,6 +3,7 @@ import { format, addWeeks, startOfWeek, endOfWeek, eachDayOfInterval } from 'dat
 import { ja } from 'date-fns/locale';
 import { Role, Employee, ShiftRequest, Store } from '../types';
 import AdminLayout from '../components/AdminLayout';
+import { getApiUrl } from '../config/api';
 
 interface ShiftRequestManagementProps {
   role: Role;
@@ -40,7 +41,7 @@ export default function ShiftRequestManagement({ role, storeId, onLogout }: Shif
 
   const fetchStores = async () => {
     try {
-      const res = await fetch('/api/stores');
+      const res = await fetch(getApiUrl('/api/stores'));
       const data = await res.json();
       setStores(data.filter((s: Store) => s.id !== 8)); // 本部以外
       
@@ -57,7 +58,7 @@ export default function ShiftRequestManagement({ role, storeId, onLogout }: Shif
     
     try {
       const targetMonth = format(targetWeekStart, 'yyyy-MM');
-      const res = await fetch(`/api/shift-deadlines?store_id=${selectedStoreId}&target_month=${targetMonth}`);
+      const res = await fetch(getApiUrl(`/api/shift-deadlines?store_id=${selectedStoreId}&target_month=${targetMonth}`));
       const data = await res.json();
       if (data.length > 0) {
         setDeadline(data[0].deadline_date);
@@ -76,7 +77,7 @@ export default function ShiftRequestManagement({ role, storeId, onLogout }: Shif
     
     try {
       // 従業員一覧を取得
-      const empRes = await fetch(`/api/employees?store_id=${selectedStoreId}`);
+      const empRes = await fetch(getApiUrl(`/api/employees?store_id=${selectedStoreId}`));
       const employees: Employee[] = await empRes.json();
 
       // 対象週の日付リスト
@@ -128,12 +129,12 @@ export default function ShiftRequestManagement({ role, storeId, onLogout }: Shif
       const targetMonth = format(targetWeekStart, 'yyyy-MM');
       
       // 既存の締切があるか確認
-      const existingRes = await fetch(`/api/shift-deadlines?store_id=${selectedStoreId}&target_month=${targetMonth}`);
+      const existingRes = await fetch(getApiUrl(`/api/shift-deadlines?store_id=${selectedStoreId}&target_month=${targetMonth}`));
       const existing = await existingRes.json();
 
       if (existing.length > 0) {
         // 更新
-        await fetch(`/api/shift-deadlines/${existing[0].id}`, {
+        await fetch(getApiUrl(`/api/shift-deadlines/${existing[0].id}`), {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           credentials: 'include',
@@ -141,7 +142,7 @@ export default function ShiftRequestManagement({ role, storeId, onLogout }: Shif
         });
       } else {
         // 新規作成
-        await fetch('/api/shift-deadlines', {
+        await fetch(getApiUrl('/api/shift-deadlines'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           credentials: 'include',

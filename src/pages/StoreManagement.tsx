@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Role, Store } from '../types';
 import AdminLayout from '../components/AdminLayout';
+import { getApiUrl } from '../config/api';
 
 interface StoreManagementProps {
   role: Role;
@@ -34,7 +35,7 @@ export default function StoreManagement({ role, onLogout }: StoreManagementProps
 
   const fetchStores = async () => {
     try {
-      const res = await fetch('/api/stores');
+      const res = await fetch(getApiUrl('/api/stores'));
       const data = await res.json();
       setStores(data);
     } catch (error) {
@@ -93,7 +94,7 @@ export default function StoreManagement({ role, onLogout }: StoreManagementProps
     if (!confirm('この店舗を削除してもよろしいですか？')) return;
 
     try {
-      const res = await fetch(`/api/stores/${id}`, {
+      const res = await fetch(getApiUrl(`/api/stores/${id}`), {
         method: 'DELETE',
         credentials: 'include',
       });
