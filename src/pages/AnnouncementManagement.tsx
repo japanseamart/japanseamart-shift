@@ -11,7 +11,11 @@ export default function AnnouncementManagement({ role, onLogout }: AnnouncementM
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [editingAnnouncement, setEditingAnnouncement] = useState<Announcement | null>(null);
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<{
+    title: string;
+    content: string;
+    is_active: number;
+  }>({
     title: '',
     content: '',
     is_active: 1
@@ -67,7 +71,7 @@ export default function AnnouncementManagement({ role, onLogout }: AnnouncementM
     setFormData({
       title: announcement.title,
       content: announcement.content,
-      is_active: announcement.is_active
+      is_active: Number(announcement.is_active)
     });
     setShowForm(true);
   };

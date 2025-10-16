@@ -9,7 +9,7 @@ interface AdminLayoutProps {
   onLogout: () => void;
 }
 
-export default function AdminLayout({ children, role, storeId, onLogout }: AdminLayoutProps) {
+export default function AdminLayout({ children, role, onLogout }: AdminLayoutProps) {
   const location = useLocation();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [lastActivity, setLastActivity] = useState(Date.now());

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Role, Announcement, Store, ShiftRequest } from '../types';
+import { Role, Announcement, Store } from '../types';
 import AdminLayout from '../components/AdminLayout';
 
 interface AdminDashboardProps {

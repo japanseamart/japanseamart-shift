@@ -58,7 +58,7 @@ export interface ShiftRequest {
   employee_id: number;
   store_id: number;
   date: string;
-  patterns: ShiftPattern[]; // 複数選択可能
+  patterns: string; // JSON文字列（ShiftPattern[]）
   custom_start?: string; // "07:00"
   custom_end?: string; // "13:00"
   status: RequestStatus;
@@ -96,7 +96,7 @@ export interface Announcement {
   title: string;
   content: string;
   created_at: string;
-  is_active: boolean;
+  is_active: number; // SQLiteでは0/1
 }
 
 // パスワード管理

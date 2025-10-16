@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { format, addDays, startOfWeek, endOfWeek, eachDayOfInterval, isBefore, isAfter, parseISO, addWeeks } from 'date-fns';
+import { format, addDays, startOfWeek, endOfWeek, eachDayOfInterval, isBefore, parseISO, addWeeks } from 'date-fns';
 import { ja } from 'date-fns/locale';
 import type { Store, Employee, ShiftRequest, SpecialDay } from '../types';
 

@@ -178,11 +178,12 @@ export default function EmployeeManagement({ role, storeId, onLogout }: Employee
           const store = stores.find(s => s.name === row.所属店舗);
           if (!store) continue;
 
-          const employmentType = {
+          const employmentTypeMap: { [key: string]: string } = {
             'パート・アルバイト': 'part_time',
             'パート社員': 'part_time_insured',
             '正社員': 'full_time',
-          }[row.給与タイプ] || 'part_time';
+          };
+          const employmentType = employmentTypeMap[row.給与タイプ as string] || 'part_time';
 
           const employeeData = {
             name: row.氏名,

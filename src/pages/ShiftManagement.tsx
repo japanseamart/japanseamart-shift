@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { format, addWeeks, startOfWeek, endOfWeek, eachDayOfInterval, parseISO, differenceInMinutes } from 'date-fns';
+import { format, addWeeks, startOfWeek, endOfWeek, eachDayOfInterval, differenceInMinutes } from 'date-fns';
 import { ja } from 'date-fns/locale';
 import { Role, Employee, Shift, Store, SpecialDay, ShiftRequest } from '../types';
 import AdminLayout from '../components/AdminLayout';
@@ -374,10 +374,6 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
       return '−';
     }
   };
-
-  const budgetPercentage = selectedStore?.monthly_budget
-    ? Math.round((totalLaborCost / selectedStore.monthly_budget) * 100)
-    : 0;
 
   const weeklyBudget = selectedStore?.monthly_budget ? Math.round(selectedStore.monthly_budget / 4) : 0;
   const isBudgetExceeded = weeklyBudget > 0 && totalLaborCost > weeklyBudget;

@@ -14,7 +14,7 @@ export default function PasswordManagement({ role, storeId, onLogout }: Password
   const [selectedStoreId, setSelectedStoreId] = useState<number | null>(null);
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [currentPassword, setCurrentPassword] = useState('');
+
   const [autoLogoutMinutes, setAutoLogoutMinutes] = useState<number>(5);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [loading, setLoading] = useState(false);
@@ -74,7 +74,6 @@ export default function PasswordManagement({ role, storeId, onLogout }: Password
         setMessage({ type: 'success', text: 'パスワードを変更しました' });
         setNewPassword('');
         setConfirmPassword('');
-        setCurrentPassword('');
       } else {
         const data = await res.json();
         setMessage({ type: 'error', text: data.error || 'パスワード変更に失敗しました' });
