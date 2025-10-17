@@ -829,6 +829,66 @@ app.delete('/special-days/:id', async (c) => {
   return c.json({ success: true })
 })
 
+// ==================== 週次公開状態API ====================
+
+// 週次公開状態の取得
+app.get('/weekly-publications', async (c) => {
+  const storeId = c.req.query('store_id')
+  const weekStartDate = c.req.query('week_start_date')
+  
+  if (!storeId || !weekStartDate) {
+    return c.json({ error: 'store_idとweek_start_dateが必要です' }, 400)
+  }
+  
+  const publication = await c.env.DB.prepare(`
+    SELECT * FROM weekly_publications 
+    WHERE store_id = ? AND week_start_date = ?
+  `).bind(storeId, weekStartDate).first()
+  
+  if (!publication) {
+    return c.json({ is_published: false })
+  }
+  
+  return c.json(publication)
+})
+
+// 週次公開状態の設定
+app.post('/weekly-publications', async (c) => {
+  const { store_id, week_start_date, is_published } = await c.req.json()
+  
+  if (!store_id || !week_start_date) {
+    return c.json({ error: 'store_idとweek_start_dateが必要です' }, 400)
+  }
+  
+  // 既存のレコードを確認
+  const existing = await c.env.DB.prepare(`
+    SELECT id FROM weekly_publications 
+    WHERE store_id = ? AND week_start_date = ?
+  `).bind(store_id, week_start_date).first()
+  
+  if (existing) {
+    // 更新
+    await c.env.DB.prepare(`
+      UPDATE weekly_publications 
+      SET is_published = ?, updated_at = CURRENT_TIMESTAMP
+      WHERE store_id = ? AND week_start_date = ?
+    `).bind(is_published ? 1 : 0, store_id, week_start_date).run()
+  } else {
+    // 新規作成
+    await c.env.DB.prepare(`
+      INSERT INTO weekly_publications (store_id, week_start_date, is_published)
+      VALUES (?, ?, ?)
+    `).bind(store_id, week_start_date, is_published ? 1 : 0).run()
+  }
+  
+  const updated = await c.env.DB.prepare(`
+    SELECT * FROM weekly_publications 
+    WHERE store_id = ? AND week_start_date = ?
+  `).bind(store_id, week_start_date).first()
+  
+  return c.json(updated)
+})
+
 // ==================== パスワード管理API ====================
 
 // パスワード一覧取得

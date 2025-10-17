@@ -446,7 +446,8 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
 
         {/* コントロールパネル */}
         <div className="card">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {/* 上段：店舗選択と週選択 */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
             {/* 店舗選択 */}
             {role === 'admin' && (
               <div>
@@ -469,30 +470,33 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
               <div className="flex gap-2">
                 <button
                   onClick={() => setTargetWeekStart(addWeeks(targetWeekStart, -1))}
-                  className="btn-secondary"
+                  className="btn-secondary px-3 py-1 text-sm"
                 >
                   ← 前週
                 </button>
                 <button
                   onClick={() => setTargetWeekStart(startOfWeek(new Date(), { locale: ja }))}
-                  className="btn-primary px-3"
+                  className="btn-primary px-3 py-1 text-sm"
                 >
                   今週
                 </button>
-                <div className="flex-1 flex items-center justify-center text-sm font-medium">
+                <div className="flex-1 flex items-center justify-center text-sm font-medium bg-ocean-50 rounded px-2">
                   {format(targetWeekStart, 'yyyy年M月d日', { locale: ja })} - {format(weekEnd, 'M月d日', { locale: ja })}
                 </div>
                 <button
                   onClick={() => setTargetWeekStart(addWeeks(targetWeekStart, 1))}
-                  className="btn-secondary"
+                  className="btn-secondary px-3 py-1 text-sm"
                 >
                   次週 →
                 </button>
               </div>
             </div>
+          </div>
 
-            {/* 人件費サマリー */}
-            <div data-salary>
+          {/* 下段：人件費サマリー */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4" data-salary>
+            {/* 週間人件費予想 */}
+            <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 週間人件費予想
                 {isBudgetExceeded && (
@@ -504,20 +508,20 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
                   ? 'bg-gradient-to-r from-red-50 to-red-100 border-2 border-red-300' 
                   : 'bg-gradient-to-r from-ocean-50 to-ocean-100'
               }`}>
-                <div className={`text-2xl font-bold ${isBudgetExceeded ? 'text-red-900' : 'text-ocean-900'}`}>
+                <div className={`text-xl font-bold ${isBudgetExceeded ? 'text-red-900' : 'text-ocean-900'}`}>
                   ¥{totalLaborCost.toLocaleString()}
                 </div>
                 {weeklyBudget > 0 && (
                   <div className="text-xs text-gray-600 mt-1">
                     <div className="flex justify-between items-center mb-1">
-                      <span>週間予算: ¥{weeklyBudget.toLocaleString()}</span>
+                      <span>週予算: ¥{weeklyBudget.toLocaleString()}</span>
                       <span className={`font-bold ${isBudgetExceeded ? 'text-red-600' : 'text-gray-700'}`}>
                         {Math.round((totalLaborCost / weeklyBudget) * 100)}%
                       </span>
                     </div>
-                    <div className="w-full bg-gray-200 rounded-full h-2">
+                    <div className="w-full bg-gray-200 rounded-full h-1.5">
                       <div
-                        className={`h-2 rounded-full transition-all ${
+                        className={`h-1.5 rounded-full transition-all ${
                           isBudgetExceeded ? 'bg-red-500' :
                           totalLaborCost / weeklyBudget > 0.8 ? 'bg-yellow-500' :
                           'bg-green-500'
@@ -525,11 +529,6 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
                         style={{ width: `${Math.min((totalLaborCost / weeklyBudget) * 100, 100)}%` }}
                       />
                     </div>
-                    {isBudgetExceeded && (
-                      <div className="text-xs text-red-600 font-medium mt-1">
-                        超過額: ¥{(totalLaborCost - weeklyBudget).toLocaleString()}
-                      </div>
-                    )}
                   </div>
                 )}
               </div>
@@ -541,20 +540,20 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
                 月間人件費予想
               </label>
               <div className="rounded-lg p-3 bg-gradient-to-r from-blue-50 to-blue-100">
-                <div className="text-2xl font-bold text-blue-900">
+                <div className="text-xl font-bold text-blue-900">
                   ¥{monthlyLaborCostForecast.toLocaleString()}
                 </div>
                 {selectedStore && selectedStore.monthly_budget > 0 && (
                   <div className="text-xs text-gray-600 mt-1">
                     <div className="flex justify-between items-center mb-1">
-                      <span>月間予算: ¥{selectedStore.monthly_budget.toLocaleString()}</span>
+                      <span>月予算: ¥{selectedStore.monthly_budget.toLocaleString()}</span>
                       <span className="font-bold text-gray-700">
                         {Math.round((monthlyLaborCostForecast / selectedStore.monthly_budget) * 100)}%
                       </span>
                     </div>
-                    <div className="w-full bg-gray-200 rounded-full h-2">
+                    <div className="w-full bg-gray-200 rounded-full h-1.5">
                       <div
-                        className={`h-2 rounded-full transition-all ${
+                        className={`h-1.5 rounded-full transition-all ${
                           monthlyLaborCostForecast > selectedStore.monthly_budget ? 'bg-red-500' :
                           monthlyLaborCostForecast / selectedStore.monthly_budget > 0.8 ? 'bg-yellow-500' :
                           'bg-green-500'
@@ -562,11 +561,6 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
                         style={{ width: `${Math.min((monthlyLaborCostForecast / selectedStore.monthly_budget) * 100, 100)}%` }}
                       />
                     </div>
-                    {monthlyLaborCostForecast > selectedStore.monthly_budget && (
-                      <div className="text-xs text-red-600 font-medium mt-1">
-                        超過予想: ¥{(monthlyLaborCostForecast - selectedStore.monthly_budget).toLocaleString()}
-                      </div>
-                    )}
                   </div>
                 )}
               </div>
