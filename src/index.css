@@ -81,10 +81,20 @@ body {
     page-break-inside: avoid;
   }
 
+  /* 週ごとに改ページ */
+  .print-week-section {
+    page-break-after: always;
+  }
+
+  .print-week-section:last-child {
+    page-break-after: auto;
+  }
+
   /* カラー印刷対応 */
   .card {
     box-shadow: none !important;
     border: 1px solid #e5e7eb !important;
+    margin-bottom: 10mm !important;
   }
 
   /* ボタンを非表示 */
@@ -100,11 +110,18 @@ body {
   /* テーブルを見やすく */
   table {
     border-collapse: collapse !important;
+    width: 100% !important;
   }
 
   th, td {
-    border: 1px solid #d1d5db !important;
-    padding: 4px 8px !important;
+    border: 1px solid #333 !important;
+    padding: 3mm 2mm !important;
+    font-size: 9pt !important;
+  }
+
+  th {
+    background-color: #f3f4f6 !important;
+    font-weight: bold !important;
   }
 
   /* 給与情報を非表示（data-salary属性がある要素） */
@@ -112,16 +129,43 @@ body {
     display: none !important;
   }
 
+  /* シフト要求パネルを非表示 */
+  [data-requests-panel] {
+    display: none !important;
+  }
+
   /* フォントサイズ調整 */
   body {
     font-size: 10pt !important;
+    color: #000 !important;
   }
 
   h1 {
-    font-size: 16pt !important;
+    font-size: 14pt !important;
+    margin-bottom: 3mm !important;
   }
 
   h2 {
-    font-size: 14pt !important;
+    font-size: 12pt !important;
+    margin-bottom: 2mm !important;
+  }
+
+  h3 {
+    font-size: 11pt !important;
+    margin-bottom: 2mm !important;
+  }
+
+  /* 印刷時のシフト表ヘッダー */
+  .print-shift-header {
+    text-align: center;
+    margin-bottom: 5mm;
+    border-bottom: 2px solid #333;
+    padding-bottom: 2mm;
+  }
+
+  /* 背景色を印刷 */
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
   }
 }

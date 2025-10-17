@@ -42,6 +42,10 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
   const [warningThreshold, setWarningThreshold] = useState(95); // 警告閾値（デフォルト95%）
   const [dangerThreshold, setDangerThreshold] = useState(100); // 危険閾値（デフォルト100%）
   const [showThresholdSettings, setShowThresholdSettings] = useState(false);
+  
+  // 印刷モード
+  const [showPrintDialog, setShowPrintDialog] = useState(false);
+  const [selectedWeeks, setSelectedWeeks] = useState<string[]>([format(startOfWeek(new Date(), { locale: ja }), 'yyyy-MM-dd')]);
 
   useEffect(() => {
     fetchStores();
@@ -179,6 +183,32 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
       console.error('公開設定エラー:', error);
       alert('公開設定に失敗しました');
     }
+  };
+
+  const handlePrint = () => {
+    // 選択された週が1つ以上あるか確認
+    if (selectedWeeks.length === 0) {
+      alert('印刷する週を選択してください');
+      return;
+    }
+    
+    // 印刷ダイアログを閉じる
+    setShowPrintDialog(false);
+    
+    // 少し待ってから印刷
+    setTimeout(() => {
+      window.print();
+    }, 100);
+  };
+
+  const toggleWeekSelection = (weekStart: string) => {
+    setSelectedWeeks(prev => {
+      if (prev.includes(weekStart)) {
+        return prev.filter(w => w !== weekStart);
+      } else {
+        return [...prev, weekStart].sort();
+      }
+    });
   };
 
   const handleAutoFillRequests = async () => {
@@ -498,10 +528,10 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
               {isPublished ? '🔓 公開中 (非公開にする)' : '🔒 未公開 (公開する)'}
             </button>
             <button
-              onClick={() => window.print()}
+              onClick={() => setShowPrintDialog(true)}
               className="btn-secondary"
             >
-              🖨️ 印刷
+              🖨️ 印刷設定
             </button>
           </div>
         </div>
@@ -551,6 +581,74 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
               >
                 設定を閉じる
               </button>
+            </div>
+          </div>
+        )}
+
+        {/* 印刷設定ダイアログ */}
+        {showPrintDialog && (
+          <div className="card bg-green-50 border-2 border-green-200">
+            <h3 className="text-lg font-bold text-gray-800 mb-4">🖨️ 印刷設定</h3>
+            <p className="text-sm text-gray-700 mb-4">
+              印刷したい週を選択してください（複数選択可）
+            </p>
+            
+            <div className="space-y-2 max-h-60 overflow-y-auto">
+              {/* 前後4週間を表示 */}
+              {Array.from({ length: 9 }, (_, i) => {
+                const weekStart = addWeeks(targetWeekStart, i - 4);
+                const weekEnd = endOfWeek(weekStart, { locale: ja });
+                const weekKey = format(weekStart, 'yyyy-MM-dd');
+                const isSelected = selectedWeeks.includes(weekKey);
+                const isCurrent = format(weekStart, 'yyyy-MM-dd') === format(targetWeekStart, 'yyyy-MM-dd');
+                
+                return (
+                  <label
+                    key={weekKey}
+                    className={`flex items-center p-3 rounded-lg border-2 cursor-pointer transition ${
+                      isSelected
+                        ? 'bg-green-100 border-green-500'
+                        : 'bg-white border-gray-200 hover:border-green-300'
+                    } ${isCurrent ? 'ring-2 ring-blue-400' : ''}`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={isSelected}
+                      onChange={() => toggleWeekSelection(weekKey)}
+                      className="w-5 h-5 text-green-600 rounded mr-3"
+                    />
+                    <div className="flex-1">
+                      <div className="font-medium text-gray-800">
+                        {format(weekStart, 'yyyy年M月d日', { locale: ja })} - {format(weekEnd, 'M月d日', { locale: ja })}
+                      </div>
+                      {isCurrent && (
+                        <div className="text-xs text-blue-600 font-medium">現在表示中</div>
+                      )}
+                    </div>
+                  </label>
+                );
+              })}
+            </div>
+
+            <div className="mt-4 flex justify-between items-center">
+              <div className="text-sm text-gray-600">
+                選択中: {selectedWeeks.length}週
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setShowPrintDialog(false)}
+                  className="btn-secondary"
+                >
+                  キャンセル
+                </button>
+                <button
+                  onClick={handlePrint}
+                  disabled={selectedWeeks.length === 0}
+                  className="btn-primary disabled:opacity-50"
+                >
+                  🖨️ 印刷プレビュー
+                </button>
+              </div>
             </div>
           </div>
         )}
@@ -899,7 +997,18 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
         </div>
 
         {/* ガントチャート */}
-        <div className="card overflow-x-auto">
+        <div className="card overflow-x-auto avoid-break">
+          {/* 印刷用ヘッダー */}
+          <div className="print-shift-header hidden print:block">
+            <h1 className="text-xl font-bold">{selectedStore?.name || ''} シフト表</h1>
+            <p className="text-sm mt-1">
+              {format(targetWeekStart, 'yyyy年M月d日', { locale: ja })} - {format(weekEnd, 'M月d日', { locale: ja })}
+            </p>
+            <p className="text-xs text-gray-600 mt-1">
+              印刷日: {format(new Date(), 'yyyy年M月d日', { locale: ja })}
+            </p>
+          </div>
+          
           <table className="min-w-full">
             <thead>
               <tr className="bg-gray-50">
