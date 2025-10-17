@@ -241,33 +241,62 @@ app.put('/stores/:id', async (c) => {
   const id = c.req.param('id')
   const data = await c.req.json()
   
-  const { name, monthly_budget, overtime_rate_enabled, saturday_rate, sunday_rate, holiday_rate,
+  const { name, monthly_budget, password, overtime_rate_enabled, saturday_rate, sunday_rate, holiday_rate,
           business_hours_start, business_hours_end, morning_start, morning_end,
           afternoon_start, afternoon_end, evening_start, evening_end } = data
 
-  await c.env.DB.prepare(`
-    UPDATE stores SET 
-      name = ?, 
-      monthly_budget = ?,
-      overtime_rate_enabled = ?,
-      saturday_rate = ?,
-      sunday_rate = ?,
-      holiday_rate = ?,
-      business_hours_start = ?,
-      business_hours_end = ?,
-      morning_start = ?,
-      morning_end = ?,
-      afternoon_start = ?,
-      afternoon_end = ?,
-      evening_start = ?,
-      evening_end = ?,
-      updated_at = CURRENT_TIMESTAMP
-    WHERE id = ?
-  `).bind(
-    name, monthly_budget, overtime_rate_enabled ? 1 : 0, saturday_rate, sunday_rate, holiday_rate,
-    business_hours_start, business_hours_end, morning_start, morning_end,
-    afternoon_start, afternoon_end, evening_start, evening_end, id
-  ).run()
+  // パスワードが提供されている場合のみ更新
+  if (password && password.trim() !== '') {
+    await c.env.DB.prepare(`
+      UPDATE stores SET 
+        name = ?, 
+        monthly_budget = ?,
+        password = ?,
+        overtime_rate_enabled = ?,
+        saturday_rate = ?,
+        sunday_rate = ?,
+        holiday_rate = ?,
+        business_hours_start = ?,
+        business_hours_end = ?,
+        morning_start = ?,
+        morning_end = ?,
+        afternoon_start = ?,
+        afternoon_end = ?,
+        evening_start = ?,
+        evening_end = ?,
+        updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `).bind(
+      name, monthly_budget, `plain:${password}`, overtime_rate_enabled ? 1 : 0, saturday_rate, sunday_rate, holiday_rate,
+      business_hours_start, business_hours_end, morning_start, morning_end,
+      afternoon_start, afternoon_end, evening_start, evening_end, id
+    ).run()
+  } else {
+    // パスワードが空の場合はパスワード以外を更新
+    await c.env.DB.prepare(`
+      UPDATE stores SET 
+        name = ?, 
+        monthly_budget = ?,
+        overtime_rate_enabled = ?,
+        saturday_rate = ?,
+        sunday_rate = ?,
+        holiday_rate = ?,
+        business_hours_start = ?,
+        business_hours_end = ?,
+        morning_start = ?,
+        morning_end = ?,
+        afternoon_start = ?,
+        afternoon_end = ?,
+        evening_start = ?,
+        evening_end = ?,
+        updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `).bind(
+      name, monthly_budget, overtime_rate_enabled ? 1 : 0, saturday_rate, sunday_rate, holiday_rate,
+      business_hours_start, business_hours_end, morning_start, morning_end,
+      afternoon_start, afternoon_end, evening_start, evening_end, id
+    ).run()
+  }
 
   const updatedStore = await c.env.DB.prepare('SELECT * FROM stores WHERE id = ?').bind(id).first()
   return c.json(updatedStore)

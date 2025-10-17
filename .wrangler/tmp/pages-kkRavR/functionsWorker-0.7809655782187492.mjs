@@ -1791,6 +1791,7 @@ app.put("/stores/:id", async (c) => {
   const {
     name,
     monthly_budget,
+    password,
     overtime_rate_enabled,
     saturday_rate,
     sunday_rate,
@@ -1804,41 +1805,81 @@ app.put("/stores/:id", async (c) => {
     evening_start,
     evening_end
   } = data;
-  await c.env.DB.prepare(`
-    UPDATE stores SET 
-      name = ?, 
-      monthly_budget = ?,
-      overtime_rate_enabled = ?,
-      saturday_rate = ?,
-      sunday_rate = ?,
-      holiday_rate = ?,
-      business_hours_start = ?,
-      business_hours_end = ?,
-      morning_start = ?,
-      morning_end = ?,
-      afternoon_start = ?,
-      afternoon_end = ?,
-      evening_start = ?,
-      evening_end = ?,
-      updated_at = CURRENT_TIMESTAMP
-    WHERE id = ?
-  `).bind(
-    name,
-    monthly_budget,
-    overtime_rate_enabled ? 1 : 0,
-    saturday_rate,
-    sunday_rate,
-    holiday_rate,
-    business_hours_start,
-    business_hours_end,
-    morning_start,
-    morning_end,
-    afternoon_start,
-    afternoon_end,
-    evening_start,
-    evening_end,
-    id
-  ).run();
+  if (password && password.trim() !== "") {
+    await c.env.DB.prepare(`
+      UPDATE stores SET 
+        name = ?, 
+        monthly_budget = ?,
+        password = ?,
+        overtime_rate_enabled = ?,
+        saturday_rate = ?,
+        sunday_rate = ?,
+        holiday_rate = ?,
+        business_hours_start = ?,
+        business_hours_end = ?,
+        morning_start = ?,
+        morning_end = ?,
+        afternoon_start = ?,
+        afternoon_end = ?,
+        evening_start = ?,
+        evening_end = ?,
+        updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `).bind(
+      name,
+      monthly_budget,
+      `plain:${password}`,
+      overtime_rate_enabled ? 1 : 0,
+      saturday_rate,
+      sunday_rate,
+      holiday_rate,
+      business_hours_start,
+      business_hours_end,
+      morning_start,
+      morning_end,
+      afternoon_start,
+      afternoon_end,
+      evening_start,
+      evening_end,
+      id
+    ).run();
+  } else {
+    await c.env.DB.prepare(`
+      UPDATE stores SET 
+        name = ?, 
+        monthly_budget = ?,
+        overtime_rate_enabled = ?,
+        saturday_rate = ?,
+        sunday_rate = ?,
+        holiday_rate = ?,
+        business_hours_start = ?,
+        business_hours_end = ?,
+        morning_start = ?,
+        morning_end = ?,
+        afternoon_start = ?,
+        afternoon_end = ?,
+        evening_start = ?,
+        evening_end = ?,
+        updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `).bind(
+      name,
+      monthly_budget,
+      overtime_rate_enabled ? 1 : 0,
+      saturday_rate,
+      sunday_rate,
+      holiday_rate,
+      business_hours_start,
+      business_hours_end,
+      morning_start,
+      morning_end,
+      afternoon_start,
+      afternoon_end,
+      evening_start,
+      evening_end,
+      id
+    ).run();
+  }
   const updatedStore = await c.env.DB.prepare("SELECT * FROM stores WHERE id = ?").bind(id).first();
   return c.json(updatedStore);
 });
@@ -2792,7 +2833,7 @@ var jsonError = /* @__PURE__ */ __name(async (request, env, _ctx, middlewareCtx)
 }, "jsonError");
 var middleware_miniflare3_json_error_default = jsonError;
 
-// ../.wrangler/tmp/bundle-cpJU6t/middleware-insertion-facade.js
+// ../.wrangler/tmp/bundle-0Yg6Zb/middleware-insertion-facade.js
 var __INTERNAL_WRANGLER_MIDDLEWARE__ = [
   middleware_ensure_req_body_drained_default,
   middleware_miniflare3_json_error_default
@@ -2824,7 +2865,7 @@ function __facade_invoke__(request, env, ctx, dispatch, finalMiddleware) {
 }
 __name(__facade_invoke__, "__facade_invoke__");
 
-// ../.wrangler/tmp/bundle-cpJU6t/middleware-loader.entry.ts
+// ../.wrangler/tmp/bundle-0Yg6Zb/middleware-loader.entry.ts
 var __Facade_ScheduledController__ = class ___Facade_ScheduledController__ {
   constructor(scheduledTime, cron, noRetry) {
     this.scheduledTime = scheduledTime;

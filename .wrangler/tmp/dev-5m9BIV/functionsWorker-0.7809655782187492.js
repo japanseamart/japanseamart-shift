@@ -1800,6 +1800,7 @@ app.put("/stores/:id", async (c) => {
   const {
     name,
     monthly_budget,
+    password,
     overtime_rate_enabled,
     saturday_rate,
     sunday_rate,
@@ -1813,41 +1814,81 @@ app.put("/stores/:id", async (c) => {
     evening_start,
     evening_end
   } = data;
-  await c.env.DB.prepare(`
-    UPDATE stores SET 
-      name = ?, 
-      monthly_budget = ?,
-      overtime_rate_enabled = ?,
-      saturday_rate = ?,
-      sunday_rate = ?,
-      holiday_rate = ?,
-      business_hours_start = ?,
-      business_hours_end = ?,
-      morning_start = ?,
-      morning_end = ?,
-      afternoon_start = ?,
-      afternoon_end = ?,
-      evening_start = ?,
-      evening_end = ?,
-      updated_at = CURRENT_TIMESTAMP
-    WHERE id = ?
-  `).bind(
-    name,
-    monthly_budget,
-    overtime_rate_enabled ? 1 : 0,
-    saturday_rate,
-    sunday_rate,
-    holiday_rate,
-    business_hours_start,
-    business_hours_end,
-    morning_start,
-    morning_end,
-    afternoon_start,
-    afternoon_end,
-    evening_start,
-    evening_end,
-    id
-  ).run();
+  if (password && password.trim() !== "") {
+    await c.env.DB.prepare(`
+      UPDATE stores SET 
+        name = ?, 
+        monthly_budget = ?,
+        password = ?,
+        overtime_rate_enabled = ?,
+        saturday_rate = ?,
+        sunday_rate = ?,
+        holiday_rate = ?,
+        business_hours_start = ?,
+        business_hours_end = ?,
+        morning_start = ?,
+        morning_end = ?,
+        afternoon_start = ?,
+        afternoon_end = ?,
+        evening_start = ?,
+        evening_end = ?,
+        updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `).bind(
+      name,
+      monthly_budget,
+      `plain:${password}`,
+      overtime_rate_enabled ? 1 : 0,
+      saturday_rate,
+      sunday_rate,
+      holiday_rate,
+      business_hours_start,
+      business_hours_end,
+      morning_start,
+      morning_end,
+      afternoon_start,
+      afternoon_end,
+      evening_start,
+      evening_end,
+      id
+    ).run();
+  } else {
+    await c.env.DB.prepare(`
+      UPDATE stores SET 
+        name = ?, 
+        monthly_budget = ?,
+        overtime_rate_enabled = ?,
+        saturday_rate = ?,
+        sunday_rate = ?,
+        holiday_rate = ?,
+        business_hours_start = ?,
+        business_hours_end = ?,
+        morning_start = ?,
+        morning_end = ?,
+        afternoon_start = ?,
+        afternoon_end = ?,
+        evening_start = ?,
+        evening_end = ?,
+        updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `).bind(
+      name,
+      monthly_budget,
+      overtime_rate_enabled ? 1 : 0,
+      saturday_rate,
+      sunday_rate,
+      holiday_rate,
+      business_hours_start,
+      business_hours_end,
+      morning_start,
+      morning_end,
+      afternoon_start,
+      afternoon_end,
+      evening_start,
+      evening_end,
+      id
+    ).run();
+  }
   const updatedStore = await c.env.DB.prepare("SELECT * FROM stores WHERE id = ?").bind(id).first();
   return c.json(updatedStore);
 });
