@@ -315,6 +315,239 @@ app.delete('/employees/:id', async (c) => {
   return c.json({ success: true })
 })
 
+// ==================== シフトAPI ====================
+
+// シフト一覧取得
+app.get('/shifts', async (c) => {
+  const storeId = c.req.query('store_id')
+  const startDate = c.req.query('start_date')
+  const endDate = c.req.query('end_date')
+  
+  let query = 'SELECT * FROM shifts WHERE 1=1'
+  const params: any[] = []
+  
+  if (storeId) {
+    query += ' AND store_id = ?'
+    params.push(storeId)
+  }
+  
+  if (startDate) {
+    query += ' AND date >= ?'
+    params.push(startDate)
+  }
+  
+  if (endDate) {
+    query += ' AND date <= ?'
+    params.push(endDate)
+  }
+  
+  query += ' ORDER BY date, start_time'
+  
+  const { results } = await c.env.DB.prepare(query).bind(...params).all()
+  return c.json(results)
+})
+
+// シフト詳細取得
+app.get('/shifts/:id', async (c) => {
+  const id = c.req.param('id')
+  const shift = await c.env.DB.prepare('SELECT * FROM shifts WHERE id = ?').bind(id).first()
+  
+  if (!shift) {
+    return c.json({ error: 'シフトが見つかりません' }, 404)
+  }
+  
+  return c.json(shift)
+})
+
+// シフト追加
+app.post('/shifts', async (c) => {
+  const { store_id, employee_id, date, start_time, end_time, break_minutes, labor_cost } = await c.req.json()
+  
+  const result = await c.env.DB.prepare(`
+    INSERT INTO shifts (store_id, employee_id, date, start_time, end_time, break_minutes, labor_cost)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `).bind(store_id, employee_id, date, start_time, end_time, break_minutes || 0, labor_cost || 0).run()
+
+  const newShift = await c.env.DB.prepare('SELECT * FROM shifts WHERE id = ?')
+    .bind(result.meta.last_row_id).first()
+  
+  return c.json(newShift)
+})
+
+// シフト更新
+app.put('/shifts/:id', async (c) => {
+  const id = c.req.param('id')
+  const { store_id, employee_id, date, start_time, end_time, break_minutes, labor_cost } = await c.req.json()
+  
+  await c.env.DB.prepare(`
+    UPDATE shifts SET 
+      store_id = ?,
+      employee_id = ?,
+      date = ?,
+      start_time = ?,
+      end_time = ?,
+      break_minutes = ?,
+      labor_cost = ?,
+      updated_at = CURRENT_TIMESTAMP
+    WHERE id = ?
+  `).bind(store_id, employee_id, date, start_time, end_time, break_minutes, labor_cost, id).run()
+
+  const updatedShift = await c.env.DB.prepare('SELECT * FROM shifts WHERE id = ?')
+    .bind(id).first()
+  
+  return c.json(updatedShift)
+})
+
+// シフト削除
+app.delete('/shifts/:id', async (c) => {
+  const id = c.req.param('id')
+  await c.env.DB.prepare('DELETE FROM shifts WHERE id = ?').bind(id).run()
+  return c.json({ success: true })
+})
+
+// ==================== シフト希望API ====================
+
+// シフト希望一覧取得
+app.get('/shift-requests', async (c) => {
+  const storeId = c.req.query('store_id')
+  const startDate = c.req.query('start_date')
+  const endDate = c.req.query('end_date')
+  const employeeId = c.req.query('employee_id')
+  
+  let query = 'SELECT * FROM shift_requests WHERE 1=1'
+  const params: any[] = []
+  
+  if (storeId) {
+    query += ' AND store_id = ?'
+    params.push(storeId)
+  }
+  
+  if (employeeId) {
+    query += ' AND employee_id = ?'
+    params.push(employeeId)
+  }
+  
+  if (startDate) {
+    query += ' AND date >= ?'
+    params.push(startDate)
+  }
+  
+  if (endDate) {
+    query += ' AND date <= ?'
+    params.push(endDate)
+  }
+  
+  query += ' ORDER BY date'
+  
+  const { results } = await c.env.DB.prepare(query).bind(...params).all()
+  return c.json(results)
+})
+
+// シフト希望追加
+app.post('/shift-requests', async (c) => {
+  const { store_id, employee_id, date, time_slot, remarks } = await c.req.json()
+  
+  const result = await c.env.DB.prepare(`
+    INSERT INTO shift_requests (store_id, employee_id, date, time_slot, remarks)
+    VALUES (?, ?, ?, ?, ?)
+  `).bind(store_id, employee_id, date, time_slot, remarks || null).run()
+
+  const newRequest = await c.env.DB.prepare('SELECT * FROM shift_requests WHERE id = ?')
+    .bind(result.meta.last_row_id).first()
+  
+  return c.json(newRequest)
+})
+
+// シフト希望更新
+app.put('/shift-requests/:id', async (c) => {
+  const id = c.req.param('id')
+  const { time_slot, remarks } = await c.req.json()
+  
+  await c.env.DB.prepare(`
+    UPDATE shift_requests SET 
+      time_slot = ?,
+      remarks = ?,
+      updated_at = CURRENT_TIMESTAMP
+    WHERE id = ?
+  `).bind(time_slot, remarks, id).run()
+
+  const updatedRequest = await c.env.DB.prepare('SELECT * FROM shift_requests WHERE id = ?')
+    .bind(id).first()
+  
+  return c.json(updatedRequest)
+})
+
+// シフト希望削除
+app.delete('/shift-requests/:id', async (c) => {
+  const id = c.req.param('id')
+  await c.env.DB.prepare('DELETE FROM shift_requests WHERE id = ?').bind(id).run()
+  return c.json({ success: true })
+})
+
+// ==================== その他のAPI ====================
+
+// シフト締切一覧取得
+app.get('/shift-deadlines', async (c) => {
+  const storeId = c.req.query('store_id')
+  const targetMonth = c.req.query('target_month')
+  
+  let query = 'SELECT * FROM shift_deadlines WHERE 1=1'
+  const params: any[] = []
+  
+  if (storeId) {
+    query += ' AND store_id = ?'
+    params.push(storeId)
+  }
+  
+  if (targetMonth) {
+    query += ' AND target_month = ?'
+    params.push(targetMonth)
+  }
+  
+  const { results } = await c.env.DB.prepare(query).bind(...params).all()
+  return c.json(results)
+})
+
+// シフト締切追加
+app.post('/shift-deadlines', async (c) => {
+  const { store_id, target_month, deadline_date } = await c.req.json()
+  
+  const result = await c.env.DB.prepare(`
+    INSERT INTO shift_deadlines (store_id, target_month, deadline_date)
+    VALUES (?, ?, ?)
+  `).bind(store_id, target_month, deadline_date).run()
+
+  const newDeadline = await c.env.DB.prepare('SELECT * FROM shift_deadlines WHERE id = ?')
+    .bind(result.meta.last_row_id).first()
+  
+  return c.json(newDeadline)
+})
+
+// シフト締切更新
+app.put('/shift-deadlines/:id', async (c) => {
+  const id = c.req.param('id')
+  const { deadline_date } = await c.req.json()
+  
+  await c.env.DB.prepare(`
+    UPDATE shift_deadlines SET 
+      deadline_date = ?,
+      updated_at = CURRENT_TIMESTAMP
+    WHERE id = ?
+  `).bind(deadline_date, id).run()
+
+  const updatedDeadline = await c.env.DB.prepare('SELECT * FROM shift_deadlines WHERE id = ?')
+    .bind(id).first()
+  
+  return c.json(updatedDeadline)
+})
+
+// シフト締切削除
+app.delete('/shift-deadlines/:id', async (c) => {
+  const id = c.req.param('id')
+  await c.env.DB.prepare('DELETE FROM shift_deadlines WHERE id = ?').bind(id).run()
+  return c.json({ success: true })
+})
+
 // Cloudflare Pages Functions エクスポート
 export const onRequest: PagesFunction = async (context) => {
   return app.fetch(context.request, context.env, context)
