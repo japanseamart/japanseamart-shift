@@ -41,7 +41,7 @@ function App() {
         return;
       }
       
-      const res = await fetch(getApiUrl('/api/auth/session'), {
+      const res = await fetch(getApiUrl('/api/session'), {
         credentials: 'include',
       });
       const data = await res.json();
@@ -59,7 +59,7 @@ function App() {
 
   const handleLogin = async (password: string) => {
     try {
-      const res = await fetch(getApiUrl('/api/auth/login'), {
+      const res = await fetch(getApiUrl('/api/login'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -85,7 +85,7 @@ function App() {
 
   const handleLogout = async (auto = false) => {
     try {
-      await fetch(getApiUrl('/api/auth/logout'), {
+      await fetch(getApiUrl('/api/logout'), {
         method: 'POST',
         credentials: 'include',
       });
