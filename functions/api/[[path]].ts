@@ -548,6 +548,154 @@ app.delete('/shift-deadlines/:id', async (c) => {
   return c.json({ success: true })
 })
 
+// ==================== お知らせAPI ====================
+
+// お知らせ一覧取得
+app.get('/announcements', async (c) => {
+  const { results } = await c.env.DB.prepare('SELECT * FROM announcements ORDER BY created_at DESC').all()
+  return c.json(results)
+})
+
+// お知らせ詳細取得
+app.get('/announcements/:id', async (c) => {
+  const id = c.req.param('id')
+  const announcement = await c.env.DB.prepare('SELECT * FROM announcements WHERE id = ?').bind(id).first()
+  
+  if (!announcement) {
+    return c.json({ error: 'お知らせが見つかりません' }, 404)
+  }
+  
+  return c.json(announcement)
+})
+
+// お知らせ追加
+app.post('/announcements', async (c) => {
+  const { title, content } = await c.req.json()
+  
+  const result = await c.env.DB.prepare(`
+    INSERT INTO announcements (title, content) VALUES (?, ?)
+  `).bind(title, content).run()
+
+  const newAnnouncement = await c.env.DB.prepare('SELECT * FROM announcements WHERE id = ?')
+    .bind(result.meta.last_row_id).first()
+  
+  return c.json(newAnnouncement)
+})
+
+// お知らせ更新
+app.put('/announcements/:id', async (c) => {
+  const id = c.req.param('id')
+  const { title, content } = await c.req.json()
+  
+  await c.env.DB.prepare(`
+    UPDATE announcements SET 
+      title = ?,
+      content = ?,
+      updated_at = CURRENT_TIMESTAMP
+    WHERE id = ?
+  `).bind(title, content, id).run()
+
+  const updatedAnnouncement = await c.env.DB.prepare('SELECT * FROM announcements WHERE id = ?')
+    .bind(id).first()
+  
+  return c.json(updatedAnnouncement)
+})
+
+// お知らせ削除
+app.delete('/announcements/:id', async (c) => {
+  const id = c.req.param('id')
+  await c.env.DB.prepare('DELETE FROM announcements WHERE id = ?').bind(id).run()
+  return c.json({ success: true })
+})
+
+// ==================== 特別日API ====================
+
+// 特別日一覧取得
+app.get('/special-days', async (c) => {
+  const { results } = await c.env.DB.prepare('SELECT * FROM special_days ORDER BY date').all()
+  return c.json(results)
+})
+
+// 特別日詳細取得
+app.get('/special-days/:id', async (c) => {
+  const id = c.req.param('id')
+  const specialDay = await c.env.DB.prepare('SELECT * FROM special_days WHERE id = ?').bind(id).first()
+  
+  if (!specialDay) {
+    return c.json({ error: '特別日が見つかりません' }, 404)
+  }
+  
+  return c.json(specialDay)
+})
+
+// 特別日追加
+app.post('/special-days', async (c) => {
+  const { date, name, rate_multiplier } = await c.req.json()
+  
+  const result = await c.env.DB.prepare(`
+    INSERT INTO special_days (date, name, rate_multiplier) VALUES (?, ?, ?)
+  `).bind(date, name, rate_multiplier || 1.0).run()
+
+  const newSpecialDay = await c.env.DB.prepare('SELECT * FROM special_days WHERE id = ?')
+    .bind(result.meta.last_row_id).first()
+  
+  return c.json(newSpecialDay)
+})
+
+// 特別日更新
+app.put('/special-days/:id', async (c) => {
+  const id = c.req.param('id')
+  const { date, name, rate_multiplier } = await c.req.json()
+  
+  await c.env.DB.prepare(`
+    UPDATE special_days SET 
+      date = ?,
+      name = ?,
+      rate_multiplier = ?,
+      updated_at = CURRENT_TIMESTAMP
+    WHERE id = ?
+  `).bind(date, name, rate_multiplier, id).run()
+
+  const updatedSpecialDay = await c.env.DB.prepare('SELECT * FROM special_days WHERE id = ?')
+    .bind(id).first()
+  
+  return c.json(updatedSpecialDay)
+})
+
+// 特別日削除
+app.delete('/special-days/:id', async (c) => {
+  const id = c.req.param('id')
+  await c.env.DB.prepare('DELETE FROM special_days WHERE id = ?').bind(id).run()
+  return c.json({ success: true })
+})
+
+// ==================== パスワード管理API ====================
+
+// パスワード一覧取得
+app.get('/passwords', async (c) => {
+  const { results } = await c.env.DB.prepare('SELECT id, role, store_id, auto_logout_minutes, updated_at FROM passwords ORDER BY id').all()
+  return c.json(results)
+})
+
+// パスワード更新
+app.put('/passwords/:id', async (c) => {
+  const id = c.req.param('id')
+  const { password_hash, auto_logout_minutes } = await c.req.json()
+  
+  await c.env.DB.prepare(`
+    UPDATE passwords SET 
+      password_hash = ?,
+      auto_logout_minutes = ?,
+      updated_at = CURRENT_TIMESTAMP
+    WHERE id = ?
+  `).bind(password_hash, auto_logout_minutes, id).run()
+
+  const updatedPassword = await c.env.DB.prepare('SELECT id, role, store_id, auto_logout_minutes, updated_at FROM passwords WHERE id = ?')
+    .bind(id).first()
+  
+  return c.json(updatedPassword)
+})
+
 // Cloudflare Pages Functions エクスポート
 export const onRequest: PagesFunction = async (context) => {
   return app.fetch(context.request, context.env, context)

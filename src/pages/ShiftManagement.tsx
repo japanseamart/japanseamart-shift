@@ -32,6 +32,7 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
   const [editingShift, setEditingShift] = useState<ShiftInput | null>(null);
   const [showShiftForm, setShowShiftForm] = useState(false);
   const [totalLaborCost, setTotalLaborCost] = useState(0);
+  const [monthlyLaborCostForecast, setMonthlyLaborCostForecast] = useState(0);
   const [saving, setSaving] = useState(false);
   const [isPublished, setIsPublished] = useState(false);
   const [autoFilling, setAutoFilling] = useState(false);
@@ -54,6 +55,7 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
 
   useEffect(() => {
     calculateTotalLaborCost();
+    calculateMonthlyForecast();
   }, [shifts, selectedStore, specialDays]);
 
   const fetchStores = async () => {
@@ -257,6 +259,36 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
     setTotalLaborCost(total);
   };
 
+  const calculateMonthlyForecast = async () => {
+    if (!selectedStoreId || !selectedStore) return;
+
+    try {
+      // 今月の開始日と終了日を取得
+      const now = new Date();
+      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+      const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+
+      // 今月の全シフトを取得
+      const res = await fetch(
+        getApiUrl(`/api/shifts?store_id=${selectedStoreId}&start_date=${format(monthStart, 'yyyy-MM-dd')}&end_date=${format(monthEnd, 'yyyy-MM-dd')}`)
+      );
+      const monthlyShifts: Shift[] = await res.json();
+
+      // 月間人件費を計算
+      let monthlyTotal = 0;
+      monthlyShifts.forEach(shift => {
+        const employee = employees.find(e => e.id === shift.employee_id);
+        if (employee) {
+          monthlyTotal += calculateLaborCost(shift, employee);
+        }
+      });
+
+      setMonthlyLaborCostForecast(monthlyTotal);
+    } catch (error) {
+      console.error('月間人件費予想計算エラー:', error);
+    }
+  };
+
   const handleAddShift = (employeeId: number, date: string) => {
     setEditingShift({
       employee_id: employeeId,
@@ -441,6 +473,12 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
                 >
                   ← 前週
                 </button>
+                <button
+                  onClick={() => setTargetWeekStart(startOfWeek(new Date(), { locale: ja }))}
+                  className="btn-primary px-3"
+                >
+                  今週
+                </button>
                 <div className="flex-1 flex items-center justify-center text-sm font-medium">
                   {format(targetWeekStart, 'yyyy年M月d日', { locale: ja })} - {format(weekEnd, 'M月d日', { locale: ja })}
                 </div>
@@ -490,6 +528,43 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
                     {isBudgetExceeded && (
                       <div className="text-xs text-red-600 font-medium mt-1">
                         超過額: ¥{(totalLaborCost - weeklyBudget).toLocaleString()}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* 月間人件費予想 */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                月間人件費予想
+              </label>
+              <div className="rounded-lg p-3 bg-gradient-to-r from-blue-50 to-blue-100">
+                <div className="text-2xl font-bold text-blue-900">
+                  ¥{monthlyLaborCostForecast.toLocaleString()}
+                </div>
+                {selectedStore && selectedStore.monthly_budget > 0 && (
+                  <div className="text-xs text-gray-600 mt-1">
+                    <div className="flex justify-between items-center mb-1">
+                      <span>月間予算: ¥{selectedStore.monthly_budget.toLocaleString()}</span>
+                      <span className="font-bold text-gray-700">
+                        {Math.round((monthlyLaborCostForecast / selectedStore.monthly_budget) * 100)}%
+                      </span>
+                    </div>
+                    <div className="w-full bg-gray-200 rounded-full h-2">
+                      <div
+                        className={`h-2 rounded-full transition-all ${
+                          monthlyLaborCostForecast > selectedStore.monthly_budget ? 'bg-red-500' :
+                          monthlyLaborCostForecast / selectedStore.monthly_budget > 0.8 ? 'bg-yellow-500' :
+                          'bg-green-500'
+                        }`}
+                        style={{ width: `${Math.min((monthlyLaborCostForecast / selectedStore.monthly_budget) * 100, 100)}%` }}
+                      />
+                    </div>
+                    {monthlyLaborCostForecast > selectedStore.monthly_budget && (
+                      <div className="text-xs text-red-600 font-medium mt-1">
+                        超過予想: ¥{(monthlyLaborCostForecast - selectedStore.monthly_budget).toLocaleString()}
                       </div>
                     )}
                   </div>
