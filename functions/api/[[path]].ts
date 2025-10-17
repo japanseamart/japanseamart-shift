@@ -14,7 +14,7 @@ type SessionData = {
 }
 
 // Honoアプリケーション
-const app = new Hono<{ Bindings: Bindings, Variables: { session: SessionData | null } }>()
+const app = new Hono<{ Bindings: Bindings, Variables: { session: SessionData | null } }>().basePath('/api')
 
 // CORS設定
 app.use('*', cors({
@@ -79,7 +79,7 @@ async function verifyPassword(plain: string, hashed: string): Promise<boolean> {
 
 // ==================== ヘルスチェック ====================
 
-app.get('/api/health', (c) => {
+app.get('/health', (c) => {
   return c.json({ 
     status: 'OK', 
     timestamp: new Date().toISOString(),
@@ -90,7 +90,7 @@ app.get('/api/health', (c) => {
 // ==================== 認証API ====================
 
 // ログイン
-app.post('/api/auth/login', async (c) => {
+app.post('/login', async (c) => {
   const { password } = await c.req.json()
   
   if (!password) {
@@ -133,12 +133,12 @@ app.post('/api/auth/login', async (c) => {
 })
 
 // ログアウト
-app.post('/api/auth/logout', async (c) => {
+app.post('/logout', async (c) => {
   return c.json({ success: true })
 })
 
 // セッション確認
-app.get('/api/auth/session', async (c) => {
+app.get('/session', async (c) => {
   const sessionId = c.req.header('x-session-id')
   const session = await getSession(c, sessionId)
   
@@ -156,13 +156,13 @@ app.get('/api/auth/session', async (c) => {
 // ==================== 店舗API ====================
 
 // 店舗一覧取得
-app.get('/api/stores', async (c) => {
+app.get('/stores', async (c) => {
   const { results } = await c.env.DB.prepare('SELECT * FROM stores ORDER BY id').all()
   return c.json(results)
 })
 
 // 店舗詳細取得
-app.get('/api/stores/:id', async (c) => {
+app.get('/stores/:id', async (c) => {
   const id = c.req.param('id')
   const store = await c.env.DB.prepare('SELECT * FROM stores WHERE id = ?').bind(id).first()
   
@@ -174,7 +174,7 @@ app.get('/api/stores/:id', async (c) => {
 })
 
 // 店舗追加
-app.post('/api/stores', async (c) => {
+app.post('/stores', async (c) => {
   const { name, monthly_budget } = await c.req.json()
   
   const result = await c.env.DB.prepare(`
@@ -188,7 +188,7 @@ app.post('/api/stores', async (c) => {
 })
 
 // 店舗更新
-app.put('/api/stores/:id', async (c) => {
+app.put('/stores/:id', async (c) => {
   const id = c.req.param('id')
   const data = await c.req.json()
   
@@ -225,7 +225,7 @@ app.put('/api/stores/:id', async (c) => {
 })
 
 // 店舗削除
-app.delete('/api/stores/:id', async (c) => {
+app.delete('/stores/:id', async (c) => {
   const id = c.req.param('id')
   await c.env.DB.prepare('DELETE FROM stores WHERE id = ?').bind(id).run()
   return c.json({ success: true })
@@ -234,7 +234,7 @@ app.delete('/api/stores/:id', async (c) => {
 // ==================== 従業員API ====================
 
 // 従業員一覧取得
-app.get('/api/employees', async (c) => {
+app.get('/employees', async (c) => {
   const storeId = c.req.query('store_id')
   
   if (storeId) {
@@ -248,7 +248,7 @@ app.get('/api/employees', async (c) => {
 })
 
 // 従業員詳細取得
-app.get('/api/employees/:id', async (c) => {
+app.get('/employees/:id', async (c) => {
   const id = c.req.param('id')
   const employee = await c.env.DB.prepare('SELECT * FROM employees WHERE id = ?').bind(id).first()
   
@@ -260,7 +260,7 @@ app.get('/api/employees/:id', async (c) => {
 })
 
 // 従業員追加
-app.post('/api/employees', async (c) => {
+app.post('/employees', async (c) => {
   const { name, store_id, employment_type, hourly_wage } = await c.req.json()
   
   const result = await c.env.DB.prepare(`
@@ -275,7 +275,7 @@ app.post('/api/employees', async (c) => {
 })
 
 // 従業員更新
-app.put('/api/employees/:id', async (c) => {
+app.put('/employees/:id', async (c) => {
   const id = c.req.param('id')
   const { name, store_id, employment_type, hourly_wage } = await c.req.json()
   
@@ -296,11 +296,13 @@ app.put('/api/employees/:id', async (c) => {
 })
 
 // 従業員削除
-app.delete('/api/employees/:id', async (c) => {
+app.delete('/employees/:id', async (c) => {
   const id = c.req.param('id')
   await c.env.DB.prepare('DELETE FROM employees WHERE id = ?').bind(id).run()
   return c.json({ success: true })
 })
 
 // Cloudflare Pages Functions エクスポート
-export const onRequest = app.fetch
+export const onRequest: PagesFunction = async (context) => {
+  return app.fetch(context.request, context.env, context)
+}
