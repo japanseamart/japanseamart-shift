@@ -58,7 +58,9 @@ export default function EmployeeShiftView() {
         `/api/weekly-publications?store_id=${selectedStoreId}&week_start_date=${format(weekStart, 'yyyy-MM-dd')}`
       );
       const pubData = await pubRes.json();
-      const published = pubData.length > 0 && pubData[0].is_published === 1;
+      console.log('従業員画面 - 公開状態取得:', pubData);
+      // APIは単一オブジェクトを返す（配列ではない）
+      const published = pubData.is_published === 1;
       setIsPublished(published);
       
       // 公開済みの場合のみシフトを取得
