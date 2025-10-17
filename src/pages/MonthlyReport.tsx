@@ -70,18 +70,27 @@ export default function MonthlyReport({ role, storeId, onLogout }: MonthlyReport
   const [hourlyStats, setHourlyStats] = useState<HourlyStats[]>([]);
   const [weekdayStats, setWeekdayStats] = useState<WeekdayStats[]>([]);
   const [heatmapMode, setHeatmapMode] = useState<'staff' | 'cost'>('staff');
+  const [isAllStores, setIsAllStores] = useState(false); // 全店計モード
+  const [allEmployees, setAllEmployees] = useState<Employee[]>([]); // 全従業員データ
 
   useEffect(() => {
     fetchStores();
+    if (role === 'admin') {
+      fetchAllEmployees();
+    }
   }, []);
 
   useEffect(() => {
-    if (selectedStoreId) {
+    if (isAllStores) {
+      // 全店計モード
+      fetchMonthlyData();
+    } else if (selectedStoreId) {
+      // 単一店舗モード
       fetchStore(selectedStoreId);
       fetchEmployees(selectedStoreId);
       fetchMonthlyData();
     }
-  }, [selectedStoreId, targetMonth]);
+  }, [selectedStoreId, targetMonth, isAllStores]);
 
   const fetchStores = async () => {
     try {
@@ -89,11 +98,28 @@ export default function MonthlyReport({ role, storeId, onLogout }: MonthlyReport
       const data = await res.json();
       setStores(data.filter((s: Store) => s.id !== 8));
       
-      if (!selectedStoreId && data.length > 0) {
-        setSelectedStoreId(data[0].id);
+      // 店舗責任者の場合は自店舗を選択、管理者の場合は未選択（全店計）
+      if (role === 'store_manager' && storeId) {
+        setSelectedStoreId(storeId);
+        setIsAllStores(false);
+      } else if (role === 'admin') {
+        setIsAllStores(false); // デフォルトは全店計ではなく最初の店舗
+        if (!selectedStoreId && data.length > 0) {
+          setSelectedStoreId(data[0].id);
+        }
       }
     } catch (error) {
       console.error('店舗取得エラー:', error);
+    }
+  };
+  
+  const fetchAllEmployees = async () => {
+    try {
+      const res = await fetch(getApiUrl('/api/employees'));
+      const data = await res.json();
+      setAllEmployees(data.filter((e: Employee) => e.store_id !== 8)); // 本部以外
+    } catch (error) {
+      console.error('全従業員取得エラー:', error);
     }
   };
 
@@ -118,7 +144,7 @@ export default function MonthlyReport({ role, storeId, onLogout }: MonthlyReport
   };
 
   const fetchMonthlyData = async () => {
-    if (!selectedStoreId) return;
+    if (!isAllStores && !selectedStoreId) return;
 
     setLoading(true);
 
@@ -126,9 +152,16 @@ export default function MonthlyReport({ role, storeId, onLogout }: MonthlyReport
       const monthStart = startOfMonth(parseISO(`${targetMonth}-01`));
       const monthEnd = endOfMonth(monthStart);
 
-      const res = await fetch(
-        `/api/shifts?store_id=${selectedStoreId}&start_date=${format(monthStart, 'yyyy-MM-dd')}&end_date=${format(monthEnd, 'yyyy-MM-dd')}`
-      );
+      let apiUrl = '';
+      if (isAllStores) {
+        // 全店計モード：全店舗のシフトを取得
+        apiUrl = getApiUrl(`/api/shifts?start_date=${format(monthStart, 'yyyy-MM-dd')}&end_date=${format(monthEnd, 'yyyy-MM-dd')}`);
+      } else {
+        // 単一店舗モード
+        apiUrl = getApiUrl(`/api/shifts?store_id=${selectedStoreId}&start_date=${format(monthStart, 'yyyy-MM-dd')}&end_date=${format(monthEnd, 'yyyy-MM-dd')}`);
+      }
+
+      const res = await fetch(apiUrl);
       const shiftsData: Shift[] = await res.json();
 
       // 統計計算
@@ -143,6 +176,14 @@ export default function MonthlyReport({ role, storeId, onLogout }: MonthlyReport
 
       const uniqueEmployees = new Set(shiftsData.map(s => s.employee_id)).size;
 
+      // 予算計算（全店計の場合は全店舗の予算合計）
+      let totalBudget = 0;
+      if (isAllStores) {
+        totalBudget = stores.reduce((sum, store) => sum + (store.monthly_budget || 0), 0);
+      } else {
+        totalBudget = selectedStore?.monthly_budget || 0;
+      }
+
       const monthlyStats: MonthlyStats = {
         totalLaborCost,
         totalWorkHours,
@@ -150,17 +191,18 @@ export default function MonthlyReport({ role, storeId, onLogout }: MonthlyReport
         employeeCount: uniqueEmployees,
         averageCostPerShift: shiftsData.length > 0 ? Math.round(totalLaborCost / shiftsData.length) : 0,
         averageHoursPerShift: shiftsData.length > 0 ? Math.round(totalWorkHours / shiftsData.length * 10) / 10 : 0,
-        budgetUsage: selectedStore?.monthly_budget ? Math.round((totalLaborCost / selectedStore.monthly_budget) * 100) : 0
+        budgetUsage: totalBudget > 0 ? Math.round((totalLaborCost / totalBudget) * 100) : 0
       };
 
       setStats(monthlyStats);
 
       // 従業員別統計
       const empStatsMap = new Map<number, EmployeeStats>();
+      const employeeList = isAllStores ? allEmployees : employees;
       
       shiftsData.forEach(shift => {
         if (!empStatsMap.has(shift.employee_id)) {
-          const employee = employees.find(e => e.id === shift.employee_id);
+          const employee = employeeList.find(e => e.id === shift.employee_id);
           if (employee) {
             empStatsMap.set(shift.employee_id, {
               employee,
@@ -370,10 +412,19 @@ export default function MonthlyReport({ role, storeId, onLogout }: MonthlyReport
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">店舗</label>
                 <select
-                  value={selectedStoreId || ''}
-                  onChange={(e) => setSelectedStoreId(Number(e.target.value))}
+                  value={isAllStores ? 'all' : (selectedStoreId || '')}
+                  onChange={(e) => {
+                    if (e.target.value === 'all') {
+                      setIsAllStores(true);
+                      setSelectedStoreId(null);
+                    } else {
+                      setIsAllStores(false);
+                      setSelectedStoreId(Number(e.target.value));
+                    }
+                  }}
                   className="input-field"
                 >
+                  <option value="all">全店計</option>
                   {stores.map(store => (
                     <option key={store.id} value={store.id}>{store.name}</option>
                   ))}
