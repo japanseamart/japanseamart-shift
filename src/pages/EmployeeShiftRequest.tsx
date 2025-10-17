@@ -27,7 +27,7 @@ export default function EmployeeShiftRequest() {
   const [specialDays, setSpecialDays] = useState<SpecialDay[]>([]);
   const [selectedStoreId, setSelectedStoreId] = useState<number | null>(null);
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<number | null>(null);
-  const [currentWeekStart, setCurrentWeekStart] = useState(startOfWeek(new Date(), { locale: ja }));
+  const [currentWeekStart, setCurrentWeekStart] = useState(startOfWeek(new Date(), { weekStartsOn: 1 }));
   const [requests, setRequests] = useState<Map<string, ShiftRequest>>(new Map());
   const [selectedPatterns, setSelectedPatterns] = useState<Map<string, string[]>>(new Map());
   const [customTimes, setCustomTimes] = useState<Map<string, { start: string; end: string }>>(new Map());
@@ -105,7 +105,7 @@ export default function EmployeeShiftRequest() {
     if (!selectedEmployeeId) return;
     
     try {
-      const weekEnd = endOfWeek(currentWeekStart, { locale: ja });
+      const weekEnd = endOfWeek(currentWeekStart, { weekStartsOn: 1 });
       const res = await fetch(
         `/api/shift-requests?employee_id=${selectedEmployeeId}&start_date=${format(currentWeekStart, 'yyyy-MM-dd')}&end_date=${format(weekEnd, 'yyyy-MM-dd')}`
       );
@@ -135,7 +135,7 @@ export default function EmployeeShiftRequest() {
 
   const weekDays = eachDayOfInterval({
     start: currentWeekStart,
-    end: endOfWeek(currentWeekStart, { locale: ja })
+    end: endOfWeek(currentWeekStart, { weekStartsOn: 1 })
   });
 
   const togglePattern = (date: string, patternId: string) => {
@@ -329,7 +329,7 @@ export default function EmployeeShiftRequest() {
                   ← 前週
                 </button>
                 <h2 className="text-lg font-bold text-gray-800">
-                  {format(currentWeekStart, 'yyyy年MM月dd日', { locale: ja })} 〜 {format(endOfWeek(currentWeekStart, { locale: ja }), 'MM月dd日', { locale: ja })}
+                  {format(currentWeekStart, 'yyyy年MM月dd日', { locale: ja })} 〜 {format(endOfWeek(currentWeekStart, { weekStartsOn: 1 }), 'MM月dd日', { locale: ja })}
                 </h2>
                 <button
                   onClick={() => setCurrentWeekStart(addDays(currentWeekStart, 7))}

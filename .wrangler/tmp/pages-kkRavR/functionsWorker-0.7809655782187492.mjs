@@ -2077,24 +2077,33 @@ app.get("/shift-requests", async (c) => {
   return c.json(results);
 });
 app.post("/shift-requests", async (c) => {
-  const { store_id, employee_id, date, time_slot, remarks } = await c.req.json();
+  const { store_id, employee_id, date, patterns, custom_start, custom_end } = await c.req.json();
   const result = await c.env.DB.prepare(`
-    INSERT INTO shift_requests (store_id, employee_id, date, time_slot, remarks)
-    VALUES (?, ?, ?, ?, ?)
-  `).bind(store_id, employee_id, date, time_slot, remarks || null).run();
+    INSERT INTO shift_requests (store_id, employee_id, date, patterns, custom_start, custom_end, status)
+    VALUES (?, ?, ?, ?, ?, ?, 'pending')
+  `).bind(store_id, employee_id, date, patterns, custom_start || null, custom_end || null).run();
   const newRequest = await c.env.DB.prepare("SELECT * FROM shift_requests WHERE id = ?").bind(result.meta.last_row_id).first();
   return c.json(newRequest);
 });
 app.put("/shift-requests/:id", async (c) => {
   const id = c.req.param("id");
-  const { time_slot, remarks } = await c.req.json();
-  await c.env.DB.prepare(`
-    UPDATE shift_requests SET 
-      time_slot = ?,
-      remarks = ?,
-      updated_at = CURRENT_TIMESTAMP
-    WHERE id = ?
-  `).bind(time_slot, remarks, id).run();
+  const { patterns, custom_start, custom_end, status } = await c.req.json();
+  if (status) {
+    await c.env.DB.prepare(`
+      UPDATE shift_requests SET 
+        status = ?,
+        reviewed_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `).bind(status, id).run();
+  } else {
+    await c.env.DB.prepare(`
+      UPDATE shift_requests SET 
+        patterns = ?,
+        custom_start = ?,
+        custom_end = ?
+      WHERE id = ?
+    `).bind(patterns, custom_start || null, custom_end || null, id).run();
+  }
   const updatedRequest = await c.env.DB.prepare("SELECT * FROM shift_requests WHERE id = ?").bind(id).first();
   return c.json(updatedRequest);
 });
@@ -2783,7 +2792,7 @@ var jsonError = /* @__PURE__ */ __name(async (request, env, _ctx, middlewareCtx)
 }, "jsonError");
 var middleware_miniflare3_json_error_default = jsonError;
 
-// ../.wrangler/tmp/bundle-Bg9eDa/middleware-insertion-facade.js
+// ../.wrangler/tmp/bundle-cpJU6t/middleware-insertion-facade.js
 var __INTERNAL_WRANGLER_MIDDLEWARE__ = [
   middleware_ensure_req_body_drained_default,
   middleware_miniflare3_json_error_default
@@ -2815,7 +2824,7 @@ function __facade_invoke__(request, env, ctx, dispatch, finalMiddleware) {
 }
 __name(__facade_invoke__, "__facade_invoke__");
 
-// ../.wrangler/tmp/bundle-Bg9eDa/middleware-loader.entry.ts
+// ../.wrangler/tmp/bundle-cpJU6t/middleware-loader.entry.ts
 var __Facade_ScheduledController__ = class ___Facade_ScheduledController__ {
   constructor(scheduledTime, cron, noRetry) {
     this.scheduledTime = scheduledTime;

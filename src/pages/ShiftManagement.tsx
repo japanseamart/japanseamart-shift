@@ -28,7 +28,7 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
   const [shifts, setShifts] = useState<Shift[]>([]);
   const [shiftRequests, setShiftRequests] = useState<ShiftRequest[]>([]);
   const [specialDays, setSpecialDays] = useState<SpecialDay[]>([]);
-  const [targetWeekStart, setTargetWeekStart] = useState(startOfWeek(new Date(), { locale: ja }));
+  const [targetWeekStart, setTargetWeekStart] = useState(startOfWeek(new Date(), { weekStartsOn: 1 }));
   const [editingShift, setEditingShift] = useState<ShiftInput | null>(null);
   const [showShiftForm, setShowShiftForm] = useState(false);
   const [totalLaborCost, setTotalLaborCost] = useState(0);
@@ -45,7 +45,7 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
   
   // 印刷モード
   const [showPrintDialog, setShowPrintDialog] = useState(false);
-  const [selectedWeeks, setSelectedWeeks] = useState<string[]>([format(startOfWeek(new Date(), { locale: ja }), 'yyyy-MM-dd')]);
+  const [selectedWeeks, setSelectedWeeks] = useState<string[]>([format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd')]);
 
   useEffect(() => {
     fetchStores();
@@ -115,7 +115,7 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
     if (!selectedStoreId) return;
     
     try {
-      const weekEnd = endOfWeek(targetWeekStart, { locale: ja });
+      const weekEnd = endOfWeek(targetWeekStart, { weekStartsOn: 1 });
       const res = await fetch(
         getApiUrl(`/api/shifts?store_id=${selectedStoreId}&start_date=${format(targetWeekStart, 'yyyy-MM-dd')}&end_date=${format(weekEnd, 'yyyy-MM-dd')}`)
       );
@@ -130,7 +130,7 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
     if (!selectedStoreId) return;
     
     try {
-      const weekEnd = endOfWeek(targetWeekStart, { locale: ja });
+      const weekEnd = endOfWeek(targetWeekStart, { weekStartsOn: 1 });
       const res = await fetch(
         getApiUrl(`/api/shift-requests?store_id=${selectedStoreId}&start_date=${format(targetWeekStart, 'yyyy-MM-dd')}&end_date=${format(weekEnd, 'yyyy-MM-dd')}`)
       );
@@ -707,7 +707,7 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
                   ← 前週
                 </button>
                 <button
-                  onClick={() => setTargetWeekStart(startOfWeek(new Date(), { locale: ja }))}
+                  onClick={() => setTargetWeekStart(startOfWeek(new Date(), { weekStartsOn: 1 }))}
                   className="btn-primary px-3 py-1 text-sm"
                 >
                   今週
