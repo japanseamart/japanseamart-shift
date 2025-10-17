@@ -75,6 +75,7 @@ export default function StoreManagement({ role, onLogout }: StoreManagementProps
     setFormData({
       name: store.name,
       monthly_budget: store.monthly_budget,
+      password: '', // 編集時はパスワードフィールドを空にする
       overtime_rate_enabled: Boolean(store.overtime_rate_enabled),
       saturday_rate: store.saturday_rate,
       sunday_rate: store.sunday_rate,

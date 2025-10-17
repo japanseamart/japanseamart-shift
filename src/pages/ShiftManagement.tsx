@@ -149,9 +149,12 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
         `/api/weekly-publications?store_id=${selectedStoreId}&week_start_date=${format(targetWeekStart, 'yyyy-MM-dd')}`
       );
       const data = await res.json();
-      setIsPublished(data.length > 0 && data[0].is_published === 1);
+      console.log('公開状態取得:', data);
+      // APIは単一オブジェクトを返す（配列ではない）
+      setIsPublished(data.is_published === 1);
     } catch (error) {
       console.error('公開状態取得エラー:', error);
+      setIsPublished(false);
     }
   };
 
@@ -166,7 +169,7 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
     if (!confirm(confirmMessage)) return;
     
     try {
-      await fetch(getApiUrl('/api/weekly-publications'), {
+      const response = await fetch(getApiUrl('/api/weekly-publications'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -177,11 +180,20 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
         })
       });
       
-      setIsPublished(newStatus);
+      if (!response.ok) {
+        throw new Error(`API error: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      console.log('公開設定レスポンス:', data);
+      
+      // 公開状態を再取得して確実に反映
+      await fetchPublicationStatus();
+      
       alert(newStatus ? 'シフトを公開しました' : 'シフトを非公開にしました');
     } catch (error) {
       console.error('公開設定エラー:', error);
-      alert('公開設定に失敗しました');
+      alert('公開設定に失敗しました: ' + (error instanceof Error ? error.message : String(error)));
     }
   };
 
@@ -507,7 +519,7 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
               className="btn-secondary"
               title="予算アラート閾値を設定"
             >
-              ⚙️ 閾値設定
+              ⚙️ 予算アラート設定
             </button>
             <button
               onClick={handleAutoFillRequests}

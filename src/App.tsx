@@ -89,11 +89,23 @@ function App() {
         method: 'POST',
         credentials: 'include',
       });
+      
+      // 状態をクリア
       setRole(null);
       setStoreId(null);
       
       // セキュリティのため、ログアウトフラグを設定（再ログイン必須にする）
       localStorage.setItem('hasLoggedOut', 'true');
+      
+      // セッションストレージもクリア（タブを閉じてもログイン状態を保持しない）
+      sessionStorage.clear();
+      
+      // すべてのCookieをクリア（念のため）
+      document.cookie.split(";").forEach(cookie => {
+        const eqPos = cookie.indexOf("=");
+        const name = eqPos > -1 ? cookie.substr(0, eqPos) : cookie;
+        document.cookie = name + "=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/";
+      });
       
       // 自動ログアウトの場合は通知
       if (auto) {
