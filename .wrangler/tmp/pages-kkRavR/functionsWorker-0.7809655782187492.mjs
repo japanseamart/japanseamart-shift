@@ -2196,24 +2196,24 @@ app.get("/special-days/:id", async (c) => {
   return c.json(specialDay);
 });
 app.post("/special-days", async (c) => {
-  const { date, name, rate_multiplier } = await c.req.json();
+  const { date, type, name, description } = await c.req.json();
   const result = await c.env.DB.prepare(`
-    INSERT INTO special_days (date, name, rate_multiplier) VALUES (?, ?, ?)
-  `).bind(date, name, rate_multiplier || 1).run();
+    INSERT INTO special_days (date, type, name, description) VALUES (?, ?, ?, ?)
+  `).bind(date, type, name, description || null).run();
   const newSpecialDay = await c.env.DB.prepare("SELECT * FROM special_days WHERE id = ?").bind(result.meta.last_row_id).first();
   return c.json(newSpecialDay);
 });
 app.put("/special-days/:id", async (c) => {
   const id = c.req.param("id");
-  const { date, name, rate_multiplier } = await c.req.json();
+  const { date, type, name, description } = await c.req.json();
   await c.env.DB.prepare(`
     UPDATE special_days SET 
       date = ?,
+      type = ?,
       name = ?,
-      rate_multiplier = ?,
-      updated_at = CURRENT_TIMESTAMP
+      description = ?
     WHERE id = ?
-  `).bind(date, name, rate_multiplier, id).run();
+  `).bind(date, type, name, description || null, id).run();
   const updatedSpecialDay = await c.env.DB.prepare("SELECT * FROM special_days WHERE id = ?").bind(id).first();
   return c.json(updatedSpecialDay);
 });
@@ -2783,7 +2783,7 @@ var jsonError = /* @__PURE__ */ __name(async (request, env, _ctx, middlewareCtx)
 }, "jsonError");
 var middleware_miniflare3_json_error_default = jsonError;
 
-// ../.wrangler/tmp/bundle-6qiuoE/middleware-insertion-facade.js
+// ../.wrangler/tmp/bundle-Bg9eDa/middleware-insertion-facade.js
 var __INTERNAL_WRANGLER_MIDDLEWARE__ = [
   middleware_ensure_req_body_drained_default,
   middleware_miniflare3_json_error_default
@@ -2815,7 +2815,7 @@ function __facade_invoke__(request, env, ctx, dispatch, finalMiddleware) {
 }
 __name(__facade_invoke__, "__facade_invoke__");
 
-// ../.wrangler/tmp/bundle-6qiuoE/middleware-loader.entry.ts
+// ../.wrangler/tmp/bundle-Bg9eDa/middleware-loader.entry.ts
 var __Facade_ScheduledController__ = class ___Facade_ScheduledController__ {
   constructor(scheduledTime, cron, noRetry) {
     this.scheduledTime = scheduledTime;

@@ -273,20 +273,31 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
 
     let hourlyRate = employee.hourly_wage || 0;
 
-    // 時間外手当計算
+    // 時間外手当計算（複数該当する場合は最も高い加算額を適用）
     if (selectedStore.overtime_rate_enabled) {
       const specialDay = specialDays.find(sd => sd.date === shift.date);
       const dayOfWeek = new Date(shift.date).getDay();
-
-      if (specialDay?.type === 1) {
-        // 祝日
-        hourlyRate += selectedStore.holiday_rate || 0;
-      } else if (dayOfWeek === 0) {
-        // 日曜日
-        hourlyRate += selectedStore.sunday_rate || 0;
-      } else if (dayOfWeek === 6) {
-        // 土曜日
-        hourlyRate += selectedStore.saturday_rate || 0;
+      
+      const applicableRates: number[] = [];
+      
+      // 祝日チェック
+      if (specialDay?.type === 1 && selectedStore.holiday_rate > 0) {
+        applicableRates.push(selectedStore.holiday_rate);
+      }
+      
+      // 日曜日チェック
+      if (dayOfWeek === 0 && selectedStore.sunday_rate > 0) {
+        applicableRates.push(selectedStore.sunday_rate);
+      }
+      
+      // 土曜日チェック
+      if (dayOfWeek === 6 && selectedStore.saturday_rate > 0) {
+        applicableRates.push(selectedStore.saturday_rate);
+      }
+      
+      // 複数の加算が該当する場合、最も高い金額を適用
+      if (applicableRates.length > 0) {
+        hourlyRate += Math.max(...applicableRates);
       }
     }
 

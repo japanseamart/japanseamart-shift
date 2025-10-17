@@ -2196,24 +2196,24 @@ app.get("/special-days/:id", async (c) => {
   return c.json(specialDay);
 });
 app.post("/special-days", async (c) => {
-  const { date, name, rate_multiplier } = await c.req.json();
+  const { date, type, name, description } = await c.req.json();
   const result = await c.env.DB.prepare(`
-    INSERT INTO special_days (date, name, rate_multiplier) VALUES (?, ?, ?)
-  `).bind(date, name, rate_multiplier || 1).run();
+    INSERT INTO special_days (date, type, name, description) VALUES (?, ?, ?, ?)
+  `).bind(date, type, name, description || null).run();
   const newSpecialDay = await c.env.DB.prepare("SELECT * FROM special_days WHERE id = ?").bind(result.meta.last_row_id).first();
   return c.json(newSpecialDay);
 });
 app.put("/special-days/:id", async (c) => {
   const id = c.req.param("id");
-  const { date, name, rate_multiplier } = await c.req.json();
+  const { date, type, name, description } = await c.req.json();
   await c.env.DB.prepare(`
     UPDATE special_days SET 
       date = ?,
+      type = ?,
       name = ?,
-      rate_multiplier = ?,
-      updated_at = CURRENT_TIMESTAMP
+      description = ?
     WHERE id = ?
-  `).bind(date, name, rate_multiplier, id).run();
+  `).bind(date, type, name, description || null, id).run();
   const updatedSpecialDay = await c.env.DB.prepare("SELECT * FROM special_days WHERE id = ?").bind(id).first();
   return c.json(updatedSpecialDay);
 });
@@ -2285,7 +2285,7 @@ var onRequest = /* @__PURE__ */ __name(async (context) => {
   return app.fetch(context.request, context.env, context);
 }, "onRequest");
 
-// ../.wrangler/tmp/pages-TLDYWn/functionsRoutes-0.1726254906385909.mjs
+// ../.wrangler/tmp/pages-lY5fpO/functionsRoutes-0.2154775373796951.mjs
 var routes = [
   {
     routePath: "/api/:path*",
@@ -2783,7 +2783,7 @@ var jsonError = /* @__PURE__ */ __name(async (request, env, _ctx, middlewareCtx)
 }, "jsonError");
 var middleware_miniflare3_json_error_default = jsonError;
 
-// ../.wrangler/tmp/bundle-FjG3TU/middleware-insertion-facade.js
+// ../.wrangler/tmp/bundle-LgZxNv/middleware-insertion-facade.js
 var __INTERNAL_WRANGLER_MIDDLEWARE__ = [
   middleware_ensure_req_body_drained_default,
   middleware_miniflare3_json_error_default
@@ -2815,7 +2815,7 @@ function __facade_invoke__(request, env, ctx, dispatch, finalMiddleware) {
 }
 __name(__facade_invoke__, "__facade_invoke__");
 
-// ../.wrangler/tmp/bundle-FjG3TU/middleware-loader.entry.ts
+// ../.wrangler/tmp/bundle-LgZxNv/middleware-loader.entry.ts
 var __Facade_ScheduledController__ = class ___Facade_ScheduledController__ {
   constructor(scheduledTime, cron, noRetry) {
     this.scheduledTime = scheduledTime;
@@ -2915,4 +2915,4 @@ export {
   __INTERNAL_WRANGLER_MIDDLEWARE__,
   middleware_loader_entry_default as default
 };
-//# sourceMappingURL=functionsWorker-0.2902804178092713.mjs.map
+//# sourceMappingURL=functionsWorker-0.22232413666675654.mjs.map

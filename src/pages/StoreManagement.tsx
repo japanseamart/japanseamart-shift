@@ -297,9 +297,9 @@ export default function StoreManagement({ role, onLogout }: StoreManagementProps
                 </div>
               </div>
 
-              {/* 加算時給設定 */}
+              {/* 特別日加算時給設定 */}
               <div className="border-t pt-6">
-                <h3 className="text-lg font-semibold text-gray-800 mb-4">加算時給設定</h3>
+                <h3 className="text-lg font-semibold text-gray-800 mb-4">特別日（祝日など）</h3>
                 <div className="mb-4">
                   <label className="flex items-center">
                     <input
@@ -308,30 +308,22 @@ export default function StoreManagement({ role, onLogout }: StoreManagementProps
                       onChange={(e) => setFormData({ ...formData, overtime_rate_enabled: e.target.checked })}
                       className="mr-2"
                     />
-                    <span className="text-sm text-gray-700">加算時給を有効にする</span>
+                    <span className="text-sm text-gray-700">特別日加算を有効にする</span>
                   </label>
                 </div>
                 {formData.overtime_rate_enabled && (
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">土曜加算（円）</label>
-                      <input
-                        type="number"
-                        value={formData.saturday_rate}
-                        onChange={(e) => setFormData({ ...formData, saturday_rate: Number(e.target.value) })}
-                        className="input-field"
-                        min="0"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">日曜加算（円）</label>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">土日加算（円）</label>
                       <input
                         type="number"
                         value={formData.sunday_rate}
-                        onChange={(e) => setFormData({ ...formData, sunday_rate: Number(e.target.value) })}
+                        onChange={(e) => setFormData({ ...formData, saturday_rate: Number(e.target.value), sunday_rate: Number(e.target.value) })}
                         className="input-field"
                         min="0"
+                        placeholder="土曜・日曜の加算額"
                       />
+                      <p className="text-xs text-gray-500 mt-1">土曜日と日曜日に同じ金額が加算されます</p>
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">祝日加算（円）</label>
@@ -341,7 +333,9 @@ export default function StoreManagement({ role, onLogout }: StoreManagementProps
                         onChange={(e) => setFormData({ ...formData, holiday_rate: Number(e.target.value) })}
                         className="input-field"
                         min="0"
+                        placeholder="祝日の加算額"
                       />
+                      <p className="text-xs text-gray-500 mt-1">特別日設定で登録した祝日に加算されます</p>
                     </div>
                   </div>
                 )}
@@ -369,7 +363,7 @@ export default function StoreManagement({ role, onLogout }: StoreManagementProps
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">店舗名</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">月間予算</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">営業時間</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">加算時給</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">特別日加算</th>
                   <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">操作</th>
                 </tr>
               </thead>

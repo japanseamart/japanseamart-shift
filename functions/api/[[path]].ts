@@ -790,11 +790,11 @@ app.get('/special-days/:id', async (c) => {
 
 // 特別日追加
 app.post('/special-days', async (c) => {
-  const { date, name, rate_multiplier } = await c.req.json()
+  const { date, type, name, description } = await c.req.json()
   
   const result = await c.env.DB.prepare(`
-    INSERT INTO special_days (date, name, rate_multiplier) VALUES (?, ?, ?)
-  `).bind(date, name, rate_multiplier || 1.0).run()
+    INSERT INTO special_days (date, type, name, description) VALUES (?, ?, ?, ?)
+  `).bind(date, type, name, description || null).run()
 
   const newSpecialDay = await c.env.DB.prepare('SELECT * FROM special_days WHERE id = ?')
     .bind(result.meta.last_row_id).first()
@@ -805,16 +805,16 @@ app.post('/special-days', async (c) => {
 // 特別日更新
 app.put('/special-days/:id', async (c) => {
   const id = c.req.param('id')
-  const { date, name, rate_multiplier } = await c.req.json()
+  const { date, type, name, description } = await c.req.json()
   
   await c.env.DB.prepare(`
     UPDATE special_days SET 
       date = ?,
+      type = ?,
       name = ?,
-      rate_multiplier = ?,
-      updated_at = CURRENT_TIMESTAMP
+      description = ?
     WHERE id = ?
-  `).bind(date, name, rate_multiplier, id).run()
+  `).bind(date, type, name, description || null, id).run()
 
   const updatedSpecialDay = await c.env.DB.prepare('SELECT * FROM special_days WHERE id = ?')
     .bind(id).first()
