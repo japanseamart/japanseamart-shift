@@ -60,8 +60,10 @@ async function requireAuth(c: any, next: any) {
 
 // bcrypt互換のパスワード検証（Web Crypto API使用）
 async function verifyPassword(plain: string, hashed: string): Promise<boolean> {
-  // Cloudflare Workersではbcryptjsが使えないため、
-  // ハッシュとパスワードのマッピングを使用
+  // プレーンテキスト形式のチェック（新規追加された店舗用）
+  if (hashed.startsWith('plain:')) {
+    return hashed.substring(6) === plain
+  }
   
   // placeholderハッシュのマッピング（本番環境）
   const placeholderHashMap: Record<string, string> = {
@@ -188,14 +190,48 @@ app.get('/stores/:id', async (c) => {
 
 // 店舗追加
 app.post('/stores', async (c) => {
-  const { name, monthly_budget } = await c.req.json()
+  const data = await c.req.json()
+  const { name, monthly_budget, password, overtime_rate_enabled, saturday_rate, sunday_rate, holiday_rate,
+          business_hours_start, business_hours_end, morning_start, morning_end,
+          afternoon_start, afternoon_end, evening_start, evening_end } = data
   
+  // 店舗を追加
   const result = await c.env.DB.prepare(`
-    INSERT INTO stores (name, monthly_budget) VALUES (?, ?)
-  `).bind(name, monthly_budget || 0).run()
+    INSERT INTO stores (
+      name, monthly_budget, overtime_rate_enabled, saturday_rate, sunday_rate, holiday_rate,
+      business_hours_start, business_hours_end, morning_start, morning_end,
+      afternoon_start, afternoon_end, evening_start, evening_end
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).bind(
+    name, 
+    monthly_budget || 0,
+    overtime_rate_enabled ? 1 : 0,
+    saturday_rate || 0,
+    sunday_rate || 0,
+    holiday_rate || 0,
+    business_hours_start || '07:00',
+    business_hours_end || '22:00',
+    morning_start || '07:00',
+    morning_end || '12:00',
+    afternoon_start || '12:00',
+    afternoon_end || '17:00',
+    evening_start || '17:00',
+    evening_end || '22:00'
+  ).run()
 
+  const storeId = result.meta.last_row_id
   const newStore = await c.env.DB.prepare('SELECT * FROM stores WHERE id = ?')
-    .bind(result.meta.last_row_id).first()
+    .bind(storeId).first()
+  
+  // パスワードが提供されている場合、passwordsテーブルに保存
+  if (password) {
+    // プレーンテキスト形式でパスワードを保存（plain:プレフィックス付き）
+    // 注意: 本番環境では適切なハッシュ化が必要
+    await c.env.DB.prepare(`
+      INSERT INTO passwords (role, store_id, password_hash)
+      VALUES ('store_manager', ?, ?)
+    `).bind(storeId, `plain:${password}`).run()
+  }
   
   return c.json(newStore)
 })
