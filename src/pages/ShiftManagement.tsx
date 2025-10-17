@@ -37,6 +37,11 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
   const [isPublished, setIsPublished] = useState(false);
   const [autoFilling, setAutoFilling] = useState(false);
   const [showRequestsPanel, setShowRequestsPanel] = useState(true);
+  
+  // 予算アラート閾値（後から変更可能）
+  const [warningThreshold, setWarningThreshold] = useState(95); // 警告閾値（デフォルト95%）
+  const [dangerThreshold, setDangerThreshold] = useState(100); // 危険閾値（デフォルト100%）
+  const [showThresholdSettings, setShowThresholdSettings] = useState(false);
 
   useEffect(() => {
     fetchStores();
@@ -263,10 +268,11 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
     if (!selectedStoreId || !selectedStore) return;
 
     try {
-      // 今月の開始日と終了日を取得
       const now = new Date();
+      const currentDay = now.getDate();
       const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
       const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+      const totalDaysInMonth = monthEnd.getDate();
 
       // 今月の全シフトを取得
       const res = await fetch(
@@ -274,16 +280,44 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
       );
       const monthlyShifts: Shift[] = await res.json();
 
-      // 月間人件費を計算
-      let monthlyTotal = 0;
+      // 既存シフトの人件費を計算
+      let confirmedTotal = 0;
+      const shiftsByDate = new Map<string, number>();
+      
       monthlyShifts.forEach(shift => {
         const employee = employees.find(e => e.id === shift.employee_id);
         if (employee) {
-          monthlyTotal += calculateLaborCost(shift, employee);
+          const cost = calculateLaborCost(shift, employee);
+          confirmedTotal += cost;
+          
+          // 日別の人件費を記録
+          const dateKey = shift.date;
+          shiftsByDate.set(dateKey, (shiftsByDate.get(dateKey) || 0) + cost);
         }
       });
 
-      setMonthlyLaborCostForecast(monthlyTotal);
+      // 予測ロジック：過去の平均から未来を予測
+      let forecastTotal = confirmedTotal;
+      
+      if (currentDay < totalDaysInMonth) {
+        // 既存シフトがある日の平均人件費を計算
+        const daysWithShifts = shiftsByDate.size;
+        
+        if (daysWithShifts > 0) {
+          const averageDailyCost = confirmedTotal / daysWithShifts;
+          
+          // 残りの日数分を予測
+          const remainingDays = totalDaysInMonth - currentDay;
+          const forecastForRemaining = averageDailyCost * remainingDays;
+          
+          forecastTotal = confirmedTotal + forecastForRemaining;
+        } else {
+          // シフトがまだ1つもない場合は確定分のみ
+          forecastTotal = confirmedTotal;
+        }
+      }
+
+      setMonthlyLaborCostForecast(Math.round(forecastTotal));
     } catch (error) {
       console.error('月間人件費予想計算エラー:', error);
     }
@@ -410,6 +444,27 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
 
   const weeklyBudget = selectedStore?.monthly_budget ? Math.round(selectedStore.monthly_budget / 4) : 0;
   const isBudgetExceeded = weeklyBudget > 0 && totalLaborCost > weeklyBudget;
+  
+  // 週間予算のアラートレベル判定
+  const getWeeklyBudgetStatus = () => {
+    if (weeklyBudget === 0) return 'normal';
+    const percentage = (totalLaborCost / weeklyBudget) * 100;
+    if (percentage >= dangerThreshold) return 'danger';
+    if (percentage >= warningThreshold) return 'warning';
+    return 'normal';
+  };
+  
+  // 月間予算のアラートレベル判定
+  const getMonthlyBudgetStatus = () => {
+    if (!selectedStore || selectedStore.monthly_budget === 0) return 'normal';
+    const percentage = (monthlyLaborCostForecast / selectedStore.monthly_budget) * 100;
+    if (percentage >= dangerThreshold) return 'danger';
+    if (percentage >= warningThreshold) return 'warning';
+    return 'normal';
+  };
+  
+  const weeklyStatus = getWeeklyBudgetStatus();
+  const monthlyStatus = getMonthlyBudgetStatus();
 
   return (
     <AdminLayout role={role} storeId={storeId} onLogout={onLogout}>
@@ -417,6 +472,13 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
         <div className="flex justify-between items-center">
           <h1 className="text-2xl font-bold text-gray-800">シフト管理</h1>
           <div className="flex gap-2 no-print">
+            <button
+              onClick={() => setShowThresholdSettings(!showThresholdSettings)}
+              className="btn-secondary"
+              title="予算アラート閾値を設定"
+            >
+              ⚙️ 閾値設定
+            </button>
             <button
               onClick={handleAutoFillRequests}
               disabled={autoFilling}
@@ -443,6 +505,55 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
             </button>
           </div>
         </div>
+
+        {/* 閾値設定パネル */}
+        {showThresholdSettings && (
+          <div className="card bg-blue-50 border-2 border-blue-200">
+            <h3 className="text-lg font-bold text-gray-800 mb-4">⚙️ 予算アラート閾値設定</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  黄色警告閾値（％）
+                </label>
+                <input
+                  type="number"
+                  value={warningThreshold}
+                  onChange={(e) => setWarningThreshold(Number(e.target.value))}
+                  className="input-field"
+                  min="0"
+                  max="100"
+                />
+                <p className="text-xs text-gray-600 mt-1">
+                  予算の{warningThreshold}%に達すると黄色で警告表示されます
+                </p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  赤色危険閾値（％）
+                </label>
+                <input
+                  type="number"
+                  value={dangerThreshold}
+                  onChange={(e) => setDangerThreshold(Number(e.target.value))}
+                  className="input-field"
+                  min="0"
+                  max="200"
+                />
+                <p className="text-xs text-gray-600 mt-1">
+                  予算の{dangerThreshold}%に達すると赤色で危険表示されます
+                </p>
+              </div>
+            </div>
+            <div className="mt-4 flex justify-end">
+              <button
+                onClick={() => setShowThresholdSettings(false)}
+                className="btn-primary"
+              >
+                設定を閉じる
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* コントロールパネル */}
         <div className="card">
@@ -499,31 +610,44 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 週間人件費予想
-                {isBudgetExceeded && (
-                  <span className="ml-2 text-xs text-red-600 font-bold">⚠️ 予算超過</span>
+                {weeklyStatus === 'danger' && (
+                  <span className="ml-2 text-xs text-red-600 font-bold">🔴 予算超過</span>
+                )}
+                {weeklyStatus === 'warning' && (
+                  <span className="ml-2 text-xs text-yellow-600 font-bold">🟡 予算警告</span>
                 )}
               </label>
               <div className={`rounded-lg p-3 ${
-                isBudgetExceeded 
+                weeklyStatus === 'danger' 
                   ? 'bg-gradient-to-r from-red-50 to-red-100 border-2 border-red-300' 
+                  : weeklyStatus === 'warning'
+                  ? 'bg-gradient-to-r from-yellow-50 to-yellow-100 border-2 border-yellow-300'
                   : 'bg-gradient-to-r from-ocean-50 to-ocean-100'
               }`}>
-                <div className={`text-xl font-bold ${isBudgetExceeded ? 'text-red-900' : 'text-ocean-900'}`}>
+                <div className={`text-xl font-bold ${
+                  weeklyStatus === 'danger' ? 'text-red-900' : 
+                  weeklyStatus === 'warning' ? 'text-yellow-900' : 
+                  'text-ocean-900'
+                }`}>
                   ¥{totalLaborCost.toLocaleString()}
                 </div>
                 {weeklyBudget > 0 && (
                   <div className="text-xs text-gray-600 mt-1">
                     <div className="flex justify-between items-center mb-1">
                       <span>週予算: ¥{weeklyBudget.toLocaleString()}</span>
-                      <span className={`font-bold ${isBudgetExceeded ? 'text-red-600' : 'text-gray-700'}`}>
+                      <span className={`font-bold ${
+                        weeklyStatus === 'danger' ? 'text-red-600' : 
+                        weeklyStatus === 'warning' ? 'text-yellow-600' : 
+                        'text-gray-700'
+                      }`}>
                         {Math.round((totalLaborCost / weeklyBudget) * 100)}%
                       </span>
                     </div>
                     <div className="w-full bg-gray-200 rounded-full h-1.5">
                       <div
                         className={`h-1.5 rounded-full transition-all ${
-                          isBudgetExceeded ? 'bg-red-500' :
-                          totalLaborCost / weeklyBudget > 0.8 ? 'bg-yellow-500' :
+                          weeklyStatus === 'danger' ? 'bg-red-500' :
+                          weeklyStatus === 'warning' ? 'bg-yellow-500' :
                           'bg-green-500'
                         }`}
                         style={{ width: `${Math.min((totalLaborCost / weeklyBudget) * 100, 100)}%` }}
@@ -537,25 +661,45 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
             {/* 月間人件費予想 */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                月間人件費予想
+                月間人件費予想（今月末予測）
+                {monthlyStatus === 'danger' && (
+                  <span className="ml-2 text-xs text-red-600 font-bold">🔴 予算超過予測</span>
+                )}
+                {monthlyStatus === 'warning' && (
+                  <span className="ml-2 text-xs text-yellow-600 font-bold">🟡 予算警告</span>
+                )}
               </label>
-              <div className="rounded-lg p-3 bg-gradient-to-r from-blue-50 to-blue-100">
-                <div className="text-xl font-bold text-blue-900">
+              <div className={`rounded-lg p-3 ${
+                monthlyStatus === 'danger' 
+                  ? 'bg-gradient-to-r from-red-50 to-red-100 border-2 border-red-300' 
+                  : monthlyStatus === 'warning'
+                  ? 'bg-gradient-to-r from-yellow-50 to-yellow-100 border-2 border-yellow-300'
+                  : 'bg-gradient-to-r from-blue-50 to-blue-100'
+              }`}>
+                <div className={`text-xl font-bold ${
+                  monthlyStatus === 'danger' ? 'text-red-900' : 
+                  monthlyStatus === 'warning' ? 'text-yellow-900' : 
+                  'text-blue-900'
+                }`}>
                   ¥{monthlyLaborCostForecast.toLocaleString()}
                 </div>
                 {selectedStore && selectedStore.monthly_budget > 0 && (
                   <div className="text-xs text-gray-600 mt-1">
                     <div className="flex justify-between items-center mb-1">
                       <span>月予算: ¥{selectedStore.monthly_budget.toLocaleString()}</span>
-                      <span className="font-bold text-gray-700">
+                      <span className={`font-bold ${
+                        monthlyStatus === 'danger' ? 'text-red-600' : 
+                        monthlyStatus === 'warning' ? 'text-yellow-600' : 
+                        'text-gray-700'
+                      }`}>
                         {Math.round((monthlyLaborCostForecast / selectedStore.monthly_budget) * 100)}%
                       </span>
                     </div>
                     <div className="w-full bg-gray-200 rounded-full h-1.5">
                       <div
                         className={`h-1.5 rounded-full transition-all ${
-                          monthlyLaborCostForecast > selectedStore.monthly_budget ? 'bg-red-500' :
-                          monthlyLaborCostForecast / selectedStore.monthly_budget > 0.8 ? 'bg-yellow-500' :
+                          monthlyStatus === 'danger' ? 'bg-red-500' :
+                          monthlyStatus === 'warning' ? 'bg-yellow-500' :
                           'bg-green-500'
                         }`}
                         style={{ width: `${Math.min((monthlyLaborCostForecast / selectedStore.monthly_budget) * 100, 100)}%` }}
