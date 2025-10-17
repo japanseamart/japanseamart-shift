@@ -27,15 +27,22 @@ export default function ShiftRequestManagement({ role, storeId, onLogout }: Shif
   const [deadline, setDeadline] = useState<string | null>(null);
   const [isEditingDeadline, setIsEditingDeadline] = useState(false);
   const [deadlineInput, setDeadlineInput] = useState('');
+  const [allEmployees, setAllEmployees] = useState<Employee[]>([]);
 
   useEffect(() => {
     fetchStores();
+    if (role === 'admin') {
+      fetchAllEmployees();
+    }
   }, []);
 
   useEffect(() => {
-    if (selectedStoreId) {
+    if (selectedStoreId !== null) {
       fetchSubmissionStatus();
       fetchDeadline();
+    } else if (role === 'admin') {
+      // 全店舗モード
+      fetchSubmissionStatus();
     }
   }, [selectedStoreId, targetWeekStart]);
 
@@ -45,11 +52,24 @@ export default function ShiftRequestManagement({ role, storeId, onLogout }: Shif
       const data = await res.json();
       setStores(data.filter((s: Store) => s.id !== 8)); // 本部以外
       
-      if (!selectedStoreId && data.length > 0) {
+      // 管理者の場合は初期値をnull(全店舗)に設定
+      if (role === 'admin' && selectedStoreId === null) {
+        setSelectedStoreId(null);
+      } else if (!selectedStoreId && data.length > 0) {
         setSelectedStoreId(data[0].id);
       }
     } catch (error) {
       console.error('店舗取得エラー:', error);
+    }
+  };
+
+  const fetchAllEmployees = async () => {
+    try {
+      const res = await fetch(getApiUrl('/api/employees'));
+      const data = await res.json();
+      setAllEmployees(data.filter((e: Employee) => e.store_id !== 8)); // 本部以外
+    } catch (error) {
+      console.error('全従業員取得エラー:', error);
     }
   };
 
@@ -71,25 +91,36 @@ export default function ShiftRequestManagement({ role, storeId, onLogout }: Shif
   };
 
   const fetchSubmissionStatus = async () => {
-    if (!selectedStoreId) return;
-    
     setLoading(true);
     
     try {
-      // 従業員一覧を取得
-      const empRes = await fetch(getApiUrl(`/api/employees?store_id=${selectedStoreId}`));
-      const employees: Employee[] = await empRes.json();
-
       // 対象週の日付リスト
       const weekEnd = endOfWeek(targetWeekStart, { locale: ja });
       const weekDates = eachDayOfInterval({ start: targetWeekStart, end: weekEnd });
       const dateStrings = weekDates.map(d => format(d, 'yyyy-MM-dd'));
 
-      // シフト希望一覧を取得
-      const reqRes = await fetch(
-        `/api/shift-requests?store_id=${selectedStoreId}&start_date=${format(targetWeekStart, 'yyyy-MM-dd')}&end_date=${format(weekEnd, 'yyyy-MM-dd')}`
-      );
-      const requests: ShiftRequest[] = await reqRes.json();
+      let employees: Employee[] = [];
+      let requests: ShiftRequest[] = [];
+
+      if (selectedStoreId !== null) {
+        // 単一店舗モード
+        const empRes = await fetch(getApiUrl(`/api/employees?store_id=${selectedStoreId}`));
+        employees = await empRes.json();
+
+        const reqRes = await fetch(
+          getApiUrl(`/api/shift-requests?store_id=${selectedStoreId}&start_date=${format(targetWeekStart, 'yyyy-MM-dd')}&end_date=${format(weekEnd, 'yyyy-MM-dd')}`)
+        );
+        requests = await reqRes.json();
+      } else {
+        // 全店舗モード
+        employees = allEmployees;
+
+        // 全店舗のシフト希望を取得
+        const reqRes = await fetch(
+          getApiUrl(`/api/shift-requests?start_date=${format(targetWeekStart, 'yyyy-MM-dd')}&end_date=${format(weekEnd, 'yyyy-MM-dd')}`)
+        );
+        requests = await reqRes.json();
+      }
 
       // 従業員ごとの提出状況を集計
       const statuses: EmployeeSubmissionStatus[] = employees.map(employee => {
@@ -183,10 +214,11 @@ export default function ShiftRequestManagement({ role, storeId, onLogout }: Shif
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">店舗</label>
                 <select
-                  value={selectedStoreId || ''}
-                  onChange={(e) => setSelectedStoreId(Number(e.target.value))}
+                  value={selectedStoreId === null ? 'all' : selectedStoreId}
+                  onChange={(e) => setSelectedStoreId(e.target.value === 'all' ? null : Number(e.target.value))}
                   className="input-field"
                 >
+                  <option value="all">全店舗</option>
                   {stores.map(store => (
                     <option key={store.id} value={store.id}>{store.name}</option>
                   ))}
@@ -217,43 +249,45 @@ export default function ShiftRequestManagement({ role, storeId, onLogout }: Shif
             </div>
 
             {/* 締切設定 */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">提出締切</label>
-              {!isEditingDeadline ? (
-                <div className="flex gap-2">
-                  <div className="flex-1 px-3 py-2 bg-gray-50 rounded-lg text-sm">
-                    {deadline ? format(new Date(deadline), 'yyyy年M月d日(E)', { locale: ja }) : '未設定'}
+            {selectedStoreId !== null && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">提出締切</label>
+                {!isEditingDeadline ? (
+                  <div className="flex gap-2">
+                    <div className="flex-1 px-3 py-2 bg-gray-50 rounded-lg text-sm">
+                      {deadline ? format(new Date(deadline), 'yyyy年M月d日(E)', { locale: ja }) : '未設定'}
+                    </div>
+                    <button
+                      onClick={handleOpenDeadlineEdit}
+                      className="btn-secondary whitespace-nowrap"
+                    >
+                      設定
+                    </button>
                   </div>
-                  <button
-                    onClick={handleOpenDeadlineEdit}
-                    className="btn-secondary whitespace-nowrap"
-                  >
-                    設定
-                  </button>
-                </div>
-              ) : (
-                <div className="flex gap-2">
-                  <input
-                    type="date"
-                    value={deadlineInput}
-                    onChange={(e) => setDeadlineInput(e.target.value)}
-                    className="input-field flex-1"
-                  />
-                  <button
-                    onClick={handleSaveDeadline}
-                    className="btn-primary whitespace-nowrap"
-                  >
-                    保存
-                  </button>
-                  <button
-                    onClick={() => setIsEditingDeadline(false)}
-                    className="btn-secondary whitespace-nowrap"
-                  >
-                    キャンセル
-                  </button>
-                </div>
-              )}
-            </div>
+                ) : (
+                  <div className="flex gap-2">
+                    <input
+                      type="date"
+                      value={deadlineInput}
+                      onChange={(e) => setDeadlineInput(e.target.value)}
+                      className="input-field flex-1"
+                    />
+                    <button
+                      onClick={handleSaveDeadline}
+                      className="btn-primary whitespace-nowrap"
+                    >
+                      保存
+                    </button>
+                    <button
+                      onClick={() => setIsEditingDeadline(false)}
+                      className="btn-secondary whitespace-nowrap"
+                    >
+                      キャンセル
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
 
@@ -301,17 +335,27 @@ export default function ShiftRequestManagement({ role, storeId, onLogout }: Shif
                     <thead className="bg-gray-50">
                       <tr>
                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">従業員名</th>
+                        {selectedStoreId === null && (
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">所属店舗</th>
+                        )}
                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">雇用形態</th>
                         <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">提出率</th>
                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">未提出日</th>
                       </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
-                      {unsubmittedEmployees.map(status => (
+                      {unsubmittedEmployees.map(status => {
+                        const employeeStore = stores.find(s => s.id === status.employee.store_id);
+                        return (
                         <tr key={status.employee.id} className="hover:bg-gray-50">
                           <td className="px-4 py-3 whitespace-nowrap">
                             <div className="font-medium text-gray-900">{status.employee.name}</div>
                           </td>
+                          {selectedStoreId === null && (
+                            <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                              {employeeStore?.name || '-'}
+                            </td>
+                          )}
                           <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
                             {status.employee.employment_type === 'part_time' && 'パート'}
                             {status.employee.employment_type === 'part_time_insured' && '社保パート'}
@@ -351,7 +395,7 @@ export default function ShiftRequestManagement({ role, storeId, onLogout }: Shif
                             </div>
                           </td>
                         </tr>
-                      ))}
+                      );})}
                     </tbody>
                   </table>
                 </div>

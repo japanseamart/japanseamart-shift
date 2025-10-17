@@ -1,0 +1,9 @@
+name = "japanseamart-shift"
+compatibility_date = "2025-01-01"
+pages_build_output_dir = "./dist"
+
+# Cloudflare D1 Database
+[[d1_databases]]
+binding = "DB"
+database_name = "japanseamart-shift-db"
+database_id = "207a8ca4-425b-4602-9c59-b294c2d64821"
