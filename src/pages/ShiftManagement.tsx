@@ -67,6 +67,28 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
     calculateMonthlyForecast();
   }, [shifts, selectedStore, specialDays]);
 
+  // 自動休憩時間計算: 開始・終了時刻変更時に6時間以上なら60分、未満なら0分に設定
+  useEffect(() => {
+    if (!editingShift) return;
+
+    const { start_time, end_time } = editingShift;
+    if (!start_time || !end_time) return;
+
+    // 労働時間を計算（休憩時間を除外せず、純粋な開始〜終了の時間）
+    const startTime = new Date(`2000-01-01T${start_time}`);
+    const endTime = new Date(`2000-01-01T${end_time}`);
+    const totalMinutes = differenceInMinutes(endTime, startTime);
+    const totalHours = totalMinutes / 60;
+
+    // 6時間以上の場合は60分、未満の場合は0分
+    const autoBreakMinutes = totalHours >= 6 ? 60 : 0;
+
+    // 現在の休憩時間と異なる場合のみ更新（無限ループ防止）
+    if (editingShift.break_minutes !== autoBreakMinutes) {
+      setEditingShift({ ...editingShift, break_minutes: autoBreakMinutes });
+    }
+  }, [editingShift?.start_time, editingShift?.end_time]);
+
   const fetchStores = async () => {
     try {
       const res = await fetch(getApiUrl('/api/stores'));
