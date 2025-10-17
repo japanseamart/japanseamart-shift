@@ -405,6 +405,130 @@ app.delete('/shifts/:id', async (c) => {
   return c.json({ success: true })
 })
 
+// シフト希望の自動反映
+app.post('/shifts/auto-fill-requests', async (c) => {
+  const { store_id, week_start_date } = await c.req.json()
+  
+  if (!store_id || !week_start_date) {
+    return c.json({ success: false, error: 'store_idとweek_start_dateが必要です' }, 400)
+  }
+  
+  try {
+    // 週末日を計算（日曜日）
+    const startDate = new Date(week_start_date)
+    const endDate = new Date(startDate)
+    endDate.setDate(endDate.getDate() + 6)
+    const weekEndDate = endDate.toISOString().split('T')[0]
+    
+    // 対象週のシフト希望を取得
+    const { results: requests } = await c.env.DB.prepare(`
+      SELECT sr.*, e.hourly_wage 
+      FROM shift_requests sr
+      JOIN employees e ON sr.employee_id = e.id
+      WHERE sr.store_id = ? 
+        AND sr.date >= ? 
+        AND sr.date <= ?
+      ORDER BY sr.date, sr.employee_id
+    `).bind(store_id, week_start_date, weekEndDate).all()
+    
+    if (!requests || requests.length === 0) {
+      return c.json({ success: true, createdCount: 0, totalRequests: 0 })
+    }
+    
+    // 店舗情報を取得（シフトパターンの時間設定用）
+    const store = await c.env.DB.prepare('SELECT * FROM stores WHERE id = ?').bind(store_id).first()
+    if (!store) {
+      return c.json({ success: false, error: '店舗が見つかりません' }, 404)
+    }
+    
+    let createdCount = 0
+    
+    for (const request of requests as any[]) {
+      // 既存のシフトがあればスキップ
+      const existing = await c.env.DB.prepare(`
+        SELECT id FROM shifts 
+        WHERE employee_id = ? AND date = ?
+      `).bind(request.employee_id, request.date).first()
+      
+      if (existing) continue
+      
+      // パターンを解析
+      let patterns: string[] = []
+      try {
+        patterns = JSON.parse(request.patterns)
+      } catch {
+        continue
+      }
+      
+      // カスタム時間が設定されている場合
+      if (request.custom_start && request.custom_end) {
+        // 労働時間と人件費を計算
+        const startMinutes = parseInt(request.custom_start.split(':')[0]) * 60 + parseInt(request.custom_start.split(':')[1])
+        const endMinutes = parseInt(request.custom_end.split(':')[0]) * 60 + parseInt(request.custom_end.split(':')[1])
+        const workMinutes = endMinutes - startMinutes - (request.break_minutes || 60)
+        const laborCost = Math.round((workMinutes / 60) * request.hourly_wage)
+        
+        await c.env.DB.prepare(`
+          INSERT INTO shifts (store_id, employee_id, date, start_time, end_time, break_minutes, labor_cost)
+          VALUES (?, ?, ?, ?, ?, ?, ?)
+        `).bind(store_id, request.employee_id, request.date, request.custom_start, request.custom_end, request.break_minutes || 60, laborCost).run()
+        
+        createdCount++
+        continue
+      }
+      
+      // 標準パターンからシフトを作成（最初のパターンを使用）
+      if (patterns.length === 0 || patterns[0] === 'off') continue
+      
+      const pattern = patterns[0]
+      let startTime = '', endTime = ''
+      
+      switch (pattern) {
+        case 'morning':
+          startTime = store.morning_start as string
+          endTime = store.morning_end as string
+          break
+        case 'afternoon':
+          startTime = store.afternoon_start as string
+          endTime = store.afternoon_end as string
+          break
+        case 'evening':
+          startTime = store.evening_start as string
+          endTime = store.evening_end as string
+          break
+        case 'full':
+          startTime = store.business_hours_start as string
+          endTime = store.business_hours_end as string
+          break
+        default:
+          continue
+      }
+      
+      // 労働時間と人件費を計算
+      const startMinutes = parseInt(startTime.split(':')[0]) * 60 + parseInt(startTime.split(':')[1])
+      const endMinutes = parseInt(endTime.split(':')[0]) * 60 + parseInt(endTime.split(':')[1])
+      const workMinutes = endMinutes - startMinutes - 60
+      const laborCost = Math.round((workMinutes / 60) * request.hourly_wage)
+      
+      await c.env.DB.prepare(`
+        INSERT INTO shifts (store_id, employee_id, date, start_time, end_time, break_minutes, labor_cost)
+        VALUES (?, ?, ?, ?, ?, 60, ?)
+      `).bind(store_id, request.employee_id, request.date, startTime, endTime, laborCost).run()
+      
+      createdCount++
+    }
+    
+    return c.json({ 
+      success: true, 
+      createdCount, 
+      totalRequests: requests.length 
+    })
+  } catch (error: any) {
+    console.error('シフト自動反映エラー:', error)
+    return c.json({ success: false, error: error.message }, 500)
+  }
+})
+
 // ==================== シフト希望API ====================
 
 // シフト希望一覧取得

@@ -15,6 +15,7 @@ export default function StoreManagement({ role, onLogout }: StoreManagementProps
   const [formData, setFormData] = useState({
     name: '',
     monthly_budget: 0,
+    password: '',
     overtime_rate_enabled: true,
     saturday_rate: 0,
     sunday_rate: 0,
@@ -113,6 +114,7 @@ export default function StoreManagement({ role, onLogout }: StoreManagementProps
     setFormData({
       name: '',
       monthly_budget: 0,
+      password: '',
       overtime_rate_enabled: true,
       saturday_rate: 0,
       sunday_rate: 0,
@@ -187,6 +189,26 @@ export default function StoreManagement({ role, onLogout }: StoreManagementProps
                   />
                 </div>
               </div>
+
+              {/* パスワード設定 */}
+              {!editingStore && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    店舗責任者パスワード <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="password"
+                    value={formData.password}
+                    onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                    className="input-field"
+                    placeholder="新規店舗のログインパスワードを設定"
+                    required={!editingStore}
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    ログインID: store{stores.length + 1} / パスワード: 上記で設定したパスワード
+                  </p>
+                </div>
+              )}
 
               {/* 営業時間設定 */}
               <div className="border-t pt-6">
