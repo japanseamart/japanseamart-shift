@@ -527,16 +527,23 @@ app.post('/shifts/auto-fill-requests', async (c) => {
       
       // カスタム時間が設定されている場合
       if (request.custom_start && request.custom_end) {
-        // 労働時間と人件費を計算
+        // 労働時間を計算（休憩時間なし）
         const startMinutes = parseInt(request.custom_start.split(':')[0]) * 60 + parseInt(request.custom_start.split(':')[1])
         const endMinutes = parseInt(request.custom_end.split(':')[0]) * 60 + parseInt(request.custom_end.split(':')[1])
-        const workMinutes = endMinutes - startMinutes - (request.break_minutes || 60)
+        const totalMinutes = endMinutes - startMinutes
+        const totalHours = totalMinutes / 60
+        
+        // 6時間以上なら60分、未満なら0分の休憩時間
+        const breakMinutes = totalHours >= 6 ? 60 : 0
+        
+        // 実労働時間と人件費を計算
+        const workMinutes = totalMinutes - breakMinutes
         const laborCost = Math.round((workMinutes / 60) * request.hourly_wage)
         
         await c.env.DB.prepare(`
           INSERT INTO shifts (store_id, employee_id, date, start_time, end_time, break_minutes, labor_cost)
           VALUES (?, ?, ?, ?, ?, ?, ?)
-        `).bind(store_id, request.employee_id, request.date, request.custom_start, request.custom_end, request.break_minutes || 60, laborCost).run()
+        `).bind(store_id, request.employee_id, request.date, request.custom_start, request.custom_end, breakMinutes, laborCost).run()
         
         createdCount++
         continue
@@ -569,16 +576,23 @@ app.post('/shifts/auto-fill-requests', async (c) => {
           continue
       }
       
-      // 労働時間と人件費を計算
+      // 労働時間を計算（休憩時間なし）
       const startMinutes = parseInt(startTime.split(':')[0]) * 60 + parseInt(startTime.split(':')[1])
       const endMinutes = parseInt(endTime.split(':')[0]) * 60 + parseInt(endTime.split(':')[1])
-      const workMinutes = endMinutes - startMinutes - 60
+      const totalMinutes = endMinutes - startMinutes
+      const totalHours = totalMinutes / 60
+      
+      // 6時間以上なら60分、未満なら0分の休憩時間
+      const breakMinutes = totalHours >= 6 ? 60 : 0
+      
+      // 実労働時間と人件費を計算
+      const workMinutes = totalMinutes - breakMinutes
       const laborCost = Math.round((workMinutes / 60) * request.hourly_wage)
       
       await c.env.DB.prepare(`
         INSERT INTO shifts (store_id, employee_id, date, start_time, end_time, break_minutes, labor_cost)
-        VALUES (?, ?, ?, ?, ?, 60, ?)
-      `).bind(store_id, request.employee_id, request.date, startTime, endTime, laborCost).run()
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `).bind(store_id, request.employee_id, request.date, startTime, endTime, breakMinutes, laborCost).run()
       
       createdCount++
     }

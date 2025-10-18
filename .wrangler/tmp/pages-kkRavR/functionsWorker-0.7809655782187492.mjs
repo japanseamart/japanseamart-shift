@@ -2038,12 +2038,15 @@ app.post("/shifts/auto-fill-requests", async (c) => {
       if (request.custom_start && request.custom_end) {
         const startMinutes2 = parseInt(request.custom_start.split(":")[0]) * 60 + parseInt(request.custom_start.split(":")[1]);
         const endMinutes2 = parseInt(request.custom_end.split(":")[0]) * 60 + parseInt(request.custom_end.split(":")[1]);
-        const workMinutes2 = endMinutes2 - startMinutes2 - (request.break_minutes || 60);
+        const totalMinutes2 = endMinutes2 - startMinutes2;
+        const totalHours2 = totalMinutes2 / 60;
+        const breakMinutes2 = totalHours2 >= 6 ? 60 : 0;
+        const workMinutes2 = totalMinutes2 - breakMinutes2;
         const laborCost2 = Math.round(workMinutes2 / 60 * request.hourly_wage);
         await c.env.DB.prepare(`
           INSERT INTO shifts (store_id, employee_id, date, start_time, end_time, break_minutes, labor_cost)
           VALUES (?, ?, ?, ?, ?, ?, ?)
-        `).bind(store_id, request.employee_id, request.date, request.custom_start, request.custom_end, request.break_minutes || 60, laborCost2).run();
+        `).bind(store_id, request.employee_id, request.date, request.custom_start, request.custom_end, breakMinutes2, laborCost2).run();
         createdCount++;
         continue;
       }
@@ -2072,12 +2075,15 @@ app.post("/shifts/auto-fill-requests", async (c) => {
       }
       const startMinutes = parseInt(startTime.split(":")[0]) * 60 + parseInt(startTime.split(":")[1]);
       const endMinutes = parseInt(endTime.split(":")[0]) * 60 + parseInt(endTime.split(":")[1]);
-      const workMinutes = endMinutes - startMinutes - 60;
+      const totalMinutes = endMinutes - startMinutes;
+      const totalHours = totalMinutes / 60;
+      const breakMinutes = totalHours >= 6 ? 60 : 0;
+      const workMinutes = totalMinutes - breakMinutes;
       const laborCost = Math.round(workMinutes / 60 * request.hourly_wage);
       await c.env.DB.prepare(`
         INSERT INTO shifts (store_id, employee_id, date, start_time, end_time, break_minutes, labor_cost)
-        VALUES (?, ?, ?, ?, ?, 60, ?)
-      `).bind(store_id, request.employee_id, request.date, startTime, endTime, laborCost).run();
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `).bind(store_id, request.employee_id, request.date, startTime, endTime, breakMinutes, laborCost).run();
       createdCount++;
     }
     return c.json({
@@ -2833,7 +2839,7 @@ var jsonError = /* @__PURE__ */ __name(async (request, env, _ctx, middlewareCtx)
 }, "jsonError");
 var middleware_miniflare3_json_error_default = jsonError;
 
-// ../.wrangler/tmp/bundle-0Yg6Zb/middleware-insertion-facade.js
+// ../.wrangler/tmp/bundle-FpGOXc/middleware-insertion-facade.js
 var __INTERNAL_WRANGLER_MIDDLEWARE__ = [
   middleware_ensure_req_body_drained_default,
   middleware_miniflare3_json_error_default
@@ -2865,7 +2871,7 @@ function __facade_invoke__(request, env, ctx, dispatch, finalMiddleware) {
 }
 __name(__facade_invoke__, "__facade_invoke__");
 
-// ../.wrangler/tmp/bundle-0Yg6Zb/middleware-loader.entry.ts
+// ../.wrangler/tmp/bundle-FpGOXc/middleware-loader.entry.ts
 var __Facade_ScheduledController__ = class ___Facade_ScheduledController__ {
   constructor(scheduledTime, cron, noRetry) {
     this.scheduledTime = scheduledTime;
