@@ -724,7 +724,9 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
             {/* 週選択 */}
             <div className={role === 'admin' ? '' : 'col-span-2'}>
               <label className="block text-sm font-medium text-gray-700 mb-2">対象週</label>
-              <div className="flex gap-2">
+              
+              {/* デスクトップ: 横並びレイアウト */}
+              <div className="hidden md:flex gap-2">
                 <button
                   onClick={() => setTargetWeekStart(addWeeks(targetWeekStart, -1))}
                   className="btn-secondary px-3 py-1 text-sm"
@@ -746,6 +748,36 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
                 >
                   次週 →
                 </button>
+              </div>
+
+              {/* モバイル: 縦積みレイアウト */}
+              <div className="md:hidden space-y-2">
+                {/* 日付表示 */}
+                <div className="flex items-center justify-center h-12 text-base font-bold bg-ocean-100 text-ocean-900 rounded-lg px-4">
+                  📅 {format(targetWeekStart, 'M/d', { locale: ja })} - {format(weekEnd, 'M/d', { locale: ja })}
+                </div>
+                
+                {/* ボタングループ */}
+                <div className="grid grid-cols-3 gap-2">
+                  <button
+                    onClick={() => setTargetWeekStart(addWeeks(targetWeekStart, -1))}
+                    className="h-12 bg-gray-200 text-gray-800 rounded-lg font-medium hover:bg-gray-300 transition-colors flex items-center justify-center"
+                  >
+                    ← 前週
+                  </button>
+                  <button
+                    onClick={() => setTargetWeekStart(startOfWeek(new Date(), { weekStartsOn: 1 }))}
+                    className="h-12 bg-ocean-600 text-white rounded-lg font-bold hover:bg-ocean-700 transition-colors"
+                  >
+                    今週
+                  </button>
+                  <button
+                    onClick={() => setTargetWeekStart(addWeeks(targetWeekStart, 1))}
+                    className="h-12 bg-gray-200 text-gray-800 rounded-lg font-medium hover:bg-gray-300 transition-colors flex items-center justify-center"
+                  >
+                    次週 →
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -943,80 +975,185 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
           </div>
         </div>
 
-        {/* シフト編集フォーム */}
+        {/* シフト編集フォーム - デスクトップ版 */}
         {showShiftForm && editingShift && (
-          <div className="card bg-blue-50 border-2 border-blue-200">
-            <h3 className="font-bold text-gray-800 mb-4">
-              {editingShift.id ? 'シフト編集' : 'シフト追加'}
-            </h3>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">従業員</label>
-                <div className="input-field bg-gray-100">
-                  {employees.find(e => e.id === editingShift.employee_id)?.name}
+          <>
+            {/* デスクトップ: 通常のカード表示 */}
+            <div className="hidden md:block card bg-blue-50 border-2 border-blue-200">
+              <h3 className="font-bold text-gray-800 mb-4">
+                {editingShift.id ? 'シフト編集' : 'シフト追加'}
+              </h3>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">従業員</label>
+                  <div className="input-field bg-gray-100">
+                    {employees.find(e => e.id === editingShift.employee_id)?.name}
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">日付</label>
+                  <div className="input-field bg-gray-100">
+                    {format(new Date(editingShift.date), 'M月d日(E)', { locale: ja })}
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">開始時刻</label>
+                  <input
+                    type="time"
+                    value={editingShift.start_time}
+                    onChange={(e) => setEditingShift({ ...editingShift, start_time: e.target.value })}
+                    className="input-field"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">終了時刻</label>
+                  <input
+                    type="time"
+                    value={editingShift.end_time}
+                    onChange={(e) => setEditingShift({ ...editingShift, end_time: e.target.value })}
+                    className="input-field"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">休憩時間（分）</label>
+                  <input
+                    type="number"
+                    value={editingShift.break_minutes}
+                    onChange={(e) => setEditingShift({ ...editingShift, break_minutes: Number(e.target.value) })}
+                    className="input-field"
+                    min="0"
+                    step="15"
+                  />
+                </div>
+                <div className="col-span-2 flex items-end gap-2">
+                  <button
+                    onClick={handleSaveShift}
+                    disabled={saving}
+                    className="btn-primary flex-1"
+                  >
+                    {saving ? '保存中...' : '保存'}
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowShiftForm(false);
+                      setEditingShift(null);
+                    }}
+                    className="btn-secondary flex-1"
+                  >
+                    キャンセル
+                  </button>
                 </div>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">日付</label>
-                <div className="input-field bg-gray-100">
-                  {format(new Date(editingShift.date), 'M月d日(E)', { locale: ja })}
-                </div>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">開始時刻</label>
-                <input
-                  type="time"
-                  value={editingShift.start_time}
-                  onChange={(e) => setEditingShift({ ...editingShift, start_time: e.target.value })}
-                  className="input-field"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">終了時刻</label>
-                <input
-                  type="time"
-                  value={editingShift.end_time}
-                  onChange={(e) => setEditingShift({ ...editingShift, end_time: e.target.value })}
-                  className="input-field"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">休憩時間（分）</label>
-                <input
-                  type="number"
-                  value={editingShift.break_minutes}
-                  onChange={(e) => setEditingShift({ ...editingShift, break_minutes: Number(e.target.value) })}
-                  className="input-field"
-                  min="0"
-                  step="15"
-                />
-              </div>
-              <div className="col-span-2 flex items-end gap-2">
-                <button
-                  onClick={handleSaveShift}
-                  disabled={saving}
-                  className="btn-primary flex-1"
-                >
-                  {saving ? '保存中...' : '保存'}
-                </button>
+            </div>
+
+            {/* モバイル: フルスクリーンモーダル */}
+            <div className="md:hidden fixed inset-0 bg-white z-50 flex flex-col">
+              {/* モーダルヘッダー */}
+              <div className="bg-ocean-600 text-white px-4 py-4 flex items-center justify-between shadow-lg">
+                <h3 className="text-lg font-bold">
+                  {editingShift.id ? '✏️ シフト編集' : '➕ シフト追加'}
+                </h3>
                 <button
                   onClick={() => {
                     setShowShiftForm(false);
                     setEditingShift(null);
                   }}
-                  className="btn-secondary flex-1"
+                  className="text-white hover:bg-ocean-700 rounded-lg p-2 transition-colors"
                 >
-                  キャンセル
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
                 </button>
               </div>
+
+              {/* モーダルコンテンツ */}
+              <div className="flex-1 overflow-y-auto p-4 pb-24 bg-gray-50">
+                <div className="space-y-4">
+                  {/* 従業員 */}
+                  <div className="bg-white rounded-lg p-4 shadow-sm">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">👤 従業員</label>
+                    <div className="input-field bg-gray-100 text-base font-medium">
+                      {employees.find(e => e.id === editingShift.employee_id)?.name}
+                    </div>
+                  </div>
+
+                  {/* 日付 */}
+                  <div className="bg-white rounded-lg p-4 shadow-sm">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">📅 日付</label>
+                    <div className="input-field bg-gray-100 text-base font-medium">
+                      {format(new Date(editingShift.date), 'M月d日(E)', { locale: ja })}
+                    </div>
+                  </div>
+
+                  {/* 開始時刻 */}
+                  <div className="bg-white rounded-lg p-4 shadow-sm">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">🕐 開始時刻</label>
+                    <input
+                      type="time"
+                      value={editingShift.start_time}
+                      onChange={(e) => setEditingShift({ ...editingShift, start_time: e.target.value })}
+                      className="input-field text-lg"
+                    />
+                  </div>
+
+                  {/* 終了時刻 */}
+                  <div className="bg-white rounded-lg p-4 shadow-sm">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">🕐 終了時刻</label>
+                    <input
+                      type="time"
+                      value={editingShift.end_time}
+                      onChange={(e) => setEditingShift({ ...editingShift, end_time: e.target.value })}
+                      className="input-field text-lg"
+                    />
+                  </div>
+
+                  {/* 休憩時間 */}
+                  <div className="bg-white rounded-lg p-4 shadow-sm">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">☕ 休憩時間（分）</label>
+                    <input
+                      type="number"
+                      value={editingShift.break_minutes}
+                      onChange={(e) => setEditingShift({ ...editingShift, break_minutes: Number(e.target.value) })}
+                      className="input-field text-lg"
+                      min="0"
+                      step="15"
+                    />
+                    <p className="text-xs text-gray-500 mt-2">
+                      💡 6時間以上の勤務で60分が自動設定されます
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* モーダルフッター（固定） */}
+              <div className="fixed bottom-0 left-0 right-0 bg-white border-t-2 border-gray-200 p-4 shadow-2xl">
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => {
+                      setShowShiftForm(false);
+                      setEditingShift(null);
+                    }}
+                    className="flex-1 h-14 bg-gray-200 text-gray-800 rounded-lg font-bold text-base hover:bg-gray-300 transition-colors"
+                  >
+                    ✕ キャンセル
+                  </button>
+                  <button
+                    onClick={handleSaveShift}
+                    disabled={saving}
+                    className="flex-1 h-14 bg-ocean-600 text-white rounded-lg font-bold text-base hover:bg-ocean-700 transition-colors disabled:opacity-50"
+                  >
+                    {saving ? '⏳ 保存中...' : '✓ 保存'}
+                  </button>
+                </div>
+              </div>
             </div>
-          </div>
+          </>
         )}
 
         {/* シフト希望表示パネル */}
         <div className="card no-print">
           <div className="flex justify-between items-center mb-4">
-            <h3 className="font-bold text-gray-800 flex items-center gap-2">
+            <h3 className="text-base md:text-lg font-bold text-gray-800 flex items-center gap-2">
               <svg className="w-5 h-5 text-ocean-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
               </svg>
@@ -1024,60 +1161,139 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
             </h3>
             <button
               onClick={() => setShowRequestsPanel(!showRequestsPanel)}
-              className="btn-secondary text-sm"
+              className="btn-secondary text-sm h-10 px-4"
             >
               {showRequestsPanel ? '非表示' : '表示'}
             </button>
           </div>
           
           {showRequestsPanel && (
-            <div className="overflow-x-auto">
-              <table className="min-w-full text-sm">
-                <thead className="bg-ocean-50">
-                  <tr>
-                    <th className="px-3 py-2 text-left font-medium text-gray-700">従業員名</th>
-                    {weekDates.map(date => (
-                      <th key={date.toISOString()} className="px-3 py-2 text-center font-medium text-gray-700">
-                        {format(date, 'M/d (E)', { locale: ja })}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-200">
-                  {employees.map(employee => (
-                    <tr key={employee.id} className="hover:bg-gray-50">
-                      <td className="px-3 py-2 font-medium text-gray-800">
-                        {employee.name}
-                      </td>
-                      {weekDates.map(date => {
-                        const dateStr = format(date, 'yyyy-MM-dd');
-                        const request = getShiftRequestForEmployeeAndDate(employee.id, dateStr);
-                        const hasShift = getShiftForEmployeeAndDate(employee.id, dateStr);
-                        
-                        return (
-                          <td key={date.toISOString()} className="px-3 py-2 text-center">
-                            {request ? (
-                              <div className={`text-xs px-2 py-1 rounded ${
-                                hasShift 
-                                  ? 'bg-green-100 text-green-800 border border-green-300'
-                                  : 'bg-blue-100 text-blue-800 border border-blue-300'
-                              }`}>
-                                {formatShiftRequestPatterns(request)}
-                                {hasShift && (
-                                  <div className="text-[10px] text-green-600 mt-0.5">✓ 反映済</div>
-                                )}
-                              </div>
-                            ) : (
-                              <span className="text-gray-400">−</span>
-                            )}
-                          </td>
-                        );
-                      })}
+            <>
+              {/* デスクトップ: テーブル表示 */}
+              <div className="hidden md:block overflow-x-auto">
+                <table className="min-w-full text-sm">
+                  <thead className="bg-ocean-50">
+                    <tr>
+                      <th className="px-3 py-2 text-left font-medium text-gray-700">従業員名</th>
+                      {weekDates.map(date => (
+                        <th key={date.toISOString()} className="px-3 py-2 text-center font-medium text-gray-700">
+                          {format(date, 'M/d (E)', { locale: ja })}
+                        </th>
+                      ))}
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200">
+                    {employees.map(employee => (
+                      <tr key={employee.id} className="hover:bg-gray-50">
+                        <td className="px-3 py-2 font-medium text-gray-800">
+                          {employee.name}
+                        </td>
+                        {weekDates.map(date => {
+                          const dateStr = format(date, 'yyyy-MM-dd');
+                          const request = getShiftRequestForEmployeeAndDate(employee.id, dateStr);
+                          const hasShift = getShiftForEmployeeAndDate(employee.id, dateStr);
+                          
+                          return (
+                            <td key={date.toISOString()} className="px-3 py-2 text-center">
+                              {request ? (
+                                <div className={`text-xs px-2 py-1 rounded ${
+                                  hasShift 
+                                    ? 'bg-green-100 text-green-800 border border-green-300'
+                                    : 'bg-blue-100 text-blue-800 border border-blue-300'
+                                }`}>
+                                  {formatShiftRequestPatterns(request)}
+                                  {hasShift && (
+                                    <div className="text-[10px] text-green-600 mt-0.5">✓ 反映済</div>
+                                  )}
+                                </div>
+                              ) : (
+                                <span className="text-gray-400">−</span>
+                              )}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* モバイル: カード表示 */}
+              <div className="md:hidden space-y-3">
+                {employees.map(employee => {
+                  const employeeRequests = weekDates
+                    .map(date => {
+                      const dateStr = format(date, 'yyyy-MM-dd');
+                      const request = getShiftRequestForEmployeeAndDate(employee.id, dateStr);
+                      const hasShift = getShiftForEmployeeAndDate(employee.id, dateStr);
+                      return { date, request, hasShift };
+                    })
+                    .filter(item => item.request);
+
+                  if (employeeRequests.length === 0) return null;
+
+                  return (
+                    <div key={employee.id} className="border-2 border-gray-200 rounded-lg bg-white">
+                      {/* 従業員ヘッダー */}
+                      <div className="bg-ocean-100 px-4 py-3 rounded-t-lg">
+                        <div className="flex items-center gap-2">
+                          <span className="text-lg">👤</span>
+                          <h4 className="font-bold text-gray-900">{employee.name}</h4>
+                          <span className="ml-auto text-xs px-2 py-1 bg-ocean-200 text-ocean-800 rounded">
+                            {employeeRequests.length}日希望
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* シフト希望リスト */}
+                      <div className="p-3 space-y-2">
+                        {employeeRequests.map(({ date, request, hasShift }) => (
+                          <div
+                            key={date.toISOString()}
+                            className={`p-3 rounded-lg border-2 ${
+                              hasShift
+                                ? 'bg-green-50 border-green-300'
+                                : 'bg-blue-50 border-blue-300'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <span className="text-sm font-bold text-gray-700">
+                                  📅 {format(date, 'M/d (E)', { locale: ja })}
+                                </span>
+                              </div>
+                              <div className={`text-xs px-2 py-1 rounded font-medium ${
+                                hasShift
+                                  ? 'bg-green-200 text-green-800'
+                                  : 'bg-blue-200 text-blue-800'
+                              }`}>
+                                {formatShiftRequestPatterns(request!)}
+                              </div>
+                            </div>
+                            {hasShift && (
+                              <div className="mt-1 text-xs text-green-700 font-medium">
+                                ✓ シフトに反映済み
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+
+                {/* 希望なしの場合 */}
+                {employees.every(employee => 
+                  weekDates.every(date => 
+                    !getShiftRequestForEmployeeAndDate(employee.id, format(date, 'yyyy-MM-dd'))
+                  )
+                ) && (
+                  <div className="text-center py-8 text-gray-500">
+                    この週のシフト希望はありません
+                  </div>
+                )}
+              </div>
+            </>
           )}
         </div>
 
