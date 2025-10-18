@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { format, addDays, startOfWeek, endOfWeek, eachDayOfInterval, isBefore, parseISO, addWeeks } from 'date-fns';
+import { format, addDays, startOfWeek, endOfWeek, eachDayOfInterval, isBefore, parseISO } from 'date-fns';
 import { ja } from 'date-fns/locale';
 import type { Store, Employee, ShiftRequest, SpecialDay } from '../types';
 import { getApiUrl } from '../config/api';
@@ -88,7 +88,8 @@ export default function EmployeeShiftRequest() {
 
   const fetchDeadline = async (storeId: number) => {
     try {
-      const targetMonth = format(addWeeks(currentWeekStart, 2), 'yyyy-MM');
+      // 現在の週が属する月の締切を取得（2週間後ではなく）
+      const targetMonth = format(currentWeekStart, 'yyyy-MM');
       const res = await fetch(getApiUrl(`/api/shift-deadlines?store_id=${storeId}&target_month=${targetMonth}`));
       const data = await res.json();
       if (data.length > 0) {
@@ -305,14 +306,33 @@ export default function EmployeeShiftRequest() {
             </div>
           </div>
 
-          {deadline && (
-            <div className={`mt-4 p-3 sm:p-4 rounded-lg ${isDeadlinePassed ? 'bg-red-50 border-2 border-red-300' : 'bg-blue-50 border-2 border-blue-300'}`}>
-              <p className={`text-sm sm:text-base font-medium ${isDeadlinePassed ? 'text-red-700' : 'text-blue-700'}`}>
-                📅 提出締切: {format(parseISO(deadline), 'yyyy年MM月dd日', { locale: ja })}
-                {isDeadlinePassed && ' (締切が過ぎています)'}
-              </p>
-            </div>
-          )}
+          {/* 締切情報表示 */}
+          <div className="mt-4">
+            {deadline ? (
+              <div className={`p-3 sm:p-4 rounded-lg ${isDeadlinePassed ? 'bg-red-50 border-2 border-red-300' : 'bg-blue-50 border-2 border-blue-300'}`}>
+                <p className={`text-sm sm:text-base font-bold ${isDeadlinePassed ? 'text-red-700' : 'text-blue-700'}`}>
+                  {isDeadlinePassed ? '⚠️ 締切が過ぎています' : '📅 提出締切'}
+                </p>
+                <p className={`text-base sm:text-lg font-bold mt-1 ${isDeadlinePassed ? 'text-red-900' : 'text-blue-900'}`}>
+                  {format(parseISO(deadline), 'yyyy年M月d日(E) まで', { locale: ja })}
+                </p>
+                {!isDeadlinePassed && (
+                  <p className="text-xs text-blue-600 mt-2">
+                    この日までにシフト希望を提出してください
+                  </p>
+                )}
+              </div>
+            ) : (
+              <div className="p-3 sm:p-4 rounded-lg bg-gray-50 border-2 border-gray-300">
+                <p className="text-sm sm:text-base font-medium text-gray-700">
+                  ℹ️ この月の提出締切は設定されていません
+                </p>
+                <p className="text-xs text-gray-600 mt-1">
+                  いつでもシフト希望を提出できます
+                </p>
+              </div>
+            )}
+          </div>
         </div>
 
         {selectedEmployeeId && (
