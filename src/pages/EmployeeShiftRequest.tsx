@@ -247,59 +247,57 @@ export default function EmployeeShiftRequest() {
   const isDeadlinePassed = deadline ? isBefore(parseISO(deadline), new Date()) : false;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-ocean-50 to-blue-50">
-      <header className="bg-white shadow-md border-b-4 border-ocean-500">
-        <div className="max-w-7xl mx-auto px-4 py-4">
+    <div className="min-h-screen bg-gradient-to-br from-ocean-50 to-blue-50 pb-24">
+      <header className="bg-white shadow-md border-b-4 border-ocean-500 sticky top-0 z-50">
+        <div className="max-w-7xl mx-auto px-4 py-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center">
-              <div className="w-12 h-12 bg-gradient-to-br from-ocean-500 to-ocean-700 rounded-lg flex items-center justify-center mr-3">
-                <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gradient-to-br from-ocean-500 to-ocean-700 rounded-lg flex items-center justify-center mr-2 sm:mr-3">
+                <svg className="w-6 h-6 sm:w-8 sm:h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
                 </svg>
               </div>
               <div>
-                <h1 className="text-xl font-bold text-gray-800">シフト希望提出</h1>
-                <p className="text-xs text-gray-500">従業員用画面</p>
+                <h1 className="text-lg sm:text-xl font-bold text-gray-800">シフト希望提出</h1>
+                <p className="text-xs text-gray-500 hidden sm:block">従業員用画面</p>
               </div>
             </div>
-            <div className="flex gap-2">
-              <Link to="/employee/shift" className="btn-secondary text-sm">
-                シフト確認
-              </Link>
-            </div>
+            <Link to="/employee/shift" className="btn-secondary text-sm px-3 py-2 sm:px-4">
+              確認
+            </Link>
           </div>
         </div>
       </header>
 
-      <div className="max-w-6xl mx-auto px-4 py-8">
+      <div className="max-w-6xl mx-auto px-4 py-4 sm:py-8">
         {/* 店舗・従業員選択 */}
-        <div className="card mb-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="card mb-4 sm:mb-6">
+          <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">店舗</label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">🏪 店舗</label>
               <select
                 value={selectedStoreId || ''}
                 onChange={(e) => {
                   setSelectedStoreId(Number(e.target.value));
                   setSelectedEmployeeId(null);
                 }}
-                className="input-field"
+                className="input-field text-base h-12"
               >
-                <option value="">店舗を選択</option>
+                <option value="">店舗を選択してください</option>
                 {stores.map(store => (
                   <option key={store.id} value={store.id}>{store.name}</option>
                 ))}
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">従業員名</label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">👤 従業員名</label>
               <select
                 value={selectedEmployeeId || ''}
                 onChange={(e) => setSelectedEmployeeId(Number(e.target.value))}
-                className="input-field"
+                className="input-field text-base h-12"
                 disabled={!selectedStoreId}
               >
-                <option value="">従業員を選択</option>
+                <option value="">従業員を選択してください</option>
                 {employees.map(emp => (
                   <option key={emp.id} value={emp.id}>{emp.name}</option>
                 ))}
@@ -308,8 +306,8 @@ export default function EmployeeShiftRequest() {
           </div>
 
           {deadline && (
-            <div className={`mt-4 p-3 rounded-lg ${isDeadlinePassed ? 'bg-red-50 border border-red-200' : 'bg-blue-50 border border-blue-200'}`}>
-              <p className={`text-sm ${isDeadlinePassed ? 'text-red-700' : 'text-blue-700'}`}>
+            <div className={`mt-4 p-3 sm:p-4 rounded-lg ${isDeadlinePassed ? 'bg-red-50 border-2 border-red-300' : 'bg-blue-50 border-2 border-blue-300'}`}>
+              <p className={`text-sm sm:text-base font-medium ${isDeadlinePassed ? 'text-red-700' : 'text-blue-700'}`}>
                 📅 提出締切: {format(parseISO(deadline), 'yyyy年MM月dd日', { locale: ja })}
                 {isDeadlinePassed && ' (締切が過ぎています)'}
               </p>
@@ -320,145 +318,188 @@ export default function EmployeeShiftRequest() {
         {selectedEmployeeId && (
           <>
             {/* 週選択 */}
-            <div className="card mb-6">
-              <div className="flex items-center justify-between">
+            <div className="card mb-4 sm:mb-6">
+              <div className="flex flex-col sm:flex-row items-center gap-3 sm:gap-0 sm:justify-between">
                 <button
-                  onClick={() => setCurrentWeekStart(addDays(currentWeekStart, -7))}
-                  className="btn-secondary"
+                  onClick={() => setCurrentWeekStart(startOfWeek(new Date(), { weekStartsOn: 1 }))}
+                  className="btn-primary w-full sm:w-auto order-1 sm:order-2 h-12"
                 >
-                  ← 前週
+                  📅 今週に戻る
                 </button>
-                <h2 className="text-lg font-bold text-gray-800">
-                  {format(currentWeekStart, 'yyyy年MM月dd日', { locale: ja })} 〜 {format(endOfWeek(currentWeekStart, { weekStartsOn: 1 }), 'MM月dd日', { locale: ja })}
+                <h2 className="text-base sm:text-lg font-bold text-gray-800 text-center order-2 sm:order-1 w-full sm:w-auto">
+                  {format(currentWeekStart, 'yyyy年M月d日', { locale: ja })} 〜<br className="sm:hidden" /> {format(endOfWeek(currentWeekStart, { weekStartsOn: 1 }), 'M月d日', { locale: ja })}
                 </h2>
-                <button
-                  onClick={() => setCurrentWeekStart(addDays(currentWeekStart, 7))}
-                  className="btn-secondary"
-                >
-                  次週 →
-                </button>
+                <div className="flex gap-2 w-full sm:w-auto order-3">
+                  <button
+                    onClick={() => setCurrentWeekStart(addDays(currentWeekStart, -7))}
+                    className="btn-secondary flex-1 sm:flex-initial h-12"
+                  >
+                    ← 前週
+                  </button>
+                  <button
+                    onClick={() => setCurrentWeekStart(addDays(currentWeekStart, 7))}
+                    className="btn-secondary flex-1 sm:flex-initial h-12"
+                  >
+                    次週 →
+                  </button>
+                </div>
               </div>
             </div>
 
             {/* シフトパターン選択 */}
-            <div className="card mb-6">
-              <h3 className="text-lg font-bold text-gray-800 mb-4">シフト希望パターン</h3>
-              <div className="space-y-4">
-                {weekDays.map(day => {
-                  const dateStr = format(day, 'yyyy-MM-dd');
-                  const dayPatterns = selectedPatterns.get(dateStr) || [];
-                  const specialDay = getSpecialDayInfo(day);
-                  const existingRequest = requests.get(dateStr);
+            <div className="space-y-3 sm:space-y-4 mb-4 sm:mb-6">
+              <h3 className="text-base sm:text-lg font-bold text-gray-800 px-4 sm:px-0">📋 シフト希望を選択</h3>
+              {weekDays.map(day => {
+                const dateStr = format(day, 'yyyy-MM-dd');
+                const dayPatterns = selectedPatterns.get(dateStr) || [];
+                const specialDay = getSpecialDayInfo(day);
+                const existingRequest = requests.get(dateStr);
+                const hasSelection = dayPatterns.length > 0;
 
-                  return (
-                    <div key={dateStr} className="border border-gray-200 rounded-lg p-4">
-                      <div className="flex items-center justify-between mb-3">
-                        <div>
-                          <h4 className="font-bold text-gray-800">
-                            {format(day, 'M月d日(E)', { locale: ja })}
-                          </h4>
-                          {specialDay && (
-                            <span className={`text-xs px-2 py-1 rounded ${
-                              specialDay.type === 1 ? 'bg-red-100 text-red-700' :
-                              specialDay.type === 2 ? 'bg-yellow-100 text-yellow-700' :
-                              'bg-green-100 text-green-700'
-                            }`}>
-                              {specialDay.name}
-                            </span>
-                          )}
-                        </div>
-                        {existingRequest && (
-                          <span className={`text-xs px-2 py-1 rounded ${
-                            existingRequest.status === 'approved' ? 'bg-green-100 text-green-700' :
-                            existingRequest.status === 'rejected' ? 'bg-red-100 text-red-700' :
-                            'bg-gray-100 text-gray-700'
+                return (
+                  <div key={dateStr} className="card bg-white">
+                    {/* 日付ヘッダー */}
+                    <div className="flex items-center justify-between mb-3 pb-3 border-b border-gray-200">
+                      <div className="flex items-center gap-2">
+                        <h4 className="text-lg sm:text-xl font-bold text-gray-800">
+                          {format(day, 'M月d日(E)', { locale: ja })}
+                        </h4>
+                        {specialDay && (
+                          <span className={`text-xs px-2 py-1 rounded font-medium ${
+                            specialDay.type === 1 ? 'bg-red-100 text-red-700' :
+                            specialDay.type === 2 ? 'bg-yellow-100 text-yellow-700' :
+                            'bg-green-100 text-green-700'
                           }`}>
-                            {existingRequest.status === 'approved' ? '承認済み' :
-                             existingRequest.status === 'rejected' ? '却下' :
-                             '承認待ち'}
+                            {specialDay.name}
                           </span>
                         )}
                       </div>
+                      {existingRequest && (
+                        <span className={`text-xs px-2 py-1 rounded font-medium ${
+                          existingRequest.status === 'approved' ? 'bg-green-100 text-green-700' :
+                          existingRequest.status === 'rejected' ? 'bg-red-100 text-red-700' :
+                          'bg-blue-100 text-blue-700'
+                        }`}>
+                          {existingRequest.status === 'approved' ? '✓ 承認済' :
+                           existingRequest.status === 'rejected' ? '✗ 却下' :
+                           '⏱ 承認待ち'}
+                        </span>
+                      )}
+                    </div>
 
-                      <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-                        {SHIFT_PATTERNS.map(pattern => {
-                          const isSelected = dayPatterns.includes(pattern.id);
-                          
-                          return (
-                            <div key={pattern.id}>
-                              <button
-                                onClick={() => togglePattern(dateStr, pattern.id)}
-                                disabled={isDeadlinePassed}
-                                className={`w-full px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                                  isSelected
-                                    ? 'bg-ocean-600 text-white'
-                                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                                } disabled:opacity-50 disabled:cursor-not-allowed`}
-                              >
-                                {pattern.name}
+                    {/* 選択済みパターン表示 */}
+                    {hasSelection && (
+                      <div className="mb-3 p-3 bg-ocean-50 rounded-lg border border-ocean-200">
+                        <p className="text-xs text-ocean-700 font-medium mb-1">選択中:</p>
+                        <p className="text-sm font-bold text-ocean-900">
+                          {dayPatterns.map(p => SHIFT_PATTERNS.find(sp => sp.id === p)?.name).join(', ')}
+                        </p>
+                      </div>
+                    )}
+
+                    {/* パターン選択ボタン */}
+                    <div className="grid grid-cols-2 gap-2 sm:gap-3">
+                      {SHIFT_PATTERNS.map(pattern => {
+                        const isSelected = dayPatterns.includes(pattern.id);
+                        
+                        return (
+                          <div key={pattern.id} className={pattern.id === 'custom' || pattern.id === 'off' ? 'col-span-2' : ''}>
+                            <button
+                              onClick={() => togglePattern(dateStr, pattern.id)}
+                              disabled={isDeadlinePassed}
+                              className={`w-full px-4 py-3 sm:py-4 rounded-lg text-sm sm:text-base font-bold transition-all min-h-[56px] ${
+                                isSelected
+                                  ? 'bg-ocean-600 text-white shadow-lg scale-105'
+                                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200 active:scale-95'
+                              } disabled:opacity-50 disabled:cursor-not-allowed`}
+                            >
+                              <div className="flex flex-col items-center gap-1">
+                                <span className="text-lg sm:text-xl">
+                                  {pattern.id === 'morning' && '🌅'}
+                                  {pattern.id === 'afternoon' && '☀️'}
+                                  {pattern.id === 'evening' && '🌙'}
+                                  {pattern.id === 'full' && '📅'}
+                                  {pattern.id === 'custom' && '⚙️'}
+                                  {pattern.id === 'off' && '🏖️'}
+                                </span>
+                                <span>{pattern.name}</span>
                                 {pattern.start && pattern.end && (
-                                  <div className="text-xs mt-1">
+                                  <span className="text-xs opacity-80">
                                     {pattern.start} - {pattern.end}
-                                  </div>
+                                  </span>
                                 )}
-                              </button>
+                              </div>
+                            </button>
 
-                              {/* カスタム時間入力 */}
-                              {pattern.id === 'custom' && isSelected && (
-                                <div className="mt-2 space-y-2">
+                            {/* カスタム時間入力 */}
+                            {pattern.id === 'custom' && isSelected && (
+                              <div className="mt-3 grid grid-cols-2 gap-2">
+                                <div>
+                                  <label className="block text-xs font-medium text-gray-600 mb-1">開始</label>
                                   <input
                                     type="time"
                                     value={customTimes.get(dateStr)?.start || '07:00'}
                                     onChange={(e) => updateCustomTime(dateStr, 'start', e.target.value)}
                                     disabled={isDeadlinePassed}
-                                    className="input-field text-sm"
+                                    className="input-field text-base h-12"
                                   />
+                                </div>
+                                <div>
+                                  <label className="block text-xs font-medium text-gray-600 mb-1">終了</label>
                                   <input
                                     type="time"
                                     value={customTimes.get(dateStr)?.end || '22:00'}
                                     onChange={(e) => updateCustomTime(dateStr, 'end', e.target.value)}
                                     disabled={isDeadlinePassed}
-                                    className="input-field text-sm"
+                                    className="input-field text-base h-12"
                                   />
                                 </div>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
-                  );
-                })}
-              </div>
+                  </div>
+                );
+              })}
             </div>
 
             {/* メッセージ表示 */}
             {message && (
-              <div className={`card mb-6 ${
-                message.type === 'success' ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'
+              <div className={`card mb-4 sm:mb-6 ${
+                message.type === 'success' ? 'bg-green-50 border-2 border-green-300' : 'bg-red-50 border-2 border-red-300'
               }`}>
-                <p className={`${message.type === 'success' ? 'text-green-700' : 'text-red-700'}`}>
+                <p className={`text-sm sm:text-base font-medium ${message.type === 'success' ? 'text-green-700' : 'text-red-700'}`}>
+                  {message.type === 'success' ? '✓ ' : '✗ '}
                   {message.text}
                 </p>
               </div>
             )}
 
-            {/* 提出ボタン */}
-            <div className="card">
-              <button
-                onClick={handleSubmit}
-                disabled={saving || isDeadlinePassed}
-                className="btn-primary w-full py-3 text-lg font-bold disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {saving ? '提出中...' : 'シフト希望を提出'}
-              </button>
-              <p className="text-xs text-gray-500 mt-2 text-center">
-                ※複数のパターンを選択可能です（休み希望・カスタムは単独選択）
-              </p>
-            </div>
+            {/* スマホ用の余白（固定フッターの下に隠れないように） */}
+            <div className="h-4 sm:hidden"></div>
           </>
         )}
       </div>
+
+      {/* 固定フッター提出ボタン（スマホ最適化） */}
+      {selectedEmployeeId && (
+        <div className="fixed bottom-0 left-0 right-0 bg-white border-t-2 border-gray-200 shadow-2xl z-40 safe-area-pb">
+          <div className="max-w-6xl mx-auto px-4 py-3">
+            <button
+              onClick={handleSubmit}
+              disabled={saving || isDeadlinePassed}
+              className="btn-primary w-full h-14 sm:h-12 text-base sm:text-lg font-bold disabled:opacity-50 disabled:cursor-not-allowed shadow-lg"
+            >
+              {saving ? '⏳ 提出中...' : `✓ シフト希望を提出 (${Array.from(selectedPatterns.values()).filter(p => p.length > 0).length}日選択中)`}
+            </button>
+            <p className="text-xs text-gray-500 mt-2 text-center">
+              ※複数パターン選択可（休み・カスタムは単独選択）
+            </p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
