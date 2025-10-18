@@ -46,6 +46,9 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
   // 印刷モード
   const [showPrintDialog, setShowPrintDialog] = useState(false);
   const [selectedWeeks, setSelectedWeeks] = useState<string[]>([format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd')]);
+  
+  // ビューモード（モバイル最適化）
+  const [viewMode, setViewMode] = useState<'table' | 'list' | 'day'>('table');
 
   useEffect(() => {
     fetchStores();
@@ -901,6 +904,43 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
               )}
             </div>
           </div>
+
+          {/* ビューモード切り替え（モバイル最適化） */}
+          <div className="mt-4 flex gap-2 no-print">
+            <button
+              onClick={() => setViewMode('table')}
+              className={`flex-1 h-12 rounded-lg text-sm font-medium transition-all ${
+                viewMode === 'table'
+                  ? 'bg-ocean-600 text-white shadow-md'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              📅 表ビュー
+              <span className="hidden md:inline"> (PC向け)</span>
+            </button>
+            <button
+              onClick={() => setViewMode('list')}
+              className={`flex-1 h-12 rounded-lg text-sm font-medium transition-all ${
+                viewMode === 'list'
+                  ? 'bg-ocean-600 text-white shadow-md'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              👥 リストビュー
+              <span className="hidden md:inline"> (従業員別)</span>
+            </button>
+            <button
+              onClick={() => setViewMode('day')}
+              className={`flex-1 h-12 rounded-lg text-sm font-medium transition-all ${
+                viewMode === 'day'
+                  ? 'bg-ocean-600 text-white shadow-md'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              📆 日別ビュー
+              <span className="hidden md:inline"> (日付別)</span>
+            </button>
+          </div>
         </div>
 
         {/* シフト編集フォーム */}
@@ -1041,7 +1081,8 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
           )}
         </div>
 
-        {/* ガントチャート */}
+        {/* 表ビュー（ガントチャート） */}
+        {viewMode === 'table' && (
         <div className="card overflow-x-auto avoid-break">
           {/* 印刷用ヘッダー */}
           <div className="print-shift-header hidden print:block">
@@ -1157,6 +1198,266 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
             </div>
           )}
         </div>
+        )}
+
+        {/* リストビュー（従業員別） */}
+        {viewMode === 'list' && (
+          <div className="space-y-4">
+            {employees.length === 0 ? (
+              <div className="card text-center py-12 text-gray-500">
+                従業員が登録されていません
+              </div>
+            ) : (
+              employees.map(employee => {
+                const employeeShifts = shifts.filter(s => s.employee_id === employee.id);
+                const totalWorkMinutes = employeeShifts.reduce((sum, shift) => {
+                  const startTime = new Date(`2000-01-01T${shift.start_time}`);
+                  const endTime = new Date(`2000-01-01T${shift.end_time}`);
+                  return sum + (differenceInMinutes(endTime, startTime) - shift.break_minutes);
+                }, 0);
+                const totalLaborCost = employeeShifts.reduce((sum, shift) => sum + calculateLaborCost(shift, employee), 0);
+
+                return (
+                  <div key={employee.id} className="card border-2 border-gray-200">
+                    {/* 従業員ヘッダー */}
+                    <div className="bg-ocean-500 text-white px-4 py-3 -m-6 mb-4 rounded-t-lg">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h3 className="text-lg font-bold flex items-center gap-2">
+                            👤 {employee.name}
+                          </h3>
+                          <p className="text-sm opacity-90 mt-1">
+                            {employee.employment_type === 'part_time' && 'パート'}
+                            {employee.employment_type === 'part_time_insured' && '社保パート'}
+                            {employee.employment_type === 'full_time' && '正社員'}
+                            {' / '}時給 ¥{employee.hourly_wage?.toLocaleString()}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-sm opacity-90">週間勤務</div>
+                          <div className="text-xl font-bold">
+                            {Math.floor(totalWorkMinutes / 60)}h {totalWorkMinutes % 60}m
+                          </div>
+                          <div className="text-sm font-bold mt-1" data-salary>
+                            ¥{totalLaborCost.toLocaleString()}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* シフト一覧 */}
+                    {employeeShifts.length === 0 ? (
+                      <div className="text-center py-8 text-gray-400">
+                        この週のシフトはありません
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        {weekDates.map(date => {
+                          const dateStr = format(date, 'yyyy-MM-dd');
+                          const shift = getShiftForEmployeeAndDate(employee.id, dateStr);
+                          if (!shift) return null;
+
+                          const specialDay = getSpecialDayInfo(date);
+                          const dayOfWeek = date.getDay();
+                          const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+                          const workMinutes = differenceInMinutes(
+                            new Date(`2000-01-01T${shift.end_time}`),
+                            new Date(`2000-01-01T${shift.start_time}`)
+                          ) - shift.break_minutes;
+
+                          return (
+                            <div
+                              key={dateStr}
+                              onClick={() => handleEditShift(shift)}
+                              className={`p-4 rounded-lg border-2 cursor-pointer transition-all hover:shadow-md ${
+                                specialDay?.type === 1
+                                  ? 'bg-red-50 border-red-200 hover:border-red-400'
+                                  : isWeekend
+                                  ? 'bg-blue-50 border-blue-200 hover:border-blue-400'
+                                  : 'bg-white border-gray-200 hover:border-ocean-400'
+                              }`}
+                            >
+                              <div className="flex items-center justify-between">
+                                <div className="flex-1">
+                                  <div className="flex items-center gap-2 mb-2">
+                                    <span className="text-lg">
+                                      {specialDay?.type === 1 ? '🎌' : isWeekend ? '📅' : '📆'}
+                                    </span>
+                                    <span className={`font-bold text-base ${
+                                      specialDay?.type === 1 ? 'text-red-700' : 
+                                      isWeekend ? 'text-blue-700' : 
+                                      'text-gray-800'
+                                    }`}>
+                                      {format(date, 'M月d日(E)', { locale: ja })}
+                                    </span>
+                                    {specialDay && (
+                                      <span className="text-xs px-2 py-0.5 bg-red-200 text-red-800 rounded">
+                                        {specialDay.name}
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div className="flex items-center gap-2 text-ocean-700">
+                                    <span className="text-xl">🕐</span>
+                                    <span className="font-bold text-lg">
+                                      {shift.start_time.slice(0, 5)} - {shift.end_time.slice(0, 5)}
+                                    </span>
+                                    {shift.break_minutes > 0 && (
+                                      <span className="text-sm text-gray-600">
+                                        (休憩{shift.break_minutes}分)
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div className="text-sm text-gray-600 mt-1">
+                                    実働: {Math.floor(workMinutes / 60)}時間{workMinutes % 60}分
+                                  </div>
+                                </div>
+                                <div className="text-right">
+                                  <div className="text-lg font-bold text-ocean-700" data-salary>
+                                    ¥{calculateLaborCost(shift, employee).toLocaleString()}
+                                  </div>
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleDeleteShift(shift.id);
+                                    }}
+                                    className="mt-2 text-xs px-3 py-1 bg-red-100 text-red-700 rounded hover:bg-red-200 transition-colors"
+                                  >
+                                    削除
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                );
+              })
+            )}
+          </div>
+        )}
+
+        {/* 日別ビュー */}
+        {viewMode === 'day' && (
+          <div className="space-y-4">
+            {weekDates.map(date => {
+              const dateStr = format(date, 'yyyy-MM-dd');
+              const dayShifts = shifts.filter(s => s.date === dateStr);
+              const specialDay = getSpecialDayInfo(date);
+              const dayOfWeek = date.getDay();
+              const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+              
+              const totalDayLaborCost = dayShifts.reduce((sum, shift) => {
+                const employee = employees.find(e => e.id === shift.employee_id);
+                return sum + (employee ? calculateLaborCost(shift, employee) : 0);
+              }, 0);
+
+              return (
+                <div key={dateStr} className="card border-2 border-gray-200">
+                  {/* 日付ヘッダー */}
+                  <div className={`px-4 py-3 -m-6 mb-4 rounded-t-lg ${
+                    specialDay?.type === 1
+                      ? 'bg-red-500 text-white'
+                      : isWeekend
+                      ? 'bg-blue-500 text-white'
+                      : 'bg-ocean-500 text-white'
+                  }`}>
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h3 className="text-lg font-bold flex items-center gap-2">
+                          {specialDay?.type === 1 ? '🎌' : isWeekend ? '📅' : '📆'}
+                          {format(date, 'M月d日(E)', { locale: ja })}
+                        </h3>
+                        {specialDay && (
+                          <p className="text-sm opacity-90 mt-1">{specialDay.name}</p>
+                        )}
+                      </div>
+                      <div className="text-right">
+                        <div className="text-sm opacity-90">出勤人数</div>
+                        <div className="text-2xl font-bold">{dayShifts.length}名</div>
+                        <div className="text-sm font-bold mt-1" data-salary>
+                          ¥{totalDayLaborCost.toLocaleString()}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* シフト一覧 */}
+                  {dayShifts.length === 0 ? (
+                    <div className="text-center py-8 text-gray-400">
+                      この日のシフトはありません
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {dayShifts.map(shift => {
+                        const employee = employees.find(e => e.id === shift.employee_id);
+                        if (!employee) return null;
+
+                        const workMinutes = differenceInMinutes(
+                          new Date(`2000-01-01T${shift.end_time}`),
+                          new Date(`2000-01-01T${shift.start_time}`)
+                        ) - shift.break_minutes;
+
+                        return (
+                          <div
+                            key={shift.id}
+                            onClick={() => handleEditShift(shift)}
+                            className="p-4 rounded-lg border-2 border-gray-200 bg-white cursor-pointer transition-all hover:shadow-md hover:border-ocean-400"
+                          >
+                            <div className="flex items-center justify-between">
+                              <div className="flex-1">
+                                <div className="flex items-center gap-2 mb-2">
+                                  <span className="text-lg">👤</span>
+                                  <span className="font-bold text-base text-gray-800">
+                                    {employee.name}
+                                  </span>
+                                  <span className="text-xs px-2 py-0.5 bg-gray-100 text-gray-700 rounded">
+                                    {employee.employment_type === 'part_time' && 'パート'}
+                                    {employee.employment_type === 'part_time_insured' && '社保パート'}
+                                    {employee.employment_type === 'full_time' && '正社員'}
+                                  </span>
+                                </div>
+                                <div className="flex items-center gap-2 text-ocean-700">
+                                  <span className="text-xl">🕐</span>
+                                  <span className="font-bold text-lg">
+                                    {shift.start_time.slice(0, 5)} - {shift.end_time.slice(0, 5)}
+                                  </span>
+                                  {shift.break_minutes > 0 && (
+                                    <span className="text-sm text-gray-600">
+                                      (休憩{shift.break_minutes}分)
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="text-sm text-gray-600 mt-1">
+                                  実働: {Math.floor(workMinutes / 60)}時間{workMinutes % 60}分 / 時給: ¥{employee.hourly_wage?.toLocaleString()}
+                                </div>
+                              </div>
+                              <div className="text-right">
+                                <div className="text-lg font-bold text-ocean-700" data-salary>
+                                  ¥{calculateLaborCost(shift, employee).toLocaleString()}
+                                </div>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleDeleteShift(shift.id);
+                                  }}
+                                  className="mt-2 text-xs px-3 py-1 bg-red-100 text-red-700 rounded hover:bg-red-200 transition-colors"
+                                >
+                                  削除
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
     </AdminLayout>
   );

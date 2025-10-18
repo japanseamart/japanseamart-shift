@@ -356,7 +356,9 @@ export default function StoreManagement({ role, onLogout }: StoreManagementProps
         {/* 店舗一覧 */}
         <div className="card">
           <h2 className="text-xl font-bold text-gray-800 mb-4">店舗一覧</h2>
-          <div className="overflow-x-auto">
+          
+          {/* デスクトップ: テーブル表示 */}
+          <div className="hidden md:block overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
                 <tr>
@@ -400,6 +402,62 @@ export default function StoreManagement({ role, onLogout }: StoreManagementProps
                 ))}
               </tbody>
             </table>
+          </div>
+
+          {/* モバイル: カード表示 */}
+          <div className="md:hidden space-y-3">
+            {stores.map((store) => (
+              <div
+                key={store.id}
+                className="border-2 border-gray-200 rounded-lg p-4 bg-white hover:border-ocean-400 transition-colors"
+              >
+                <div className="flex items-start justify-between mb-3">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="text-lg">🏪</span>
+                      <h3 className="font-bold text-base text-gray-900">{store.name}</h3>
+                    </div>
+                    <div className="text-sm text-gray-600 space-y-1.5">
+                      <div className="flex items-center gap-2">
+                        <span className="text-ocean-600">💰</span>
+                        <span>月間予算:</span>
+                        <span className="font-bold text-ocean-700">
+                          ¥{store.monthly_budget.toLocaleString()}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-ocean-600">🕐</span>
+                        <span>営業時間:</span>
+                        <span className="font-medium">
+                          {store.business_hours_start} - {store.business_hours_end}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-ocean-600">⭐</span>
+                        <span>特別日加算:</span>
+                        <span className={`font-medium ${store.overtime_rate_enabled ? 'text-green-600' : 'text-gray-500'}`}>
+                          {store.overtime_rate_enabled ? '✓ 有効' : '✗ 無効'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div className="flex gap-2 pt-3 border-t border-gray-200">
+                  <button
+                    onClick={() => handleEdit(store)}
+                    className="flex-1 h-10 bg-ocean-50 text-ocean-700 rounded-lg hover:bg-ocean-100 transition-colors font-medium text-sm"
+                  >
+                    ✏️ 編集
+                  </button>
+                  <button
+                    onClick={() => handleDelete(store.id)}
+                    className="flex-1 h-10 bg-red-50 text-red-700 rounded-lg hover:bg-red-100 transition-colors font-medium text-sm"
+                  >
+                    🗑️ 削除
+                  </button>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       </div>
