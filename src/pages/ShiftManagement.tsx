@@ -49,6 +49,7 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
   
   // ビューモード（モバイル最適化）
   const [viewMode, setViewMode] = useState<'table' | 'list' | 'day'>('table');
+  const [requestsViewMode, setRequestsViewMode] = useState<'card' | 'table'>('card');
 
   useEffect(() => {
     fetchStores();
@@ -547,9 +548,14 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
   return (
     <AdminLayout role={role} storeId={storeId} onLogout={onLogout}>
       <div className="space-y-6">
-        <div className="flex justify-between items-center">
-          <h1 className="text-2xl font-bold text-gray-800">シフト管理</h1>
-          <div className="flex gap-2 no-print">
+        {/* ヘッダー */}
+        <div className="flex flex-col gap-3">
+          <div className="flex justify-between items-center">
+            <h1 className="text-xl md:text-2xl font-bold text-gray-800">シフト管理</h1>
+          </div>
+
+          {/* デスクトップ: 横並びボタン */}
+          <div className="hidden md:flex gap-2 no-print">
             <button
               onClick={() => setShowThresholdSettings(!showThresholdSettings)}
               className="btn-secondary"
@@ -581,6 +587,44 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
             >
               🖨️ 印刷設定
             </button>
+          </div>
+
+          {/* モバイル: 縦積みボタン */}
+          <div className="md:hidden space-y-2 no-print">
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                onClick={handleAutoFillRequests}
+                disabled={autoFilling}
+                className="h-12 bg-ocean-600 text-white rounded-lg font-bold hover:bg-ocean-700 transition-colors disabled:opacity-50 text-sm"
+                title="表示中の週のシフト希望のみを自動的にシフトに反映します"
+              >
+                {autoFilling ? '⏳ 反映中...' : '✨ 自動反映'}
+              </button>
+              <button
+                onClick={handleTogglePublication}
+                className={`h-12 rounded-lg font-bold transition-colors text-sm ${
+                  isPublished
+                    ? 'bg-yellow-500 hover:bg-yellow-600 text-white'
+                    : 'bg-green-500 hover:bg-green-600 text-white'
+                }`}
+              >
+                {isPublished ? '🔓 公開中' : '🔒 公開する'}
+              </button>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                onClick={() => setShowThresholdSettings(!showThresholdSettings)}
+                className="h-10 bg-gray-200 text-gray-800 rounded-lg font-medium hover:bg-gray-300 transition-colors text-sm"
+              >
+                ⚙️ 予算設定
+              </button>
+              <button
+                onClick={() => setShowPrintDialog(true)}
+                className="h-10 bg-gray-200 text-gray-800 rounded-lg font-medium hover:bg-gray-300 transition-colors text-sm"
+              >
+                🖨️ 印刷
+              </button>
+            </div>
           </div>
         </div>
 
@@ -1152,19 +1196,47 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
 
         {/* シフト希望表示パネル */}
         <div className="card no-print">
-          <div className="flex justify-between items-center mb-4">
-            <h3 className="text-base md:text-lg font-bold text-gray-800 flex items-center gap-2">
-              <svg className="w-5 h-5 text-ocean-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-              </svg>
-              シフト希望一覧
-            </h3>
-            <button
-              onClick={() => setShowRequestsPanel(!showRequestsPanel)}
-              className="btn-secondary text-sm h-10 px-4"
-            >
-              {showRequestsPanel ? '非表示' : '表示'}
-            </button>
+          <div className="flex flex-col gap-3">
+            <div className="flex justify-between items-center">
+              <h3 className="text-base md:text-lg font-bold text-gray-800 flex items-center gap-2">
+                <svg className="w-5 h-5 text-ocean-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                </svg>
+                シフト希望一覧
+              </h3>
+              <button
+                onClick={() => setShowRequestsPanel(!showRequestsPanel)}
+                className="btn-secondary text-sm h-10 px-4"
+              >
+                {showRequestsPanel ? '非表示' : '表示'}
+              </button>
+            </div>
+
+            {/* モバイル: ビューモード切り替え */}
+            {showRequestsPanel && (
+              <div className="md:hidden flex gap-2">
+                <button
+                  onClick={() => setRequestsViewMode('card')}
+                  className={`flex-1 h-10 rounded-lg text-sm font-medium transition-all ${
+                    requestsViewMode === 'card'
+                      ? 'bg-ocean-600 text-white shadow-md'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  📋 カード
+                </button>
+                <button
+                  onClick={() => setRequestsViewMode('table')}
+                  className={`flex-1 h-10 rounded-lg text-sm font-medium transition-all ${
+                    requestsViewMode === 'table'
+                      ? 'bg-ocean-600 text-white shadow-md'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  📊 表
+                </button>
+              </div>
+            )}
           </div>
           
           {showRequestsPanel && (
@@ -1219,7 +1291,8 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
               </div>
 
               {/* モバイル: カード表示 */}
-              <div className="md:hidden space-y-3">
+              {requestsViewMode === 'card' && (
+              <div className="md:hidden space-y-3 mt-4">
                 {employees.map(employee => {
                   const employeeRequests = weekDates
                     .map(date => {
@@ -1293,6 +1366,61 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
                   </div>
                 )}
               </div>
+              )}
+
+              {/* モバイル: テーブル表示 */}
+              {requestsViewMode === 'table' && (
+              <div className="md:hidden overflow-x-auto mt-4">
+                <table className="min-w-full text-sm">
+                  <thead className="bg-ocean-50">
+                    <tr>
+                      <th className="px-3 py-2 text-left font-medium text-gray-700 sticky left-0 bg-ocean-50 z-10">従業員</th>
+                      {weekDates.map(date => (
+                        <th key={date.toISOString()} className="px-2 py-2 text-center font-medium text-gray-700 min-w-[80px]">
+                          <div>{format(date, 'M/d', { locale: ja })}</div>
+                          <div className="text-[10px] font-normal">{format(date, 'E', { locale: ja })}</div>
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200 bg-white">
+                    {employees.map(employee => (
+                      <tr key={employee.id}>
+                        <td className="px-3 py-2 font-medium text-gray-800 sticky left-0 bg-white z-10 border-r border-gray-200">
+                          {employee.name}
+                        </td>
+                        {weekDates.map(date => {
+                          const dateStr = format(date, 'yyyy-MM-dd');
+                          const request = getShiftRequestForEmployeeAndDate(employee.id, dateStr);
+                          const hasShift = getShiftForEmployeeAndDate(employee.id, dateStr);
+                          
+                          return (
+                            <td key={date.toISOString()} className="px-2 py-2 text-center">
+                              {request ? (
+                                <div className={`text-xs px-1 py-1 rounded ${
+                                  hasShift 
+                                    ? 'bg-green-100 text-green-800 border border-green-300'
+                                    : 'bg-blue-100 text-blue-800 border border-blue-300'
+                                }`}>
+                                  <div className="font-medium">
+                                    {formatShiftRequestPatterns(request)}
+                                  </div>
+                                  {hasShift && (
+                                    <div className="text-[9px] text-green-600 mt-0.5">✓</div>
+                                  )}
+                                </div>
+                              ) : (
+                                <span className="text-gray-400">−</span>
+                              )}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              )}
             </>
           )}
         </div>
