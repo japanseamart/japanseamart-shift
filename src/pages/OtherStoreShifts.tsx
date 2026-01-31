@@ -176,9 +176,9 @@ export default function OtherStoreShifts({ role, storeId, onLogout }: OtherStore
                   }}
                   className="input-field flex-1"
                 >
-                  {Array.from({ length: 12 }, (_, i) => {
+                  {Array.from({ length: 18 }, (_, i) => {
                     const d = new Date();
-                    d.setMonth(d.getMonth() + i - 3);
+                    d.setMonth(d.getMonth() + i - 6);
                     return (
                       <option key={i} value={format(d, 'yyyy-MM')}>
                         {format(d, 'yyyy年M月', { locale: ja })}
