@@ -657,6 +657,30 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
     }).length;
   };
 
+  // ヒートマップ用: 最大人数を計算（月間レポートと同じ濃淡表示のため）
+  const getMaxHourlyStaffCount = () => {
+    let max = 0;
+    for (const date of periodDates) {
+      for (let hour = 6; hour <= 21; hour++) {
+        const count = getHourlyStaffCount(date, hour);
+        if (count > max) max = count;
+      }
+    }
+    return max || 1; // 0除算防止
+  };
+
+  // ヒートマップのカラー計算（月間レポートと同じ青系グラデーション）
+  const getHeatmapColor = (value: number, max: number) => {
+    if (max === 0) return 'bg-gray-100';
+    const intensity = Math.min(value / max, 1);
+    if (intensity === 0) return 'bg-gray-50';
+    if (intensity < 0.2) return 'bg-blue-100';
+    if (intensity < 0.4) return 'bg-blue-200';
+    if (intensity < 0.6) return 'bg-blue-300';
+    if (intensity < 0.8) return 'bg-blue-400';
+    return 'bg-blue-500';
+  };
+
   const periodBudget = selectedStore?.monthly_budget ? Math.round(selectedStore.monthly_budget / 2) : 0;
   const budgetUsagePercent = periodBudget > 0 ? (totalLaborCost / periodBudget) * 100 : 0;
   const periodStatus = budgetUsagePercent >= dangerThreshold ? 'danger' : budgetUsagePercent >= warningThreshold ? 'warning' : 'normal';
@@ -1244,59 +1268,62 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
         )}
 
         {/* ヒートマップビュー */}
-        {viewMode === 'heatmap' && (
-          <div className="card overflow-x-auto">
-            <h3 className="text-lg font-bold text-gray-800 mb-4">🔥 時間帯別人員配置</h3>
-            <table className="min-w-full text-xs">
-              <thead>
-                <tr className="bg-gray-50">
-                  <th className="sticky left-0 z-10 bg-gray-50 px-2 py-2 text-left font-medium text-gray-500 min-w-[60px]">時間</th>
-                  {periodDates.map(date => {
-                    const dayOfWeek = date.getDay();
-                    return (
-                      <th key={date.toISOString()}
-                        className={`px-1 py-2 text-center font-medium min-w-[40px] ${
-                          dayOfWeek === 0 ? 'bg-red-50 text-red-600' : dayOfWeek === 6 ? 'bg-blue-50 text-blue-600' : 'text-gray-500'
-                        }`}>
-                        <div>{format(date, 'd')}</div>
-                        <div className="text-[9px]">{format(date, 'E', { locale: ja })}</div>
-                      </th>
-                    );
-                  })}
-                </tr>
-              </thead>
-              <tbody>
-                {Array.from({ length: 16 }, (_, i) => i + 6).map(hour => (
-                  <tr key={hour} className="border-b">
-                    <td className="sticky left-0 z-10 bg-white px-2 py-1 font-medium text-gray-700">{hour}:00</td>
+        {viewMode === 'heatmap' && (() => {
+          const maxStaffCount = getMaxHourlyStaffCount();
+          return (
+            <div className="card overflow-x-auto">
+              <h3 className="text-lg font-bold text-gray-800 mb-4">🔥 時間帯別人員配置</h3>
+              <table className="min-w-full text-xs">
+                <thead>
+                  <tr className="bg-gray-50">
+                    <th className="sticky left-0 z-10 bg-gray-50 px-2 py-2 text-left font-medium text-gray-500 min-w-[60px]">時間</th>
                     {periodDates.map(date => {
-                      const count = getHourlyStaffCount(date, hour);
-                      const bgColor = count === 0 ? 'bg-gray-100' :
-                        count === 1 ? 'bg-green-200' :
-                        count === 2 ? 'bg-green-400' :
-                        count === 3 ? 'bg-yellow-400' :
-                        count === 4 ? 'bg-orange-400' :
-                        'bg-red-500';
+                      const dayOfWeek = date.getDay();
                       return (
-                        <td key={date.toISOString()} className={`px-1 py-1 text-center ${bgColor}`}>
-                          {count > 0 && <span className={count >= 4 ? 'text-white font-bold' : 'text-gray-800 font-medium'}>{count}</span>}
-                        </td>
+                        <th key={date.toISOString()}
+                          className={`px-1 py-2 text-center font-medium min-w-[40px] ${
+                            dayOfWeek === 0 ? 'bg-red-50 text-red-600' : dayOfWeek === 6 ? 'bg-blue-50 text-blue-600' : 'text-gray-500'
+                          }`}>
+                          <div>{format(date, 'd')}</div>
+                          <div className="text-[9px]">{format(date, 'E', { locale: ja })}</div>
+                        </th>
                       );
                     })}
                   </tr>
-                ))}
-              </tbody>
-            </table>
-            <div className="mt-4 flex flex-wrap gap-2 text-xs">
-              <span className="px-2 py-1 bg-gray-100 rounded">0名</span>
-              <span className="px-2 py-1 bg-green-200 rounded">1名</span>
-              <span className="px-2 py-1 bg-green-400 rounded">2名</span>
-              <span className="px-2 py-1 bg-yellow-400 rounded">3名</span>
-              <span className="px-2 py-1 bg-orange-400 rounded">4名</span>
-              <span className="px-2 py-1 bg-red-500 text-white rounded">5名以上</span>
+                </thead>
+                <tbody>
+                  {Array.from({ length: 16 }, (_, i) => i + 6).map(hour => (
+                    <tr key={hour} className="border-b">
+                      <td className="sticky left-0 z-10 bg-white px-2 py-1 font-medium text-gray-700">{hour}:00</td>
+                      {periodDates.map(date => {
+                        const count = getHourlyStaffCount(date, hour);
+                        const bgColor = getHeatmapColor(count, maxStaffCount);
+                        return (
+                          <td key={date.toISOString()} className={`px-1 py-1 text-center ${bgColor}`} title={`${count}名`}>
+                            {count > 0 && <span className={count >= maxStaffCount * 0.8 ? 'text-white font-bold' : 'text-gray-800 font-medium'}>{count}</span>}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <div className="mt-4 text-xs text-gray-500 flex items-center gap-4">
+                <span>濃い色ほど人数が多い</span>
+                <div className="flex items-center gap-1">
+                  <div className="w-4 h-4 bg-gray-50 border border-gray-300 rounded"></div>
+                  <span>0</span>
+                  <div className="w-4 h-4 bg-blue-100 border border-gray-300 rounded"></div>
+                  <div className="w-4 h-4 bg-blue-200 border border-gray-300 rounded"></div>
+                  <div className="w-4 h-4 bg-blue-300 border border-gray-300 rounded"></div>
+                  <div className="w-4 h-4 bg-blue-400 border border-gray-300 rounded"></div>
+                  <div className="w-4 h-4 bg-blue-500 border border-gray-300 rounded"></div>
+                  <span>最大({maxStaffCount}名)</span>
+                </div>
+              </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
 
         {/* 日別人件費ビュー（本部のみ） */}
         {viewMode === 'cost' && role === 'admin' && (
