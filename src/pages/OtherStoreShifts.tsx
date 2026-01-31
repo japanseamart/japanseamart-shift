@@ -176,15 +176,33 @@ export default function OtherStoreShifts({ role, storeId, onLogout }: OtherStore
                   }}
                   className="input-field flex-1"
                 >
-                  {Array.from({ length: 18 }, (_, i) => {
-                    const d = new Date();
-                    d.setMonth(d.getMonth() + i - 6);
-                    return (
-                      <option key={i} value={format(d, 'yyyy-MM')}>
-                        {format(d, 'yyyy年M月', { locale: ja })}
+                  {(() => {
+                    // システム稼働開始: 2024年11月から現在+12ヶ月先まで
+                    const startYear = 2024;
+                    const startMonth = 11; // 11月
+                    const now = new Date();
+                    const endYear = now.getFullYear() + 1;
+                    const endMonth = now.getMonth() + 1;
+                    
+                    const months: { year: number; month: number }[] = [];
+                    let y = startYear;
+                    let m = startMonth;
+                    
+                    while (y < endYear || (y === endYear && m <= endMonth)) {
+                      months.push({ year: y, month: m });
+                      m++;
+                      if (m > 12) {
+                        m = 1;
+                        y++;
+                      }
+                    }
+                    
+                    return months.map(({ year, month }) => (
+                      <option key={`${year}-${month}`} value={`${year}-${String(month).padStart(2, '0')}`}>
+                        {year}年{month}月
                       </option>
-                    );
-                  })}
+                    ));
+                  })()}
                 </select>
                 <button
                   onClick={() => setTargetPeriod('first')}
