@@ -97,7 +97,7 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
   useEffect(() => {
     calculateTotalLaborCost();
     calculateMonthlyForecast();
-  }, [shifts, selectedStore, specialDays, employees]);
+  }, [shifts, selectedStore, specialDays, employees, isAllStores, stores, allEmployees]);
 
   // 自動休憩時間計算（6時間ちょうど→休憩なし、6時間超→60分）
   // 手動で変更された場合は自動計算しない
@@ -318,17 +318,30 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
   };
 
   const calculateTotalLaborCost = () => {
-    if (!selectedStore) return;
+    // 全店計モードまたは単一店舗モードの両方に対応
+    if (!isAllStores && !selectedStore) return;
+    
     let total = 0;
+    const employeeList = isAllStores ? allEmployees : employees;
+    
     shifts.forEach(shift => {
-      const employee = employees.find(e => e.id === shift.employee_id);
-      if (employee) total += calculateLaborCost(shift, employee);
+      const employee = employeeList.find(e => e.id === shift.employee_id);
+      if (employee) {
+        // 全店計モードでは保存されたlabor_costを使用
+        if (isAllStores && shift.labor_cost) {
+          total += shift.labor_cost;
+        } else {
+          total += calculateLaborCost(shift, employee);
+        }
+      }
     });
     setTotalLaborCost(total);
   };
 
   const calculateMonthlyForecast = async () => {
-    if (!selectedStoreId || !selectedStore) return;
+    // 全店計モードまたは単一店舗モードの両方に対応
+    if (!isAllStores && (!selectedStoreId || !selectedStore)) return;
+    
     try {
       const monthStart = new Date(targetYear, targetMonth - 1, 1);
       const monthEnd = new Date(targetYear, targetMonth, 0);
@@ -341,10 +354,17 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
       const isFutureMonth = targetYear > today.getFullYear() ||
                            (targetYear === today.getFullYear() && targetMonth > today.getMonth() + 1);
       
-      const res = await fetch(
-        getApiUrl(`/api/shifts?store_id=${selectedStoreId}&start_date=${format(monthStart, 'yyyy-MM-dd')}&end_date=${format(monthEnd, 'yyyy-MM-dd')}`)
-      );
+      // 全店計モードでは全店舗のシフトを取得、単一店舗モードでは店舗指定
+      let apiUrl = '';
+      if (isAllStores) {
+        apiUrl = getApiUrl(`/api/shifts?start_date=${format(monthStart, 'yyyy-MM-dd')}&end_date=${format(monthEnd, 'yyyy-MM-dd')}`);
+      } else {
+        apiUrl = getApiUrl(`/api/shifts?store_id=${selectedStoreId}&start_date=${format(monthStart, 'yyyy-MM-dd')}&end_date=${format(monthEnd, 'yyyy-MM-dd')}`);
+      }
+      
+      const res = await fetch(apiUrl);
       const monthlyShifts: Shift[] = await res.json();
+      const employeeList = isAllStores ? allEmployees : employees;
 
       // 前半（1-15日）と後半（16日以降）に分けて集計
       // シフトに保存されているlabor_costを使用
@@ -358,7 +378,7 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
         // シフトに保存されたlabor_costを使用（なければ計算）
         let cost = shift.labor_cost || 0;
         if (!cost) {
-          const employee = employees.find(e => e.id === shift.employee_id);
+          const employee = employeeList.find(e => e.id === shift.employee_id);
           if (employee) {
             cost = calculateLaborCost(shift, employee);
           }
@@ -720,12 +740,15 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
     return 'bg-blue-500';
   };
 
-  const periodBudget = selectedStore?.monthly_budget ? Math.round(selectedStore.monthly_budget / 2) : 0;
+  // 全店計モードでは全店舗の予算合計、単一店舗では選択店舗の予算
+  const allStoresBudget = stores.reduce((sum, store) => sum + (store.monthly_budget || 0), 0);
+  const totalMonthlyBudget = isAllStores ? allStoresBudget : (selectedStore?.monthly_budget || 0);
+  const periodBudget = totalMonthlyBudget ? Math.round(totalMonthlyBudget / 2) : 0;
   const budgetUsagePercent = periodBudget > 0 ? (totalLaborCost / periodBudget) * 100 : 0;
   const periodStatus = budgetUsagePercent >= dangerThreshold ? 'danger' : budgetUsagePercent >= warningThreshold ? 'warning' : 'normal';
-  const monthlyStatus = selectedStore?.monthly_budget && monthlyLaborCostForecast > 0
-    ? (monthlyLaborCostForecast / selectedStore.monthly_budget * 100 >= dangerThreshold ? 'danger' 
-      : monthlyLaborCostForecast / selectedStore.monthly_budget * 100 >= warningThreshold ? 'warning' : 'normal')
+  const monthlyStatus = totalMonthlyBudget && monthlyLaborCostForecast > 0
+    ? (monthlyLaborCostForecast / totalMonthlyBudget * 100 >= dangerThreshold ? 'danger' 
+      : monthlyLaborCostForecast / totalMonthlyBudget * 100 >= warningThreshold ? 'warning' : 'normal')
     : 'normal';
 
   return (
@@ -913,7 +936,7 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
             {/* 期間人件費 */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                {targetPeriod === 'first' ? '前半' : '後半'}人件費
+                {isAllStores ? '🏢 全店計 ' : ''}{targetPeriod === 'first' ? '前半' : '後半'}人件費
                 {periodStatus === 'danger' && <span className="ml-2 text-xs text-red-600 font-bold">🔴 予算超過</span>}
                 {periodStatus === 'warning' && <span className="ml-2 text-xs text-yellow-600 font-bold">🟡 予算警告</span>}
               </label>
@@ -948,7 +971,7 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
             {/* 月末人件費予想 */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                {targetMonth}月末 人件費予想
+                {isAllStores ? '🏢 全店計 ' : ''}{targetMonth}月末 人件費予想
                 {monthlyStatus === 'danger' && <span className="ml-2 text-xs text-red-600 font-bold">🔴 予算超過</span>}
                 {monthlyStatus === 'warning' && <span className="ml-2 text-xs text-yellow-600 font-bold">🟡 予算警告</span>}
               </label>
@@ -962,16 +985,16 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
                 }`}>
                   ¥{monthlyLaborCostForecast.toLocaleString()}
                 </div>
-                {selectedStore && selectedStore.monthly_budget > 0 && (
+                {totalMonthlyBudget > 0 && (
                   <div className="text-xs text-gray-600 mt-1">
                     <div className="flex justify-between items-center mb-1">
-                      <span>月予算: ¥{selectedStore.monthly_budget.toLocaleString()}</span>
-                      <span className="font-bold">{Math.round(monthlyLaborCostForecast / selectedStore.monthly_budget * 100)}%</span>
+                      <span>月予算: ¥{totalMonthlyBudget.toLocaleString()}</span>
+                      <span className="font-bold">{Math.round(monthlyLaborCostForecast / totalMonthlyBudget * 100)}%</span>
                     </div>
                     <div className="w-full bg-gray-200 rounded-full h-1.5">
                       <div className={`h-1.5 rounded-full transition-all ${
                         monthlyStatus === 'danger' ? 'bg-red-500' : monthlyStatus === 'warning' ? 'bg-yellow-500' : 'bg-green-500'
-                      }`} style={{ width: `${Math.min(monthlyLaborCostForecast / selectedStore.monthly_budget * 100, 100)}%` }} />
+                      }`} style={{ width: `${Math.min(monthlyLaborCostForecast / totalMonthlyBudget * 100, 100)}%` }} />
                     </div>
                   </div>
                 )}
