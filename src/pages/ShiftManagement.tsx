@@ -29,6 +29,8 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
   const [shifts, setShifts] = useState<Shift[]>([]);
   const [shiftRequests, setShiftRequests] = useState<ShiftRequest[]>([]);
   const [specialDays, setSpecialDays] = useState<SpecialDay[]>([]);
+  const [isAllStores, setIsAllStores] = useState(false); // 全店フィルタモード（本部のみ）
+  const [allEmployees, setAllEmployees] = useState<Employee[]>([]); // 全従業員データ
   
   // 前半/後半期間選択
   const today = new Date();
@@ -69,17 +71,23 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
   useEffect(() => {
     fetchStores();
     fetchSpecialDays();
+    if (role === 'admin') {
+      fetchAllEmployees();
+    }
   }, []);
 
   useEffect(() => {
-    if (selectedStoreId) {
+    if (isAllStores) {
+      // 全店フィルタモード
+      fetchAllShifts();
+    } else if (selectedStoreId) {
       fetchStore(selectedStoreId);
       fetchEmployees(selectedStoreId);
       fetchShifts();
       fetchShiftRequests();
       fetchPublicationStatus();
     }
-  }, [selectedStoreId, targetYear, targetMonth, targetPeriod]);
+  }, [selectedStoreId, targetYear, targetMonth, targetPeriod, isAllStores]);
 
   // 従業員リスト更新時に並び順をリセット
   useEffect(() => {
@@ -149,6 +157,30 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
       setSpecialDays(data);
     } catch (error) {
       console.error('特別日取得エラー:', error);
+    }
+  };
+
+  const fetchAllEmployees = async () => {
+    try {
+      const res = await fetch(getApiUrl('/api/employees'));
+      const data = await res.json();
+      setAllEmployees(data.filter((e: Employee) => e.store_id !== 8)); // 本部以外
+    } catch (error) {
+      console.error('全従業員取得エラー:', error);
+    }
+  };
+
+  const fetchAllShifts = async () => {
+    try {
+      const res = await fetch(
+        getApiUrl(`/api/shifts?start_date=${format(periodStart, 'yyyy-MM-dd')}&end_date=${format(periodEnd, 'yyyy-MM-dd')}`)
+      );
+      const data = await res.json();
+      setShifts(data);
+      // 全店モードでは従業員リストも全従業員を使用
+      setEmployees(allEmployees);
+    } catch (error) {
+      console.error('全店シフト取得エラー:', error);
     }
   };
 
@@ -412,6 +444,9 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
   };
 
   const handleEditShift = (shift: Shift) => {
+    // 全店モードでは編集不可
+    if (isAllStores) return;
+    
     setBreakManuallySet(true); // 編集時は既存の休憩時間を保持（手動設定済みとして扱う）
     setEditingShift({
       id: shift.id,
@@ -461,6 +496,9 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
   };
 
   const handleDeleteShift = async (shiftId: number) => {
+    // 全店モードでは削除不可
+    if (isAllStores) return;
+    
     if (!confirm('このシフトを削除しますか?')) return;
     try {
       await fetch(getApiUrl(`/api/shifts/${shiftId}`), { method: 'DELETE', credentials: 'include' });
@@ -778,7 +816,21 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
             {role === 'admin' && (
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">店舗</label>
-                <select value={selectedStoreId || ''} onChange={(e) => setSelectedStoreId(Number(e.target.value))} className="input-field">
+                <select 
+                  value={isAllStores ? 'all' : (selectedStoreId || '')} 
+                  onChange={(e) => {
+                    if (e.target.value === 'all') {
+                      setIsAllStores(true);
+                      setSelectedStoreId(null);
+                      setSelectedStore(null);
+                    } else {
+                      setIsAllStores(false);
+                      setSelectedStoreId(Number(e.target.value));
+                    }
+                  }} 
+                  className="input-field"
+                >
+                  <option value="all">🏢 全店</option>
                   {stores.map(store => <option key={store.id} value={store.id}>{store.name}</option>)}
                 </select>
               </div>
@@ -841,6 +893,20 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
               </div>
             </div>
           </div>
+
+          {/* 全店モード時の表示 */}
+          {isAllStores && (
+            <div className="bg-blue-50 border-2 border-blue-300 rounded-lg p-4 mb-4">
+              <div className="flex items-center gap-2 text-blue-800">
+                <span className="text-xl">🏢</span>
+                <span className="font-bold">全店フィルタモード</span>
+                <span className="text-sm text-blue-600">（閲覧専用）</span>
+              </div>
+              <p className="text-sm text-blue-700 mt-2">
+                全店舗のシフトを一覧表示しています。シフトの編集・追加は、個別の店舗を選択してください。
+              </p>
+            </div>
+          )}
 
           {/* 人件費サマリー */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4" data-salary>
@@ -1118,11 +1184,14 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {orderedEmployees.map(employee => (
+                {orderedEmployees.map(employee => {
+                  const employeeStore = isAllStores ? stores.find(s => s.id === employee.store_id) : null;
+                  return (
                   <tr key={employee.id} className="hover:bg-gray-50">
                     <td className="sticky left-0 z-10 bg-white px-4 py-3 border-r">
                       <div className="font-medium text-gray-900">{employee.name}</div>
                       <div className="text-xs text-gray-500">
+                        {isAllStores && employeeStore && <span className="text-ocean-600 mr-1">[{employeeStore.name}]</span>}
                         {employee.employment_type === 'part_time' && 'パート'}
                         {employee.employment_type === 'part_time_insured' && '社保パート'}
                         {employee.employment_type === 'full_time' && '正社員'}
@@ -1140,20 +1209,23 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
                           }`}>
                           {shift ? (
                             <div onClick={() => handleEditShift(shift)}
-                              className="cursor-pointer bg-ocean-600 hover:bg-ocean-700 text-white rounded px-1 py-1 text-xs transition-colors">
+                              className={`${isAllStores ? '' : 'cursor-pointer hover:bg-ocean-700'} bg-ocean-600 text-white rounded px-1 py-1 text-xs transition-colors`}>
                               <div className="font-medium">{shift.start_time.slice(0, 5)}-{shift.end_time.slice(0, 5)}</div>
                               {shift.break_minutes > 0 && <div className="text-[9px] opacity-75">休{shift.break_minutes}分</div>}
                               <div className="text-[10px] opacity-90" data-salary>¥{calculateLaborCost(shift, employee).toLocaleString()}</div>
                             </div>
                           ) : (
-                            <button onClick={() => handleAddShift(employee.id, dateStr)}
-                              className="w-full py-2 text-gray-400 hover:text-ocean-600 hover:bg-ocean-50 rounded text-xs">+</button>
+                            !isAllStores && (
+                              <button onClick={() => handleAddShift(employee.id, dateStr)}
+                                className="w-full py-2 text-gray-400 hover:text-ocean-600 hover:bg-ocean-50 rounded text-xs">+</button>
+                            )
                           )}
                         </td>
                       );
                     })}
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -1165,11 +1237,13 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
             {orderedEmployees.map(employee => {
               const employeeShifts = shifts.filter(s => s.employee_id === employee.id);
               const totalCost = employeeShifts.reduce((sum, s) => sum + calculateLaborCost(s, employee), 0);
+              const employeeStore = isAllStores ? stores.find(s => s.id === employee.store_id) : null;
               return (
                 <div key={employee.id} className="card border-2 border-gray-200">
                   <div className="bg-ocean-500 text-white px-4 py-3 -m-6 mb-4 rounded-t-lg flex justify-between items-center">
                     <div>
                       <h3 className="text-lg font-bold">👤 {employee.name}</h3>
+                      {isAllStores && employeeStore && <p className="text-sm opacity-90">[{employeeStore.name}]</p>}
                       <p className="text-sm opacity-90">時給 ¥{employee.hourly_wage?.toLocaleString()}</p>
                     </div>
                     <div className="text-right">
@@ -1184,7 +1258,7 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
                       if (!shift) return null;
                       return (
                         <div key={date.toISOString()} onClick={() => handleEditShift(shift)}
-                          className="p-3 rounded-lg border-2 border-gray-200 hover:border-ocean-400 cursor-pointer flex justify-between items-center">
+                          className={`p-3 rounded-lg border-2 border-gray-200 flex justify-between items-center ${isAllStores ? '' : 'hover:border-ocean-400 cursor-pointer'}`}>
                           <div>
                             <div className="font-bold">{format(date, 'M/d(E)', { locale: ja })}</div>
                             <div className="text-ocean-700">
@@ -1194,8 +1268,10 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
                           </div>
                           <div className="text-right">
                             <div className="font-bold" data-salary>¥{calculateLaborCost(shift, employee).toLocaleString()}</div>
-                            <button onClick={(e) => { e.stopPropagation(); handleDeleteShift(shift.id); }}
-                              className="text-xs text-red-600 hover:text-red-800">削除</button>
+                            {!isAllStores && (
+                              <button onClick={(e) => { e.stopPropagation(); handleDeleteShift(shift.id); }}
+                                className="text-xs text-red-600 hover:text-red-800">削除</button>
+                            )}
                           </div>
                         </div>
                       );
@@ -1238,11 +1314,15 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
                       {dayShifts.map(shift => {
                         const emp = employees.find(e => e.id === shift.employee_id);
                         if (!emp) return null;
+                        const empStore = isAllStores ? stores.find(s => s.id === emp.store_id) : null;
                         return (
                           <div key={shift.id} onClick={() => handleEditShift(shift)}
-                            className="p-3 rounded-lg border-2 border-gray-200 hover:border-ocean-400 cursor-pointer flex justify-between items-center">
+                            className={`p-3 rounded-lg border-2 border-gray-200 flex justify-between items-center ${isAllStores ? '' : 'hover:border-ocean-400 cursor-pointer'}`}>
                             <div>
-                              <div className="font-bold">{emp.name}</div>
+                              <div className="font-bold">
+                                {emp.name}
+                                {isAllStores && empStore && <span className="text-sm font-normal text-ocean-600 ml-2">[{empStore.name}]</span>}
+                              </div>
                               <div className="text-ocean-700">
                                 {shift.start_time.slice(0, 5)} - {shift.end_time.slice(0, 5)}
                                 {shift.break_minutes > 0 && <span className="text-gray-500 text-xs ml-2">休{shift.break_minutes}分</span>}
@@ -1250,8 +1330,10 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
                             </div>
                             <div className="text-right">
                               <div className="font-bold" data-salary>¥{calculateLaborCost(shift, emp).toLocaleString()}</div>
-                              <button onClick={(e) => { e.stopPropagation(); handleDeleteShift(shift.id); }}
-                                className="text-xs text-red-600 hover:text-red-800">削除</button>
+                              {!isAllStores && (
+                                <button onClick={(e) => { e.stopPropagation(); handleDeleteShift(shift.id); }}
+                                  className="text-xs text-red-600 hover:text-red-800">削除</button>
+                              )}
                             </div>
                           </div>
                         );
