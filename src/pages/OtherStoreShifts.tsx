@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { format, eachDayOfInterval } from 'date-fns';
+import { format, eachDayOfInterval, differenceInMinutes } from 'date-fns';
 import { ja } from 'date-fns/locale';
 import { Role, Employee, Shift, Store, SpecialDay } from '../types';
 import AdminLayout from '../components/AdminLayout';
@@ -138,6 +138,93 @@ export default function OtherStoreShifts({ role, storeId, onLogout }: OtherStore
     return shifts.filter(s => s.date === dateStr).length;
   };
 
+  // 人件費計算（シフトに保存されたlabor_costを優先、なければ計算）
+  const calculateLaborCost = (shift: Shift, employee: Employee): number => {
+    // シフトに保存されたlabor_costがあれば使用
+    if (shift.labor_cost) return shift.labor_cost;
+    
+    if (!selectedStore) return 0;
+    const startTime = new Date(`2000-01-01T${shift.start_time}`);
+    const endTime = new Date(`2000-01-01T${shift.end_time}`);
+    const workMinutes = differenceInMinutes(endTime, startTime) - (shift.break_minutes || 0);
+    const workHours = workMinutes / 60;
+
+    let hourlyRate = employee.hourly_wage || 0;
+
+    if (selectedStore.overtime_rate_enabled) {
+      const specialDay = specialDays.find(sd => sd.date === shift.date);
+      const dayOfWeek = new Date(shift.date).getDay();
+      const applicableRates: number[] = [];
+
+      if (specialDay?.type === 1 && selectedStore.holiday_rate > 0) {
+        applicableRates.push(selectedStore.holiday_rate);
+      }
+      if (dayOfWeek === 0 && selectedStore.sunday_rate > 0) {
+        applicableRates.push(selectedStore.sunday_rate);
+      }
+      if (dayOfWeek === 6 && selectedStore.saturday_rate > 0) {
+        applicableRates.push(selectedStore.saturday_rate);
+      }
+      if (applicableRates.length > 0) {
+        hourlyRate += Math.max(...applicableRates);
+      }
+    }
+    return Math.round(workHours * hourlyRate);
+  };
+
+  // 日別人件費を計算
+  const getDailyCost = (date: Date) => {
+    const dateStr = format(date, 'yyyy-MM-dd');
+    return shifts
+      .filter(s => s.date === dateStr)
+      .reduce((sum, shift) => {
+        const employee = employees.find(e => e.id === shift.employee_id);
+        return sum + (employee ? calculateLaborCost(shift, employee) : 0);
+      }, 0);
+  };
+
+  // 期間内の総人件費を計算
+  const totalLaborCost = shifts.reduce((sum, shift) => {
+    const employee = employees.find(e => e.id === shift.employee_id);
+    return sum + (employee ? calculateLaborCost(shift, employee) : 0);
+  }, 0);
+
+  // ヒートマップ用: 時間帯別人数を計算
+  const getHourlyStaffCount = (date: Date, hour: number) => {
+    const dateStr = format(date, 'yyyy-MM-dd');
+    const timeStr = `${hour.toString().padStart(2, '0')}:00`;
+    return shifts.filter(s => {
+      if (s.date !== dateStr) return false;
+      const start = s.start_time.slice(0, 5);
+      const end = s.end_time.slice(0, 5);
+      return start <= timeStr && end > timeStr;
+    }).length;
+  };
+
+  // ヒートマップ用: 最大人数を計算
+  const getMaxHourlyStaffCount = () => {
+    let max = 0;
+    for (const date of periodDates) {
+      for (let hour = 6; hour <= 21; hour++) {
+        const count = getHourlyStaffCount(date, hour);
+        if (count > max) max = count;
+      }
+    }
+    return max || 1;
+  };
+
+  // ヒートマップのカラー計算（青系グラデーション）
+  const getHeatmapColor = (value: number, max: number) => {
+    if (max === 0) return 'bg-gray-100';
+    const intensity = Math.min(value / max, 1);
+    if (intensity === 0) return 'bg-gray-50';
+    if (intensity < 0.2) return 'bg-blue-100';
+    if (intensity < 0.4) return 'bg-blue-200';
+    if (intensity < 0.6) return 'bg-blue-300';
+    if (intensity < 0.8) return 'bg-blue-400';
+    return 'bg-blue-500';
+  };
+
   return (
     <AdminLayout role={role} storeId={storeId} onLogout={onLogout}>
       <div className="space-y-6">
@@ -262,7 +349,7 @@ export default function OtherStoreShifts({ role, storeId, onLogout }: OtherStore
         ) : (
           <>
             {/* サマリー */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
               <div className="card bg-gradient-to-br from-ocean-50 to-ocean-100">
                 <div className="text-sm text-ocean-700">従業員数</div>
                 <div className="text-2xl font-bold text-ocean-900">{employees.length}名</div>
@@ -284,6 +371,10 @@ export default function OtherStoreShifts({ role, storeId, onLogout }: OtherStore
                     ? Math.round(shifts.length / (employees.length * periodDates.length) * 100)
                     : 0}%
                 </div>
+              </div>
+              <div className="card bg-gradient-to-br from-amber-50 to-amber-100" data-salary>
+                <div className="text-sm text-amber-700">期間人件費</div>
+                <div className="text-2xl font-bold text-amber-900">¥{totalLaborCost.toLocaleString()}</div>
               </div>
             </div>
 
@@ -363,62 +454,107 @@ export default function OtherStoreShifts({ role, storeId, onLogout }: OtherStore
               </table>
             </div>
 
-            {/* 日別出勤一覧 */}
-            <div className="card">
-              <h3 className="text-lg font-bold text-gray-800 mb-4">📆 日別出勤一覧</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                {periodDates.map(date => {
-                  const dateStr = format(date, 'yyyy-MM-dd');
-                  const dayShifts = shifts.filter(s => s.date === dateStr);
-                  const specialDay = getSpecialDayInfo(date);
-                  const dayOfWeek = date.getDay();
-                  
-                  return (
-                    <div
-                      key={dateStr}
-                      className={`p-3 rounded-lg border-2 ${
-                        specialDay?.type === 1 ? 'border-red-300 bg-red-50' :
-                        dayOfWeek === 0 ? 'border-red-200 bg-red-50' :
-                        dayOfWeek === 6 ? 'border-blue-200 bg-blue-50' :
-                        'border-gray-200 bg-white'
-                      }`}
-                    >
-                      <div className="flex justify-between items-center mb-2">
-                        <span className={`font-bold ${
-                          dayOfWeek === 0 ? 'text-red-600' :
-                          dayOfWeek === 6 ? 'text-blue-600' : 'text-gray-800'
-                        }`}>
-                          {format(date, 'M/d(E)', { locale: ja })}
-                        </span>
-                        <span className="text-sm bg-ocean-100 text-ocean-700 px-2 py-0.5 rounded-full">
-                          {dayShifts.length}名
-                        </span>
-                      </div>
-                      {specialDay && (
-                        <div className="text-xs text-red-600 mb-1">{specialDay.name}</div>
-                      )}
-                      <div className="text-xs text-gray-600 space-y-0.5">
-                        {dayShifts.slice(0, 5).map(shift => {
-                          const emp = employees.find(e => e.id === shift.employee_id);
+            {/* ヒートマップ */}
+            {(() => {
+              const maxStaffCount = getMaxHourlyStaffCount();
+              return (
+                <div className="card overflow-x-auto">
+                  <h3 className="text-lg font-bold text-gray-800 mb-4">🔥 時間帯別人員配置</h3>
+                  <table className="min-w-full text-xs">
+                    <thead>
+                      <tr className="bg-gray-50">
+                        <th className="sticky left-0 z-10 bg-gray-50 px-2 py-2 text-left font-medium text-gray-500 min-w-[60px]">時間</th>
+                        {periodDates.map(date => {
+                          const dayOfWeek = date.getDay();
                           return (
-                            <div key={shift.id} className="flex justify-between">
-                              <span>{emp?.name}</span>
-                              <span className="text-gray-400">
-                                {shift.start_time.slice(0, 5)}-{shift.end_time.slice(0, 5)}
-                              </span>
-                            </div>
+                            <th key={date.toISOString()}
+                              className={`px-1 py-2 text-center font-medium min-w-[40px] ${
+                                dayOfWeek === 0 ? 'bg-red-50 text-red-600' : dayOfWeek === 6 ? 'bg-blue-50 text-blue-600' : 'text-gray-500'
+                              }`}>
+                              <div>{format(date, 'd')}</div>
+                              <div className="text-[9px]">{format(date, 'E', { locale: ja })}</div>
+                            </th>
                           );
                         })}
-                        {dayShifts.length > 5 && (
-                          <div className="text-gray-400">...他{dayShifts.length - 5}名</div>
-                        )}
-                        {dayShifts.length === 0 && (
-                          <div className="text-gray-400">シフトなし</div>
-                        )}
-                      </div>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {Array.from({ length: 16 }, (_, i) => i + 6).map(hour => (
+                        <tr key={hour} className="border-b">
+                          <td className="sticky left-0 z-10 bg-white px-2 py-1 font-medium text-gray-700">{hour}:00</td>
+                          {periodDates.map(date => {
+                            const count = getHourlyStaffCount(date, hour);
+                            const bgColor = getHeatmapColor(count, maxStaffCount);
+                            return (
+                              <td key={date.toISOString()} className={`px-1 py-1 text-center ${bgColor}`} title={`${count}名`}>
+                                {count > 0 && <span className={count >= maxStaffCount * 0.8 ? 'text-white font-bold' : 'text-gray-800 font-medium'}>{count}</span>}
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  <div className="mt-4 text-xs text-gray-500 flex items-center gap-4">
+                    <span>濃い色ほど人数が多い</span>
+                    <div className="flex items-center gap-1">
+                      <div className="w-4 h-4 bg-gray-50 border border-gray-300 rounded"></div>
+                      <span>0</span>
+                      <div className="w-4 h-4 bg-blue-100 border border-gray-300 rounded"></div>
+                      <div className="w-4 h-4 bg-blue-200 border border-gray-300 rounded"></div>
+                      <div className="w-4 h-4 bg-blue-300 border border-gray-300 rounded"></div>
+                      <div className="w-4 h-4 bg-blue-400 border border-gray-300 rounded"></div>
+                      <div className="w-4 h-4 bg-blue-500 border border-gray-300 rounded"></div>
+                      <span>最大({maxStaffCount}名)</span>
                     </div>
-                  );
-                })}
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* 日次人件費計 */}
+            <div className="card" data-salary>
+              <h3 className="text-lg font-bold text-gray-800 mb-4">💰 日次人件費一覧</h3>
+              <div className="overflow-x-auto">
+                <table className="min-w-full text-sm">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-4 py-3 text-left font-medium text-gray-500">日付</th>
+                      <th className="px-4 py-3 text-center font-medium text-gray-500">出勤人数</th>
+                      <th className="px-4 py-3 text-right font-medium text-gray-500">人件費</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200">
+                    {periodDates.map(date => {
+                      const dateStr = format(date, 'yyyy-MM-dd');
+                      const dayShifts = shifts.filter(s => s.date === dateStr);
+                      const dayCost = getDailyCost(date);
+                      const specialDay = getSpecialDayInfo(date);
+                      const dayOfWeek = date.getDay();
+                      return (
+                        <tr key={dateStr} className={`${
+                          specialDay?.type === 1 ? 'bg-red-50' : dayOfWeek === 0 ? 'bg-red-50' : dayOfWeek === 6 ? 'bg-blue-50' : ''
+                        }`}>
+                          <td className="px-4 py-3">
+                            <div className={`font-medium ${dayOfWeek === 0 ? 'text-red-600' : dayOfWeek === 6 ? 'text-blue-600' : 'text-gray-900'}`}>
+                              {format(date, 'M/d(E)', { locale: ja })}
+                            </div>
+                            {specialDay && <div className="text-xs text-red-600">{specialDay.name}</div>}
+                          </td>
+                          <td className="px-4 py-3 text-center font-medium">{dayShifts.length}名</td>
+                          <td className="px-4 py-3 text-right font-bold">¥{dayCost.toLocaleString()}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                  <tfoot className="bg-ocean-50">
+                    <tr>
+                      <td className="px-4 py-3 font-bold text-gray-800">合計</td>
+                      <td className="px-4 py-3 text-center font-bold">{shifts.length}件</td>
+                      <td className="px-4 py-3 text-right font-bold text-ocean-700">¥{totalLaborCost.toLocaleString()}</td>
+                    </tr>
+                  </tfoot>
+                </table>
               </div>
             </div>
           </>
