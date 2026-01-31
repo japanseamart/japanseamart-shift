@@ -27,6 +27,7 @@ export default function OtherStoreShifts({ role, storeId, onLogout }: OtherStore
   const [targetPeriod, setTargetPeriod] = useState<'first' | 'second'>(today.getDate() <= 15 ? 'first' : 'second');
   
   const [loading, setLoading] = useState(false);
+  const [isPublished, setIsPublished] = useState(false);
 
   // 期間の日付リストを計算
   const { start: periodStart, end: periodEnd } = getPeriodDates(targetYear, targetMonth, targetPeriod);
@@ -42,6 +43,7 @@ export default function OtherStoreShifts({ role, storeId, onLogout }: OtherStore
       fetchStore(selectedStoreId);
       fetchEmployees(selectedStoreId);
       fetchShifts();
+      fetchPublicationStatus();
     }
   }, [selectedStoreId, targetYear, targetMonth, targetPeriod]);
 
@@ -49,12 +51,12 @@ export default function OtherStoreShifts({ role, storeId, onLogout }: OtherStore
     try {
       const res = await fetch(getApiUrl('/api/stores'));
       const data = await res.json();
-      // 自店舗を除外した他店舗リスト（本部も除外）
-      const otherStores = data.filter((s: Store) => s.id !== storeId && s.id !== 8);
-      setStores(otherStores);
+      // 本部以外の全店舗（自店舗も含む）
+      const allStores = data.filter((s: Store) => s.id !== 8);
+      setStores(allStores);
       // 最初の店舗を選択
-      if (otherStores.length > 0 && !selectedStoreId) {
-        setSelectedStoreId(otherStores[0].id);
+      if (allStores.length > 0 && !selectedStoreId) {
+        setSelectedStoreId(allStores[0].id);
       }
     } catch (error) {
       console.error('店舗取得エラー:', error);
@@ -104,6 +106,20 @@ export default function OtherStoreShifts({ role, storeId, onLogout }: OtherStore
       console.error('シフト取得エラー:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchPublicationStatus = async () => {
+    if (!selectedStoreId) return;
+    try {
+      const res = await fetch(
+        getApiUrl(`/api/weekly-publications?store_id=${selectedStoreId}&week_start_date=${format(periodStart, 'yyyy-MM-dd')}`)
+      );
+      const data = await res.json();
+      setIsPublished(data.is_published || false);
+    } catch (error) {
+      console.error('公開状態取得エラー:', error);
+      setIsPublished(false);
     }
   };
 
@@ -196,6 +212,23 @@ export default function OtherStoreShifts({ role, storeId, onLogout }: OtherStore
               📅 {selectedStore?.name} - {targetMonth}月{targetPeriod === 'first' ? '前半' : '後半'}
               （{format(periodStart, 'M/d')}〜{format(periodEnd, 'M/d')}）
             </span>
+          </div>
+          
+          {/* 公開状態インジケーター */}
+          <div className={`mt-4 p-3 rounded-lg border-2 ${isPublished ? 'bg-green-50 border-green-300' : 'bg-yellow-50 border-yellow-300'}`}>
+            <div className="flex items-center gap-2">
+              {isPublished ? (
+                <>
+                  <span className="text-green-600 text-lg">✅</span>
+                  <span className="text-green-800 font-medium">公開済み</span>
+                </>
+              ) : (
+                <>
+                  <span className="text-yellow-600 text-lg">🔒</span>
+                  <span className="text-yellow-800 font-medium">編集中（未公開）</span>
+                </>
+              )}
+            </div>
           </div>
         </div>
 
