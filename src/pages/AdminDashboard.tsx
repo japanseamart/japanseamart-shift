@@ -107,7 +107,7 @@ export default function AdminDashboard({ role, storeId, onLogout }: AdminDashboa
               </div>
               <span className="text-2xl font-bold text-ocean-700">→</span>
             </div>
-            <h3 className="text-lg font-semibold text-gray-800 mb-1">シフト管理</h3>
+            <h3 className="text-lg font-semibold text-gray-800 mb-1">シフト作成</h3>
             <p className="text-sm text-gray-600">シフトの作成・編集</p>
           </button>
 

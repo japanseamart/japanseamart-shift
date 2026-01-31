@@ -551,7 +551,7 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
         {/* ヘッダー */}
         <div className="flex flex-col gap-3">
           <div className="flex justify-between items-center">
-            <h1 className="text-xl md:text-2xl font-bold text-gray-800">シフト管理</h1>
+            <h1 className="text-xl md:text-2xl font-bold text-gray-800">シフト作成</h1>
           </div>
 
           {/* デスクトップ: 横並びボタン */}
