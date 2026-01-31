@@ -72,6 +72,10 @@ export default function MonthlyReport({ role, storeId, onLogout }: MonthlyReport
   const [heatmapMode, setHeatmapMode] = useState<'staff' | 'cost'>('staff');
   const [isAllStores, setIsAllStores] = useState(false); // 全店計モード
   const [allEmployees, setAllEmployees] = useState<Employee[]>([]); // 全従業員データ
+  
+  // 前半/後半分析データ
+  const [firstHalfStats, setFirstHalfStats] = useState<{ cost: number; shifts: number; staffCount: number } | null>(null);
+  const [secondHalfStats, setSecondHalfStats] = useState<{ cost: number; shifts: number; staffCount: number } | null>(null);
 
   useEffect(() => {
     fetchStores();
@@ -270,6 +274,27 @@ export default function MonthlyReport({ role, storeId, onLogout }: MonthlyReport
       });
       const sortedDailyData = Array.from(dailyMap.values()).sort((a, b) => a.date.localeCompare(b.date));
       setDailyData(sortedDailyData);
+
+      // 前半/後半の分析データ計算
+      const firstHalfShifts = shiftsData.filter(s => {
+        const day = parseInt(s.date.split('-')[2]);
+        return day <= 15;
+      });
+      const secondHalfShifts = shiftsData.filter(s => {
+        const day = parseInt(s.date.split('-')[2]);
+        return day > 15;
+      });
+      
+      setFirstHalfStats({
+        cost: firstHalfShifts.reduce((sum, s) => sum + (s.labor_cost || 0), 0),
+        shifts: firstHalfShifts.length,
+        staffCount: new Set(firstHalfShifts.map(s => s.employee_id)).size
+      });
+      setSecondHalfStats({
+        cost: secondHalfShifts.reduce((sum, s) => sum + (s.labor_cost || 0), 0),
+        shifts: secondHalfShifts.length,
+        staffCount: new Set(secondHalfShifts.map(s => s.employee_id)).size
+      });
 
       // 時間帯別統計
       const hourlyMap = new Map<number, { staffCount: number; laborCost: number; days: number }>();
@@ -491,6 +516,106 @@ export default function MonthlyReport({ role, storeId, onLogout }: MonthlyReport
                 </div>
               </div>
             </div>
+
+            {/* 前半/後半比較 */}
+            {firstHalfStats && secondHalfStats && (
+              <div className="card">
+                <h2 className="text-lg font-bold text-gray-800 mb-4">📊 前半/後半比較</h2>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* 前半 */}
+                  <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-lg p-4 border border-purple-200">
+                    <div className="flex justify-between items-center mb-3">
+                      <span className="text-lg font-bold text-purple-900">前半（1-15日）</span>
+                      <span className="text-xs bg-purple-200 text-purple-700 px-2 py-1 rounded">1st Half</span>
+                    </div>
+                    <div className="space-y-2">
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm text-purple-700">人件費</span>
+                        <span className="text-xl font-bold text-purple-900">¥{firstHalfStats.cost.toLocaleString()}</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm text-purple-700">シフト数</span>
+                        <span className="font-bold text-purple-900">{firstHalfStats.shifts}件</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm text-purple-700">稼働人数</span>
+                        <span className="font-bold text-purple-900">{firstHalfStats.staffCount}名</span>
+                      </div>
+                      {selectedStore?.monthly_budget && (
+                        <div className="mt-3 pt-3 border-t border-purple-200">
+                          <div className="flex justify-between items-center">
+                            <span className="text-xs text-purple-600">半期予算比</span>
+                            <span className={`text-sm font-bold ${
+                              firstHalfStats.cost > selectedStore.monthly_budget / 2 ? 'text-red-600' : 'text-green-600'
+                            }`}>
+                              {Math.round(firstHalfStats.cost / (selectedStore.monthly_budget / 2) * 100)}%
+                            </span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  
+                  {/* 後半 */}
+                  <div className="bg-gradient-to-br from-indigo-50 to-indigo-100 rounded-lg p-4 border border-indigo-200">
+                    <div className="flex justify-between items-center mb-3">
+                      <span className="text-lg font-bold text-indigo-900">後半（16日以降）</span>
+                      <span className="text-xs bg-indigo-200 text-indigo-700 px-2 py-1 rounded">2nd Half</span>
+                    </div>
+                    <div className="space-y-2">
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm text-indigo-700">人件費</span>
+                        <span className="text-xl font-bold text-indigo-900">¥{secondHalfStats.cost.toLocaleString()}</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm text-indigo-700">シフト数</span>
+                        <span className="font-bold text-indigo-900">{secondHalfStats.shifts}件</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm text-indigo-700">稼働人数</span>
+                        <span className="font-bold text-indigo-900">{secondHalfStats.staffCount}名</span>
+                      </div>
+                      {selectedStore?.monthly_budget && (
+                        <div className="mt-3 pt-3 border-t border-indigo-200">
+                          <div className="flex justify-between items-center">
+                            <span className="text-xs text-indigo-600">半期予算比</span>
+                            <span className={`text-sm font-bold ${
+                              secondHalfStats.cost > selectedStore.monthly_budget / 2 ? 'text-red-600' : 'text-green-600'
+                            }`}>
+                              {Math.round(secondHalfStats.cost / (selectedStore.monthly_budget / 2) * 100)}%
+                            </span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                
+                {/* 前半/後半の差分 */}
+                <div className="mt-4 p-3 bg-gray-50 rounded-lg">
+                  <div className="flex flex-wrap gap-4 justify-center text-sm">
+                    <div className="text-center">
+                      <div className="text-gray-600">人件費差</div>
+                      <div className={`font-bold ${
+                        firstHalfStats.cost > secondHalfStats.cost ? 'text-purple-600' : 'text-indigo-600'
+                      }`}>
+                        {firstHalfStats.cost > secondHalfStats.cost ? '前半 +' : '後半 +'}
+                        ¥{Math.abs(firstHalfStats.cost - secondHalfStats.cost).toLocaleString()}
+                      </div>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-gray-600">シフト差</div>
+                      <div className={`font-bold ${
+                        firstHalfStats.shifts > secondHalfStats.shifts ? 'text-purple-600' : 'text-indigo-600'
+                      }`}>
+                        {firstHalfStats.shifts > secondHalfStats.shifts ? '前半 +' : '後半 +'}
+                        {Math.abs(firstHalfStats.shifts - secondHalfStats.shifts)}件
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* 予算比較 */}
             {selectedStore?.monthly_budget && (

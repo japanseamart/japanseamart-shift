@@ -67,6 +67,10 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
   // ビューモード
   const [viewMode, setViewMode] = useState<'table' | 'list' | 'day' | 'heatmap' | 'cost'>('table');
   // const [requestsViewMode, setRequestsViewMode] = useState<'card' | 'table'>('card');
+  
+  // 従業員並び順（画面内のみ保持）
+  const [orderedEmployees, setOrderedEmployees] = useState<Employee[]>([]);
+  const [draggedEmployee, setDraggedEmployee] = useState<Employee | null>(null);
 
   // 期間の日付リストを計算
   const { start: periodStart, end: periodEnd } = getPeriodDates(targetYear, targetMonth, targetPeriod);
@@ -86,6 +90,11 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
       fetchPublicationStatus();
     }
   }, [selectedStoreId, targetYear, targetMonth, targetPeriod]);
+
+  // 従業員リスト更新時に並び順をリセット
+  useEffect(() => {
+    setOrderedEmployees(employees);
+  }, [employees]);
 
   useEffect(() => {
     calculateTotalLaborCost();
@@ -432,6 +441,122 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
     } catch { return '−'; }
   };
 
+  // シフト希望が「休み」かどうか判定
+  const isOffRequest = (request: ShiftRequest): boolean => {
+    try {
+      const patterns = JSON.parse(request.patterns);
+      return patterns.includes('off');
+    } catch { return false; }
+  };
+
+  // シフト希望からシフト追加（クリック時）
+  const handleAddShiftFromRequest = async (employeeId: number, date: string, request: ShiftRequest) => {
+    // 「休み」の場合は追加しない
+    if (isOffRequest(request)) return;
+    
+    // 既にシフトがある場合は削除
+    const existingShift = getShiftForEmployeeAndDate(employeeId, date);
+    if (existingShift) {
+      if (confirm('このシフトを削除しますか？')) {
+        await handleDeleteShiftSilent(existingShift.id);
+      }
+      return;
+    }
+    
+    // シフト希望からシフトを作成
+    let startTime = selectedStore?.morning_start || '09:00';
+    let endTime = selectedStore?.morning_end || '17:00';
+    
+    // カスタム時間がある場合はそれを使用
+    if (request.custom_start && request.custom_end) {
+      startTime = request.custom_start;
+      endTime = request.custom_end;
+    } else {
+      // パターンから時間を決定
+      try {
+        const patterns = JSON.parse(request.patterns);
+        if (patterns.includes('morning')) {
+          startTime = selectedStore?.morning_start || '09:00';
+          endTime = selectedStore?.morning_end || '13:00';
+        } else if (patterns.includes('afternoon')) {
+          startTime = selectedStore?.afternoon_start || '13:00';
+          endTime = selectedStore?.afternoon_end || '17:00';
+        } else if (patterns.includes('evening')) {
+          startTime = selectedStore?.evening_start || '17:00';
+          endTime = selectedStore?.evening_end || '21:00';
+        } else if (patterns.includes('full')) {
+          startTime = selectedStore?.morning_start || '09:00';
+          endTime = selectedStore?.evening_end || '21:00';
+        }
+      } catch {}
+    }
+    
+    // 休憩時間の自動計算
+    const startDt = new Date(`2000-01-01T${startTime}`);
+    const endDt = new Date(`2000-01-01T${endTime}`);
+    const totalMinutes = differenceInMinutes(endDt, startDt);
+    const totalHours = totalMinutes / 60;
+    const breakMinutes = totalHours >= 6 ? 60 : 0;
+    
+    const employee = employees.find(e => e.id === employeeId);
+    if (!employee) return;
+    
+    const shiftInput: ShiftInput = {
+      employee_id: employeeId,
+      date,
+      start_time: startTime,
+      end_time: endTime,
+      break_minutes: breakMinutes
+    };
+    const laborCost = calculateLaborCost(shiftInput, employee);
+    
+    try {
+      await fetch(getApiUrl('/api/shifts'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ ...shiftInput, store_id: selectedStoreId, labor_cost: laborCost })
+      });
+      fetchShifts();
+    } catch (error) {
+      console.error('シフト追加エラー:', error);
+    }
+  };
+
+  // 確認なしでシフト削除
+  const handleDeleteShiftSilent = async (shiftId: number) => {
+    try {
+      await fetch(getApiUrl(`/api/shifts/${shiftId}`), { method: 'DELETE', credentials: 'include' });
+      fetchShifts();
+    } catch (error) {
+      console.error('シフト削除エラー:', error);
+    }
+  };
+
+  // ドラッグ＆ドロップハンドラ
+  const handleDragStart = (employee: Employee) => {
+    setDraggedEmployee(employee);
+  };
+
+  const handleDragOver = (e: React.DragEvent, targetEmployee: Employee) => {
+    e.preventDefault();
+    if (!draggedEmployee || draggedEmployee.id === targetEmployee.id) return;
+    
+    const newOrder = [...orderedEmployees];
+    const draggedIndex = newOrder.findIndex(e => e.id === draggedEmployee.id);
+    const targetIndex = newOrder.findIndex(e => e.id === targetEmployee.id);
+    
+    if (draggedIndex !== -1 && targetIndex !== -1) {
+      newOrder.splice(draggedIndex, 1);
+      newOrder.splice(targetIndex, 0, draggedEmployee);
+      setOrderedEmployees(newOrder);
+    }
+  };
+
+  const handleDragEnd = () => {
+    setDraggedEmployee(null);
+  };
+
   // 日別人件費を計算
   const getDailyCost = (date: Date) => {
     const dateStr = format(date, 'yyyy-MM-dd');
@@ -652,10 +777,10 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
               </div>
             </div>
 
-            {/* 月間人件費 */}
+            {/* 月末人件費予想 */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                {targetMonth}月 累計人件費
+                {targetMonth}月末 人件費予想
                 {monthlyStatus === 'danger' && <span className="ml-2 text-xs text-red-600 font-bold">🔴 予算超過</span>}
                 {monthlyStatus === 'warning' && <span className="ml-2 text-xs text-yellow-600 font-bold">🟡 予算警告</span>}
               </label>
@@ -765,11 +890,16 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
 
         {/* シフト希望パネル */}
         <div className="card no-print">
-          <div className="flex justify-between items-center mb-4">
-            <h3 className="text-base md:text-lg font-bold text-gray-800">📋 シフト希望一覧</h3>
-            <button onClick={() => setShowRequestsPanel(!showRequestsPanel)} className="btn-secondary text-sm">
-              {showRequestsPanel ? '非表示' : '表示'}
-            </button>
+          <div className="flex flex-col gap-2 mb-4">
+            <div className="flex justify-between items-center">
+              <h3 className="text-base md:text-lg font-bold text-gray-800">📋 シフト希望一覧</h3>
+              <button onClick={() => setShowRequestsPanel(!showRequestsPanel)} className="btn-secondary text-sm">
+                {showRequestsPanel ? '非表示' : '表示'}
+              </button>
+            </div>
+            {showRequestsPanel && (
+              <p className="text-xs text-gray-500">💡 クリックでシフト追加/削除、従業員名をドラッグして並び替え（画面内のみ）</p>
+            )}
           </div>
           {showRequestsPanel && (
             <div className="overflow-auto max-h-[400px] border rounded-lg">
@@ -791,19 +921,39 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200 bg-white">
-                  {employees.map(employee => (
-                    <tr key={employee.id} className="hover:bg-gray-50">
-                      <td className="sticky left-0 z-10 bg-white px-3 py-2 font-medium text-gray-800 border-r">{employee.name}</td>
+                  {orderedEmployees.map(employee => (
+                    <tr key={employee.id} 
+                      className={`hover:bg-gray-50 ${draggedEmployee?.id === employee.id ? 'opacity-50 bg-blue-50' : ''}`}
+                      draggable
+                      onDragStart={() => handleDragStart(employee)}
+                      onDragOver={(e) => handleDragOver(e, employee)}
+                      onDragEnd={handleDragEnd}
+                    >
+                      <td className="sticky left-0 z-10 bg-white px-3 py-2 font-medium text-gray-800 border-r cursor-move hover:bg-gray-100">
+                        <div className="flex items-center gap-1">
+                          <span className="text-gray-400">⠿</span>
+                          {employee.name}
+                        </div>
+                      </td>
                       {periodDates.map(date => {
                         const dateStr = format(date, 'yyyy-MM-dd');
                         const request = getShiftRequestForEmployeeAndDate(employee.id, dateStr);
                         const hasShift = getShiftForEmployeeAndDate(employee.id, dateStr);
+                        const isOff = request && isOffRequest(request);
                         return (
                           <td key={date.toISOString()} className="px-2 py-2 text-center">
                             {request ? (
-                              <div className={`text-xs px-1 py-1 rounded ${hasShift ? 'bg-green-100 text-green-800' : 'bg-blue-100 text-blue-800'}`}>
+                              <div 
+                                onClick={() => handleAddShiftFromRequest(employee.id, dateStr, request)}
+                                className={`text-xs px-1 py-1 rounded cursor-pointer transition-all hover:scale-105 hover:shadow ${
+                                  isOff ? 'bg-red-100 text-red-700 border border-red-300' :
+                                  hasShift ? 'bg-green-100 text-green-800 border border-green-300' : 
+                                  'bg-blue-100 text-blue-800 border border-blue-200 hover:bg-blue-200'
+                                }`}
+                                title={isOff ? '休み希望（クリック不可）' : hasShift ? 'クリックで削除' : 'クリックでシフト追加'}
+                              >
                                 {formatShiftRequestPatterns(request)}
-                                {hasShift && <div className="text-[9px] text-green-600">✓</div>}
+                                {hasShift && !isOff && <div className="text-[9px] text-green-600 font-bold">✓</div>}
                               </div>
                             ) : <span className="text-gray-400">−</span>}
                           </td>
@@ -843,7 +993,7 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {employees.map(employee => (
+                {orderedEmployees.map(employee => (
                   <tr key={employee.id} className="hover:bg-gray-50">
                     <td className="sticky left-0 z-10 bg-white px-4 py-3 border-r">
                       <div className="font-medium text-gray-900">{employee.name}</div>
@@ -886,7 +1036,7 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
         {/* リストビュー */}
         {viewMode === 'list' && (
           <div className="space-y-4">
-            {employees.map(employee => {
+            {orderedEmployees.map(employee => {
               const employeeShifts = shifts.filter(s => s.employee_id === employee.id);
               const totalCost = employeeShifts.reduce((sum, s) => sum + calculateLaborCost(s, employee), 0);
               return (
@@ -1041,6 +1191,27 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
         {viewMode === 'cost' && (
           <div className="card">
             <h3 className="text-lg font-bold text-gray-800 mb-4">💰 日別人件費一覧</h3>
+            {/* 予算目安 */}
+            {periodBudget > 0 && (
+              <div className="mb-4 p-3 rounded-lg bg-gray-50 border">
+                <div className="flex flex-wrap gap-4 text-sm">
+                  <div>
+                    <span className="text-gray-600">半期予算: </span>
+                    <span className="font-bold">¥{periodBudget.toLocaleString()}</span>
+                  </div>
+                  <div>
+                    <span className="text-gray-600">1日あたり目安: </span>
+                    <span className="font-bold text-ocean-700">¥{Math.round(periodBudget / periodDates.length).toLocaleString()}</span>
+                  </div>
+                  <div>
+                    <span className="text-gray-600">現在の消化率: </span>
+                    <span className={`font-bold ${periodStatus === 'danger' ? 'text-red-600' : periodStatus === 'warning' ? 'text-yellow-600' : 'text-green-600'}`}>
+                      {Math.round(budgetUsagePercent)}%
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
             <div className="overflow-x-auto">
               <table className="min-w-full text-sm">
                 <thead className="bg-gray-50">
@@ -1048,19 +1219,21 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
                     <th className="px-4 py-3 text-left font-medium text-gray-500">日付</th>
                     <th className="px-4 py-3 text-center font-medium text-gray-500">出勤人数</th>
                     <th className="px-4 py-3 text-right font-medium text-gray-500">人件費</th>
-                    <th className="px-4 py-3 text-right font-medium text-gray-500">日平均比</th>
+                    <th className="px-4 py-3 text-right font-medium text-gray-500">予算目安比</th>
+                    <th className="px-4 py-3 text-center font-medium text-gray-500">状態</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
                   {(() => {
-                    const avgDailyCost = totalLaborCost / periodDates.length;
+                    const dailyBudget = periodBudget > 0 ? Math.round(periodBudget / periodDates.length) : 0;
                     return periodDates.map(date => {
                       const dateStr = format(date, 'yyyy-MM-dd');
                       const dayShifts = shifts.filter(s => s.date === dateStr);
                       const dayCost = getDailyCost(date);
                       const specialDay = getSpecialDayInfo(date);
                       const dayOfWeek = date.getDay();
-                      const ratio = avgDailyCost > 0 ? (dayCost / avgDailyCost * 100) : 0;
+                      const ratio = dailyBudget > 0 ? (dayCost / dailyBudget * 100) : 0;
+                      const status = ratio === 0 ? 'none' : ratio <= 80 ? 'good' : ratio <= 100 ? 'normal' : ratio <= 120 ? 'warning' : 'danger';
                       return (
                         <tr key={dateStr} className={`${
                           specialDay?.type === 1 ? 'bg-red-50' : dayOfWeek === 0 ? 'bg-red-50' : dayOfWeek === 6 ? 'bg-blue-50' : ''
@@ -1074,9 +1247,16 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
                           <td className="px-4 py-3 text-center font-medium">{dayShifts.length}名</td>
                           <td className="px-4 py-3 text-right font-bold" data-salary>¥{dayCost.toLocaleString()}</td>
                           <td className={`px-4 py-3 text-right font-medium ${
-                            ratio > 120 ? 'text-red-600' : ratio < 80 ? 'text-green-600' : 'text-gray-600'
+                            status === 'danger' ? 'text-red-600' : status === 'warning' ? 'text-yellow-600' : status === 'good' ? 'text-green-600' : 'text-gray-600'
                           }`}>
                             {ratio > 0 ? `${Math.round(ratio)}%` : '-'}
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            {status === 'none' && <span className="text-gray-400">-</span>}
+                            {status === 'good' && <span className="text-green-600 text-lg">✅</span>}
+                            {status === 'normal' && <span className="text-blue-600 text-lg">📊</span>}
+                            {status === 'warning' && <span className="text-yellow-600 text-lg">⚠️</span>}
+                            {status === 'danger' && <span className="text-red-600 text-lg">🔴</span>}
                           </td>
                         </tr>
                       );
@@ -1088,12 +1268,19 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
                     <td className="px-4 py-3 font-bold text-gray-800">合計</td>
                     <td className="px-4 py-3 text-center font-bold">{shifts.length}件</td>
                     <td className="px-4 py-3 text-right font-bold text-ocean-700" data-salary>¥{totalLaborCost.toLocaleString()}</td>
-                    <td className="px-4 py-3 text-right font-medium text-gray-600">
+                    <td className="px-4 py-3 text-right font-medium text-gray-600" colSpan={2}>
                       日平均: ¥{Math.round(totalLaborCost / periodDates.length).toLocaleString()}
                     </td>
                   </tr>
                 </tfoot>
               </table>
+            </div>
+            {/* 凡例 */}
+            <div className="mt-4 flex flex-wrap gap-3 text-xs">
+              <span className="flex items-center gap-1"><span className="text-green-600">✅</span>予算以下（80%以下）</span>
+              <span className="flex items-center gap-1"><span className="text-blue-600">📊</span>予算範囲内（81-100%）</span>
+              <span className="flex items-center gap-1"><span className="text-yellow-600">⚠️</span>やや超過（101-120%）</span>
+              <span className="flex items-center gap-1"><span className="text-red-600">🔴</span>超過（120%超）</span>
             </div>
           </div>
         )}
