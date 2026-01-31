@@ -17,6 +17,7 @@ import SpecialDayManagement from './pages/SpecialDayManagement';
 import AnnouncementManagement from './pages/AnnouncementManagement';
 import PasswordManagement from './pages/PasswordManagement';
 import StoreRanking from './pages/StoreRanking';
+import OtherStoreShifts from './pages/OtherStoreShifts';
 
 function App() {
   const [role, setRole] = useState<Role | null>(null);
@@ -230,6 +231,16 @@ function App() {
           element={
             role ? (
               <ShiftRequestManagement role={role} storeId={storeId} onLogout={handleLogout} />
+            ) : (
+              <Navigate to="/admin/login" replace />
+            )
+          }
+        />
+        <Route
+          path="/admin/other-shifts"
+          element={
+            role === 'admin' ? (
+              <OtherStoreShifts role={role} storeId={storeId} onLogout={handleLogout} />
             ) : (
               <Navigate to="/admin/login" replace />
             )
