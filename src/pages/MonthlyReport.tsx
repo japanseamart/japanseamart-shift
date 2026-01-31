@@ -72,6 +72,7 @@ export default function MonthlyReport({ role, storeId, onLogout }: MonthlyReport
   const [heatmapMode, setHeatmapMode] = useState<'staff' | 'cost'>('staff');
   const [isAllStores, setIsAllStores] = useState(false); // 全店計モード
   const [allEmployees, setAllEmployees] = useState<Employee[]>([]); // 全従業員データ
+  const [allStoresBudget, setAllStoresBudget] = useState(0); // 全店計予算
   
   // 前半/後半分析データ
   const [firstHalfStats, setFirstHalfStats] = useState<{ cost: number; shifts: number; staffCount: number; workHours: number } | null>(null);
@@ -195,6 +196,7 @@ export default function MonthlyReport({ role, storeId, onLogout }: MonthlyReport
       let totalBudget = 0;
       if (isAllStores) {
         totalBudget = stores.reduce((sum, store) => sum + (store.monthly_budget || 0), 0);
+        setAllStoresBudget(totalBudget); // 全店計予算を保存
       } else {
         totalBudget = selectedStore?.monthly_budget || 0;
       }
@@ -402,10 +404,13 @@ export default function MonthlyReport({ role, storeId, onLogout }: MonthlyReport
   };
 
   const handleExportCSV = () => {
-    if (!selectedStore || !stats) return;
+    if (!stats) return;
+    // 全店計モードまたは単一店舗モードの両方に対応
+    if (!isAllStores && !selectedStore) return;
 
+    const storeName = isAllStores ? '全店計' : selectedStore!.name;
     const csvData = [
-      ['月間レポート', `${targetMonth}`, selectedStore.name],
+      ['月間レポート', `${targetMonth}`, storeName],
       [],
       ['サマリー'],
       ['項目', '値'],
@@ -433,7 +438,7 @@ export default function MonthlyReport({ role, storeId, onLogout }: MonthlyReport
     const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
-    link.download = `月間レポート_${selectedStore.name}_${targetMonth}.csv`;
+    link.download = `月間レポート_${storeName}_${targetMonth}.csv`;
     link.click();
   };
 
@@ -612,9 +617,9 @@ export default function MonthlyReport({ role, storeId, onLogout }: MonthlyReport
               const staffCount = periodTab === 'all' && stats ? stats.employeeCount :
                 ('staffCount' in rawStats ? rawStats.staffCount : 0);
               
-              const budget = periodTab === 'all' 
-                ? (selectedStore?.monthly_budget || 0)
-                : (selectedStore?.monthly_budget || 0) / 2;
+              // 全店計モードではallStoresBudget、単一店舗ではselectedStore.monthly_budgetを使用
+              const storeBudget = isAllStores ? allStoresBudget : (selectedStore?.monthly_budget || 0);
+              const budget = periodTab === 'all' ? storeBudget : storeBudget / 2;
               const budgetUsage = budget > 0 ? Math.round((cost / budget) * 100) : 0;
               
               const colorScheme = periodTab === 'all' ? 'ocean' :
@@ -670,12 +675,12 @@ export default function MonthlyReport({ role, storeId, onLogout }: MonthlyReport
             })()}
 
             {/* 予算比較 - 期間に応じて表示 */}
-            {selectedStore?.monthly_budget && (() => {
+            {((isAllStores && allStoresBudget > 0) || selectedStore?.monthly_budget) && (() => {
               const rawStats = periodTab === 'all' ? stats :
                 periodTab === 'first' ? firstHalfStats : secondHalfStats;
-              const budget = periodTab === 'all' 
-                ? selectedStore.monthly_budget
-                : selectedStore.monthly_budget / 2;
+              // 全店計モードではallStoresBudget、単一店舗ではselectedStore.monthly_budgetを使用
+              const storeBudget = isAllStores ? allStoresBudget : (selectedStore?.monthly_budget || 0);
+              const budget = periodTab === 'all' ? storeBudget : storeBudget / 2;
               const actualCost = rawStats 
                 ? (periodTab === 'all' && stats ? stats.totalLaborCost : ('cost' in rawStats ? rawStats.cost : 0))
                 : 0;
@@ -912,9 +917,9 @@ export default function MonthlyReport({ role, storeId, onLogout }: MonthlyReport
             {(() => {
               const currentDailyData = periodTab === 'all' ? dailyData :
                 periodTab === 'first' ? firstHalfDailyData : secondHalfDailyData;
-              const budget = periodTab === 'all' 
-                ? (selectedStore?.monthly_budget || 0)
-                : (selectedStore?.monthly_budget || 0) / 2;
+              // 全店計モードではallStoresBudget、単一店舗ではselectedStore.monthly_budgetを使用
+              const storeBudget = isAllStores ? allStoresBudget : (selectedStore?.monthly_budget || 0);
+              const budget = periodTab === 'all' ? storeBudget : storeBudget / 2;
               
               return (
                 <div className="card">
