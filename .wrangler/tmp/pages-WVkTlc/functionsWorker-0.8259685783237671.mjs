@@ -1,10 +1,23 @@
 var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
-// .wrangler/tmp/pages-kkRavR/functionsWorker-0.7809655782187492.mjs
-var __defProp2 = Object.defineProperty;
-var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
-var compose = /* @__PURE__ */ __name2((middleware, onError, onNotFound) => {
+// ../.wrangler/tmp/bundle-Vbnod8/strip-cf-connecting-ip-header.js
+function stripCfConnectingIPHeader(input, init) {
+  const request = new Request(input, init);
+  request.headers.delete("CF-Connecting-IP");
+  return request;
+}
+__name(stripCfConnectingIPHeader, "stripCfConnectingIPHeader");
+globalThis.fetch = new Proxy(globalThis.fetch, {
+  apply(target, thisArg, argArray) {
+    return Reflect.apply(target, thisArg, [
+      stripCfConnectingIPHeader.apply(null, argArray)
+    ]);
+  }
+});
+
+// ../node_modules/hono/dist/compose.js
+var compose = /* @__PURE__ */ __name((middleware, onError, onNotFound) => {
   return (context, next) => {
     let index = -1;
     return dispatch(0);
@@ -45,11 +58,14 @@ var compose = /* @__PURE__ */ __name2((middleware, onError, onNotFound) => {
       return context;
     }
     __name(dispatch, "dispatch");
-    __name2(dispatch, "dispatch");
   };
 }, "compose");
+
+// ../node_modules/hono/dist/request/constants.js
 var GET_MATCH_RESULT = Symbol();
-var parseBody = /* @__PURE__ */ __name2(async (request, options = /* @__PURE__ */ Object.create(null)) => {
+
+// ../node_modules/hono/dist/utils/body.js
+var parseBody = /* @__PURE__ */ __name(async (request, options = /* @__PURE__ */ Object.create(null)) => {
   const { all = false, dot = false } = options;
   const headers = request instanceof HonoRequest ? request.raw.headers : request.headers;
   const contentType = headers.get("Content-Type");
@@ -66,7 +82,6 @@ async function parseFormData(request, options) {
   return {};
 }
 __name(parseFormData, "parseFormData");
-__name2(parseFormData, "parseFormData");
 function convertFormDataToBodyData(formData, options) {
   const form = /* @__PURE__ */ Object.create(null);
   formData.forEach((value, key) => {
@@ -89,8 +104,7 @@ function convertFormDataToBodyData(formData, options) {
   return form;
 }
 __name(convertFormDataToBodyData, "convertFormDataToBodyData");
-__name2(convertFormDataToBodyData, "convertFormDataToBodyData");
-var handleParsingAllValues = /* @__PURE__ */ __name2((form, key, value) => {
+var handleParsingAllValues = /* @__PURE__ */ __name((form, key, value) => {
   if (form[key] !== void 0) {
     if (Array.isArray(form[key])) {
       ;
@@ -106,7 +120,7 @@ var handleParsingAllValues = /* @__PURE__ */ __name2((form, key, value) => {
     }
   }
 }, "handleParsingAllValues");
-var handleParsingNestedValues = /* @__PURE__ */ __name2((form, key, value) => {
+var handleParsingNestedValues = /* @__PURE__ */ __name((form, key, value) => {
   let nestedForm = form;
   const keys = key.split(".");
   keys.forEach((key2, index) => {
@@ -120,19 +134,21 @@ var handleParsingNestedValues = /* @__PURE__ */ __name2((form, key, value) => {
     }
   });
 }, "handleParsingNestedValues");
-var splitPath = /* @__PURE__ */ __name2((path) => {
+
+// ../node_modules/hono/dist/utils/url.js
+var splitPath = /* @__PURE__ */ __name((path) => {
   const paths = path.split("/");
   if (paths[0] === "") {
     paths.shift();
   }
   return paths;
 }, "splitPath");
-var splitRoutingPath = /* @__PURE__ */ __name2((routePath) => {
+var splitRoutingPath = /* @__PURE__ */ __name((routePath) => {
   const { groups, path } = extractGroupsFromPath(routePath);
   const paths = splitPath(path);
   return replaceGroupMarks(paths, groups);
 }, "splitRoutingPath");
-var extractGroupsFromPath = /* @__PURE__ */ __name2((path) => {
+var extractGroupsFromPath = /* @__PURE__ */ __name((path) => {
   const groups = [];
   path = path.replace(/\{[^}]+\}/g, (match3, index) => {
     const mark = `@${index}`;
@@ -141,7 +157,7 @@ var extractGroupsFromPath = /* @__PURE__ */ __name2((path) => {
   });
   return { groups, path };
 }, "extractGroupsFromPath");
-var replaceGroupMarks = /* @__PURE__ */ __name2((paths, groups) => {
+var replaceGroupMarks = /* @__PURE__ */ __name((paths, groups) => {
   for (let i = groups.length - 1; i >= 0; i--) {
     const [mark] = groups[i];
     for (let j = paths.length - 1; j >= 0; j--) {
@@ -154,7 +170,7 @@ var replaceGroupMarks = /* @__PURE__ */ __name2((paths, groups) => {
   return paths;
 }, "replaceGroupMarks");
 var patternCache = {};
-var getPattern = /* @__PURE__ */ __name2((label, next) => {
+var getPattern = /* @__PURE__ */ __name((label, next) => {
   if (label === "*") {
     return "*";
   }
@@ -172,7 +188,7 @@ var getPattern = /* @__PURE__ */ __name2((label, next) => {
   }
   return null;
 }, "getPattern");
-var tryDecode = /* @__PURE__ */ __name2((str, decoder) => {
+var tryDecode = /* @__PURE__ */ __name((str, decoder) => {
   try {
     return decoder(str);
   } catch {
@@ -185,8 +201,8 @@ var tryDecode = /* @__PURE__ */ __name2((str, decoder) => {
     });
   }
 }, "tryDecode");
-var tryDecodeURI = /* @__PURE__ */ __name2((str) => tryDecode(str, decodeURI), "tryDecodeURI");
-var getPath = /* @__PURE__ */ __name2((request) => {
+var tryDecodeURI = /* @__PURE__ */ __name((str) => tryDecode(str, decodeURI), "tryDecodeURI");
+var getPath = /* @__PURE__ */ __name((request) => {
   const url = request.url;
   const start = url.indexOf("/", url.indexOf(":") + 4);
   let i = start;
@@ -202,17 +218,17 @@ var getPath = /* @__PURE__ */ __name2((request) => {
   }
   return url.slice(start, i);
 }, "getPath");
-var getPathNoStrict = /* @__PURE__ */ __name2((request) => {
+var getPathNoStrict = /* @__PURE__ */ __name((request) => {
   const result = getPath(request);
   return result.length > 1 && result.at(-1) === "/" ? result.slice(0, -1) : result;
 }, "getPathNoStrict");
-var mergePath = /* @__PURE__ */ __name2((base, sub, ...rest) => {
+var mergePath = /* @__PURE__ */ __name((base, sub, ...rest) => {
   if (rest.length) {
     sub = mergePath(sub, ...rest);
   }
   return `${base?.[0] === "/" ? "" : "/"}${base}${sub === "/" ? "" : `${base?.at(-1) === "/" ? "" : "/"}${sub?.[0] === "/" ? sub.slice(1) : sub}`}`;
 }, "mergePath");
-var checkOptionalParameter = /* @__PURE__ */ __name2((path) => {
+var checkOptionalParameter = /* @__PURE__ */ __name((path) => {
   if (path.charCodeAt(path.length - 1) !== 63 || !path.includes(":")) {
     return null;
   }
@@ -239,7 +255,7 @@ var checkOptionalParameter = /* @__PURE__ */ __name2((path) => {
   });
   return results.filter((v, i, a) => a.indexOf(v) === i);
 }, "checkOptionalParameter");
-var _decodeURI = /* @__PURE__ */ __name2((value) => {
+var _decodeURI = /* @__PURE__ */ __name((value) => {
   if (!/[%+]/.test(value)) {
     return value;
   }
@@ -248,7 +264,7 @@ var _decodeURI = /* @__PURE__ */ __name2((value) => {
   }
   return value.indexOf("%") !== -1 ? tryDecode(value, decodeURIComponent_) : value;
 }, "_decodeURI");
-var _getQueryParam = /* @__PURE__ */ __name2((url, key, multiple) => {
+var _getQueryParam = /* @__PURE__ */ __name((url, key, multiple) => {
   let encoded;
   if (!multiple && key && !/[%+]/.test(key)) {
     let keyIndex2 = url.indexOf(`?${key}`, 8);
@@ -313,18 +329,14 @@ var _getQueryParam = /* @__PURE__ */ __name2((url, key, multiple) => {
   return key ? results[key] : results;
 }, "_getQueryParam");
 var getQueryParam = _getQueryParam;
-var getQueryParams = /* @__PURE__ */ __name2((url, key) => {
+var getQueryParams = /* @__PURE__ */ __name((url, key) => {
   return _getQueryParam(url, key, true);
 }, "getQueryParams");
 var decodeURIComponent_ = decodeURIComponent;
-var tryDecodeURIComponent = /* @__PURE__ */ __name2((str) => tryDecode(str, decodeURIComponent_), "tryDecodeURIComponent");
-var HonoRequest = class {
-  static {
-    __name(this, "HonoRequest");
-  }
-  static {
-    __name2(this, "HonoRequest");
-  }
+
+// ../node_modules/hono/dist/request.js
+var tryDecodeURIComponent = /* @__PURE__ */ __name((str) => tryDecode(str, decodeURIComponent_), "tryDecodeURIComponent");
+var HonoRequest = /* @__PURE__ */ __name(class {
   raw;
   #validatedData;
   #matchResult;
@@ -378,7 +390,7 @@ var HonoRequest = class {
   async parseBody(options) {
     return this.bodyCache.parsedBody ??= await parseBody(this, options);
   }
-  #cachedBody = /* @__PURE__ */ __name2((key) => {
+  #cachedBody = (key) => {
     const { bodyCache, raw: raw2 } = this;
     const cachedBody = bodyCache[key];
     if (cachedBody) {
@@ -394,7 +406,7 @@ var HonoRequest = class {
       });
     }
     return bodyCache[key] = raw2[key]();
-  }, "#cachedBody");
+  };
   json() {
     return this.#cachedBody("text").then((text) => JSON.parse(text));
   }
@@ -431,19 +443,21 @@ var HonoRequest = class {
   get routePath() {
     return this.#matchResult[0].map(([[, route]]) => route)[this.routeIndex].path;
   }
-};
+}, "HonoRequest");
+
+// ../node_modules/hono/dist/utils/html.js
 var HtmlEscapedCallbackPhase = {
   Stringify: 1,
   BeforeStream: 2,
   Stream: 3
 };
-var raw = /* @__PURE__ */ __name2((value, callbacks) => {
+var raw = /* @__PURE__ */ __name((value, callbacks) => {
   const escapedString = new String(value);
   escapedString.isEscaped = true;
   escapedString.callbacks = callbacks;
   return escapedString;
 }, "raw");
-var resolveCallback = /* @__PURE__ */ __name2(async (str, phase, preserveCallbacks, context, buffer) => {
+var resolveCallback = /* @__PURE__ */ __name(async (str, phase, preserveCallbacks, context, buffer) => {
   if (typeof str === "object" && !(str instanceof String)) {
     if (!(str instanceof Promise)) {
       str = str.toString();
@@ -472,20 +486,16 @@ var resolveCallback = /* @__PURE__ */ __name2(async (str, phase, preserveCallbac
     return resStr;
   }
 }, "resolveCallback");
+
+// ../node_modules/hono/dist/context.js
 var TEXT_PLAIN = "text/plain; charset=UTF-8";
-var setDefaultContentType = /* @__PURE__ */ __name2((contentType, headers) => {
+var setDefaultContentType = /* @__PURE__ */ __name((contentType, headers) => {
   return {
     "Content-Type": contentType,
     ...headers
   };
 }, "setDefaultContentType");
-var Context = class {
-  static {
-    __name(this, "Context");
-  }
-  static {
-    __name2(this, "Context");
-  }
+var Context = /* @__PURE__ */ __name(class {
   #rawRequest;
   #req;
   env = {};
@@ -555,16 +565,16 @@ var Context = class {
     this.#res = _res;
     this.finalized = true;
   }
-  render = /* @__PURE__ */ __name2((...args) => {
+  render = (...args) => {
     this.#renderer ??= (content) => this.html(content);
     return this.#renderer(...args);
-  }, "render");
-  setLayout = /* @__PURE__ */ __name2((layout) => this.#layout = layout, "setLayout");
-  getLayout = /* @__PURE__ */ __name2(() => this.#layout, "getLayout");
-  setRenderer = /* @__PURE__ */ __name2((renderer) => {
+  };
+  setLayout = (layout) => this.#layout = layout;
+  getLayout = () => this.#layout;
+  setRenderer = (renderer) => {
     this.#renderer = renderer;
-  }, "setRenderer");
-  header = /* @__PURE__ */ __name2((name, value, options) => {
+  };
+  header = (name, value, options) => {
     if (this.finalized) {
       this.#res = new Response(this.#res.body, this.#res);
     }
@@ -576,17 +586,17 @@ var Context = class {
     } else {
       headers.set(name, value);
     }
-  }, "header");
-  status = /* @__PURE__ */ __name2((status) => {
+  };
+  status = (status) => {
     this.#status = status;
-  }, "status");
-  set = /* @__PURE__ */ __name2((key, value) => {
+  };
+  set = (key, value) => {
     this.#var ??= /* @__PURE__ */ new Map();
     this.#var.set(key, value);
-  }, "set");
-  get = /* @__PURE__ */ __name2((key) => {
+  };
+  get = (key) => {
     return this.#var ? this.#var.get(key) : void 0;
-  }, "get");
+  };
   get var() {
     if (!this.#var) {
       return {};
@@ -620,56 +630,56 @@ var Context = class {
     const status = typeof arg === "number" ? arg : arg?.status ?? this.#status;
     return new Response(data, { status, headers: responseHeaders });
   }
-  newResponse = /* @__PURE__ */ __name2((...args) => this.#newResponse(...args), "newResponse");
-  body = /* @__PURE__ */ __name2((data, arg, headers) => this.#newResponse(data, arg, headers), "body");
-  text = /* @__PURE__ */ __name2((text, arg, headers) => {
+  newResponse = (...args) => this.#newResponse(...args);
+  body = (data, arg, headers) => this.#newResponse(data, arg, headers);
+  text = (text, arg, headers) => {
     return !this.#preparedHeaders && !this.#status && !arg && !headers && !this.finalized ? new Response(text) : this.#newResponse(
       text,
       arg,
       setDefaultContentType(TEXT_PLAIN, headers)
     );
-  }, "text");
-  json = /* @__PURE__ */ __name2((object, arg, headers) => {
+  };
+  json = (object, arg, headers) => {
     return this.#newResponse(
       JSON.stringify(object),
       arg,
       setDefaultContentType("application/json", headers)
     );
-  }, "json");
-  html = /* @__PURE__ */ __name2((html, arg, headers) => {
-    const res = /* @__PURE__ */ __name2((html2) => this.#newResponse(html2, arg, setDefaultContentType("text/html; charset=UTF-8", headers)), "res");
+  };
+  html = (html, arg, headers) => {
+    const res = /* @__PURE__ */ __name((html2) => this.#newResponse(html2, arg, setDefaultContentType("text/html; charset=UTF-8", headers)), "res");
     return typeof html === "object" ? resolveCallback(html, HtmlEscapedCallbackPhase.Stringify, false, {}).then(res) : res(html);
-  }, "html");
-  redirect = /* @__PURE__ */ __name2((location, status) => {
+  };
+  redirect = (location, status) => {
     const locationString = String(location);
     this.header(
       "Location",
       !/[^\x00-\xFF]/.test(locationString) ? locationString : encodeURI(locationString)
     );
     return this.newResponse(null, status ?? 302);
-  }, "redirect");
-  notFound = /* @__PURE__ */ __name2(() => {
+  };
+  notFound = () => {
     this.#notFoundHandler ??= () => new Response();
     return this.#notFoundHandler(this);
-  }, "notFound");
-};
+  };
+}, "Context");
+
+// ../node_modules/hono/dist/router.js
 var METHOD_NAME_ALL = "ALL";
 var METHOD_NAME_ALL_LOWERCASE = "all";
 var METHODS = ["get", "post", "put", "delete", "options", "patch"];
 var MESSAGE_MATCHER_IS_ALREADY_BUILT = "Can not add a route since the matcher is already built.";
-var UnsupportedPathError = class extends Error {
-  static {
-    __name(this, "UnsupportedPathError");
-  }
-  static {
-    __name2(this, "UnsupportedPathError");
-  }
-};
+var UnsupportedPathError = /* @__PURE__ */ __name(class extends Error {
+}, "UnsupportedPathError");
+
+// ../node_modules/hono/dist/utils/constants.js
 var COMPOSED_HANDLER = "__COMPOSED_HANDLER";
-var notFoundHandler = /* @__PURE__ */ __name2((c) => {
+
+// ../node_modules/hono/dist/hono-base.js
+var notFoundHandler = /* @__PURE__ */ __name((c) => {
   return c.text("404 Not Found", 404);
 }, "notFoundHandler");
-var errorHandler = /* @__PURE__ */ __name2((err, c) => {
+var errorHandler = /* @__PURE__ */ __name((err, c) => {
   if ("getResponse" in err) {
     const res = err.getResponse();
     return c.newResponse(res.body, res);
@@ -677,13 +687,7 @@ var errorHandler = /* @__PURE__ */ __name2((err, c) => {
   console.error(err);
   return c.text("Internal Server Error", 500);
 }, "errorHandler");
-var Hono = class {
-  static {
-    __name(this, "Hono");
-  }
-  static {
-    __name2(this, "Hono");
-  }
+var Hono = /* @__PURE__ */ __name(class {
   get;
   post;
   put;
@@ -759,7 +763,7 @@ var Hono = class {
       if (app2.errorHandler === errorHandler) {
         handler = r.handler;
       } else {
-        handler = /* @__PURE__ */ __name2(async (c, next) => (await compose([], app2.errorHandler)(c, () => r.handler(c, next))).res, "handler");
+        handler = /* @__PURE__ */ __name(async (c, next) => (await compose([], app2.errorHandler)(c, () => r.handler(c, next))).res, "handler");
         handler[COMPOSED_HANDLER] = r.handler;
       }
       subApp.#addRoute(r.method, r.path, handler);
@@ -771,14 +775,14 @@ var Hono = class {
     subApp._basePath = mergePath(this._basePath, path);
     return subApp;
   }
-  onError = /* @__PURE__ */ __name2((handler) => {
+  onError = (handler) => {
     this.errorHandler = handler;
     return this;
-  }, "onError");
-  notFound = /* @__PURE__ */ __name2((handler) => {
+  };
+  notFound = (handler) => {
     this.#notFoundHandler = handler;
     return this;
-  }, "notFound");
+  };
   mount(path, applicationHandler, options) {
     let replaceRequest;
     let optionHandler;
@@ -788,7 +792,7 @@ var Hono = class {
       } else {
         optionHandler = options.optionHandler;
         if (options.replaceRequest === false) {
-          replaceRequest = /* @__PURE__ */ __name2((request) => request, "replaceRequest");
+          replaceRequest = /* @__PURE__ */ __name((request) => request, "replaceRequest");
         } else {
           replaceRequest = options.replaceRequest;
         }
@@ -814,7 +818,7 @@ var Hono = class {
         return new Request(url, request);
       };
     })();
-    const handler = /* @__PURE__ */ __name2(async (c, next) => {
+    const handler = /* @__PURE__ */ __name(async (c, next) => {
       const res = await applicationHandler(replaceRequest(c.req.raw), ...getOptions(c));
       if (res) {
         return res;
@@ -878,10 +882,10 @@ var Hono = class {
       }
     })();
   }
-  fetch = /* @__PURE__ */ __name2((request, ...rest) => {
+  fetch = (request, ...rest) => {
     return this.#dispatch(request, rest[1], rest[0], request.method);
-  }, "fetch");
-  request = /* @__PURE__ */ __name2((input, requestInit, Env, executionCtx) => {
+  };
+  request = (input, requestInit, Env, executionCtx) => {
     if (input instanceof Request) {
       return this.fetch(requestInit ? new Request(input, requestInit) : input, Env, executionCtx);
     }
@@ -894,17 +898,19 @@ var Hono = class {
       Env,
       executionCtx
     );
-  }, "request");
-  fire = /* @__PURE__ */ __name2(() => {
+  };
+  fire = () => {
     addEventListener("fetch", (event) => {
       event.respondWith(this.#dispatch(event.request, event, void 0, event.request.method));
     });
-  }, "fire");
-};
+  };
+}, "Hono");
+
+// ../node_modules/hono/dist/router/reg-exp-router/matcher.js
 var emptyParam = [];
 function match(method, path) {
   const matchers = this.buildAllMatchers();
-  const match22 = /* @__PURE__ */ __name2((method2, path2) => {
+  const match22 = /* @__PURE__ */ __name((method2, path2) => {
     const matcher = matchers[method2] || matchers[METHOD_NAME_ALL];
     const staticMatch = matcher[2][path2];
     if (staticMatch) {
@@ -921,7 +927,8 @@ function match(method, path) {
   return match22(method, path);
 }
 __name(match, "match");
-__name2(match, "match");
+
+// ../node_modules/hono/dist/router/reg-exp-router/node.js
 var LABEL_REG_EXP_STR = "[^/]+";
 var ONLY_WILDCARD_REG_EXP_STR = ".*";
 var TAIL_WILDCARD_REG_EXP_STR = "(?:|/.*)";
@@ -947,14 +954,7 @@ function compareKey(a, b) {
   return a.length === b.length ? a < b ? -1 : 1 : b.length - a.length;
 }
 __name(compareKey, "compareKey");
-__name2(compareKey, "compareKey");
-var Node = class {
-  static {
-    __name(this, "Node");
-  }
-  static {
-    __name2(this, "Node");
-  }
+var Node = /* @__PURE__ */ __name(class {
   #index;
   #varIndex;
   #children = /* @__PURE__ */ Object.create(null);
@@ -1035,14 +1035,10 @@ var Node = class {
     }
     return "(?:" + strList.join("|") + ")";
   }
-};
-var Trie = class {
-  static {
-    __name(this, "Trie");
-  }
-  static {
-    __name2(this, "Trie");
-  }
+}, "Node");
+
+// ../node_modules/hono/dist/router/reg-exp-router/trie.js
+var Trie = /* @__PURE__ */ __name(class {
   #context = { varIndex: 0 };
   #root = new Node();
   insert(path, index, pathErrorCheckOnly) {
@@ -1095,7 +1091,9 @@ var Trie = class {
     });
     return [new RegExp(`^${regexp}`), indexReplacementMap, paramReplacementMap];
   }
-};
+}, "Trie");
+
+// ../node_modules/hono/dist/router/reg-exp-router/router.js
 var nullMatcher = [/^$/, [], /* @__PURE__ */ Object.create(null)];
 var wildcardRegExpCache = /* @__PURE__ */ Object.create(null);
 function buildWildcardRegExp(path) {
@@ -1107,12 +1105,10 @@ function buildWildcardRegExp(path) {
   );
 }
 __name(buildWildcardRegExp, "buildWildcardRegExp");
-__name2(buildWildcardRegExp, "buildWildcardRegExp");
 function clearWildcardRegExpCache() {
   wildcardRegExpCache = /* @__PURE__ */ Object.create(null);
 }
 __name(clearWildcardRegExpCache, "clearWildcardRegExpCache");
-__name2(clearWildcardRegExpCache, "clearWildcardRegExpCache");
 function buildMatcherFromPreprocessedRoutes(routes2) {
   const trie = new Trie();
   const handlerData = [];
@@ -1171,7 +1167,6 @@ function buildMatcherFromPreprocessedRoutes(routes2) {
   return [regexp, handlerMap, staticMap];
 }
 __name(buildMatcherFromPreprocessedRoutes, "buildMatcherFromPreprocessedRoutes");
-__name2(buildMatcherFromPreprocessedRoutes, "buildMatcherFromPreprocessedRoutes");
 function findMiddleware(middleware, path) {
   if (!middleware) {
     return void 0;
@@ -1184,14 +1179,7 @@ function findMiddleware(middleware, path) {
   return void 0;
 }
 __name(findMiddleware, "findMiddleware");
-__name2(findMiddleware, "findMiddleware");
-var RegExpRouter = class {
-  static {
-    __name(this, "RegExpRouter");
-  }
-  static {
-    __name2(this, "RegExpRouter");
-  }
+var RegExpRouter = /* @__PURE__ */ __name(class {
   name = "RegExpRouter";
   #middleware;
   #routes;
@@ -1286,14 +1274,10 @@ var RegExpRouter = class {
       return buildMatcherFromPreprocessedRoutes(routes2);
     }
   }
-};
-var SmartRouter = class {
-  static {
-    __name(this, "SmartRouter");
-  }
-  static {
-    __name2(this, "SmartRouter");
-  }
+}, "RegExpRouter");
+
+// ../node_modules/hono/dist/router/smart-router/router.js
+var SmartRouter = /* @__PURE__ */ __name(class {
   name = "SmartRouter";
   #routers = [];
   #routes = [];
@@ -1345,15 +1329,11 @@ var SmartRouter = class {
     }
     return this.#routers[0];
   }
-};
+}, "SmartRouter");
+
+// ../node_modules/hono/dist/router/trie-router/node.js
 var emptyParams = /* @__PURE__ */ Object.create(null);
-var Node2 = class {
-  static {
-    __name(this, "Node2");
-  }
-  static {
-    __name2(this, "Node");
-  }
+var Node2 = /* @__PURE__ */ __name(class {
   #methods;
   #children;
   #patterns;
@@ -1507,14 +1487,10 @@ var Node2 = class {
     }
     return [handlerSets.map(({ handler, params }) => [handler, params])];
   }
-};
-var TrieRouter = class {
-  static {
-    __name(this, "TrieRouter");
-  }
-  static {
-    __name2(this, "TrieRouter");
-  }
+}, "Node");
+
+// ../node_modules/hono/dist/router/trie-router/router.js
+var TrieRouter = /* @__PURE__ */ __name(class {
   name = "TrieRouter";
   #node;
   constructor() {
@@ -1533,22 +1509,20 @@ var TrieRouter = class {
   match(method, path) {
     return this.#node.search(method, path);
   }
-};
-var Hono2 = class extends Hono {
-  static {
-    __name(this, "Hono2");
-  }
-  static {
-    __name2(this, "Hono");
-  }
+}, "TrieRouter");
+
+// ../node_modules/hono/dist/hono.js
+var Hono2 = /* @__PURE__ */ __name(class extends Hono {
   constructor(options = {}) {
     super(options);
     this.router = options.router ?? new SmartRouter({
       routers: [new RegExpRouter(), new TrieRouter()]
     });
   }
-};
-var cors = /* @__PURE__ */ __name2((options) => {
+}, "Hono");
+
+// ../node_modules/hono/dist/middleware/cors/index.js
+var cors = /* @__PURE__ */ __name((options) => {
   const defaults = {
     origin: "*",
     allowMethods: ["GET", "HEAD", "PUT", "POST", "DELETE", "PATCH"],
@@ -1581,12 +1555,11 @@ var cors = /* @__PURE__ */ __name2((options) => {
       return () => [];
     }
   })(opts.allowMethods);
-  return /* @__PURE__ */ __name2(/* @__PURE__ */ __name(async function cors2(c, next) {
+  return /* @__PURE__ */ __name(async function cors2(c, next) {
     function set(key, value) {
       c.res.headers.set(key, value);
     }
     __name(set, "set");
-    __name2(set, "set");
     const allowOrigin = await findAllowOrigin(c.req.header("origin") || "", c);
     if (allowOrigin) {
       set("Access-Control-Allow-Origin", allowOrigin);
@@ -1633,8 +1606,10 @@ var cors = /* @__PURE__ */ __name2((options) => {
       });
     }
     await next();
-  }, "cors2"), "cors2");
+  }, "cors2");
 }, "cors");
+
+// api/[[path]].ts
 var app = new Hono2().basePath("/api");
 app.use("*", cors({
   origin: "*",
@@ -1643,7 +1618,8 @@ app.use("*", cors({
   allowHeaders: ["Content-Type", "X-Session-ID"]
 }));
 async function getSession(c, sessionId) {
-  if (!sessionId) return null;
+  if (!sessionId)
+    return null;
   try {
     return null;
   } catch {
@@ -1651,7 +1627,6 @@ async function getSession(c, sessionId) {
   }
 }
 __name(getSession, "getSession");
-__name2(getSession, "getSession");
 async function verifyPassword(plain, hashed) {
   if (hashed.startsWith("plain:")) {
     return hashed.substring(6) === plain;
@@ -1679,7 +1654,6 @@ async function verifyPassword(plain, hashed) {
   return placeholderHashMap[hashed] === plain || bcryptHashMap[hashed] === plain;
 }
 __name(verifyPassword, "verifyPassword");
-__name2(verifyPassword, "verifyPassword");
 app.get("/health", (c) => {
   return c.json({
     status: "OK",
@@ -2037,7 +2011,8 @@ app.post("/shifts/auto-fill-requests", async (c) => {
         SELECT id FROM shifts 
         WHERE employee_id = ? AND date = ?
       `).bind(request.employee_id, request.date).first();
-      if (existing) continue;
+      if (existing)
+        continue;
       let patterns = [];
       try {
         patterns = JSON.parse(request.patterns);
@@ -2059,7 +2034,8 @@ app.post("/shifts/auto-fill-requests", async (c) => {
         createdCount++;
         continue;
       }
-      if (patterns.length === 0 || patterns[0] === "off") continue;
+      if (patterns.length === 0 || patterns[0] === "off")
+        continue;
       const pattern = patterns[0];
       let startTime = "", endTime = "";
       switch (pattern) {
@@ -2346,9 +2322,11 @@ app.put("/passwords/:id", async (c) => {
   const updatedPassword = await c.env.DB.prepare("SELECT id, role, store_id, auto_logout_minutes, updated_at FROM passwords WHERE id = ?").bind(id).first();
   return c.json(updatedPassword);
 });
-var onRequest = /* @__PURE__ */ __name2(async (context) => {
+var onRequest = /* @__PURE__ */ __name(async (context) => {
   return app.fetch(context.request, context.env, context);
 }, "onRequest");
+
+// ../.wrangler/tmp/pages-WVkTlc/functionsRoutes-0.4673282701716801.mjs
 var routes = [
   {
     routePath: "/api/:path*",
@@ -2358,6 +2336,8 @@ var routes = [
     modules: [onRequest]
   }
 ];
+
+// ../node_modules/wrangler/node_modules/path-to-regexp/dist.es2015/index.js
 function lexer(str) {
   var tokens = [];
   var i = 0;
@@ -2442,7 +2422,6 @@ function lexer(str) {
   return tokens;
 }
 __name(lexer, "lexer");
-__name2(lexer, "lexer");
 function parse(str, options) {
   if (options === void 0) {
     options = {};
@@ -2453,18 +2432,18 @@ function parse(str, options) {
   var key = 0;
   var i = 0;
   var path = "";
-  var tryConsume = /* @__PURE__ */ __name2(function(type) {
+  var tryConsume = /* @__PURE__ */ __name(function(type) {
     if (i < tokens.length && tokens[i].type === type)
       return tokens[i++].value;
   }, "tryConsume");
-  var mustConsume = /* @__PURE__ */ __name2(function(type) {
+  var mustConsume = /* @__PURE__ */ __name(function(type) {
     var value2 = tryConsume(type);
     if (value2 !== void 0)
       return value2;
     var _a2 = tokens[i], nextType = _a2.type, index = _a2.index;
     throw new TypeError("Unexpected ".concat(nextType, " at ").concat(index, ", expected ").concat(type));
   }, "mustConsume");
-  var consumeText = /* @__PURE__ */ __name2(function() {
+  var consumeText = /* @__PURE__ */ __name(function() {
     var result2 = "";
     var value2;
     while (value2 = tryConsume("CHAR") || tryConsume("ESCAPED_CHAR")) {
@@ -2472,7 +2451,7 @@ function parse(str, options) {
     }
     return result2;
   }, "consumeText");
-  var isSafe = /* @__PURE__ */ __name2(function(value2) {
+  var isSafe = /* @__PURE__ */ __name(function(value2) {
     for (var _i = 0, delimiter_1 = delimiter; _i < delimiter_1.length; _i++) {
       var char2 = delimiter_1[_i];
       if (value2.indexOf(char2) > -1)
@@ -2480,7 +2459,7 @@ function parse(str, options) {
     }
     return false;
   }, "isSafe");
-  var safePattern = /* @__PURE__ */ __name2(function(prefix2) {
+  var safePattern = /* @__PURE__ */ __name(function(prefix2) {
     var prev = result[result.length - 1];
     var prevText = prefix2 || (prev && typeof prev === "string" ? prev : "");
     if (prev && !prevText) {
@@ -2543,14 +2522,12 @@ function parse(str, options) {
   return result;
 }
 __name(parse, "parse");
-__name2(parse, "parse");
 function match2(str, options) {
   var keys = [];
   var re = pathToRegexp(str, keys, options);
   return regexpToFunction(re, keys, options);
 }
-__name(match2, "match2");
-__name2(match2, "match");
+__name(match2, "match");
 function regexpToFunction(re, keys, options) {
   if (options === void 0) {
     options = {};
@@ -2564,7 +2541,7 @@ function regexpToFunction(re, keys, options) {
       return false;
     var path = m[0], index = m.index;
     var params = /* @__PURE__ */ Object.create(null);
-    var _loop_1 = /* @__PURE__ */ __name2(function(i2) {
+    var _loop_1 = /* @__PURE__ */ __name(function(i2) {
       if (m[i2] === void 0)
         return "continue";
       var key = keys[i2 - 1];
@@ -2583,17 +2560,14 @@ function regexpToFunction(re, keys, options) {
   };
 }
 __name(regexpToFunction, "regexpToFunction");
-__name2(regexpToFunction, "regexpToFunction");
 function escapeString(str) {
   return str.replace(/([.+*?=^!:${}()[\]|/\\])/g, "\\$1");
 }
 __name(escapeString, "escapeString");
-__name2(escapeString, "escapeString");
 function flags(options) {
   return options && options.sensitive ? "" : "i";
 }
 __name(flags, "flags");
-__name2(flags, "flags");
 function regexpToRegexp(path, keys) {
   if (!keys)
     return path;
@@ -2614,7 +2588,6 @@ function regexpToRegexp(path, keys) {
   return path;
 }
 __name(regexpToRegexp, "regexpToRegexp");
-__name2(regexpToRegexp, "regexpToRegexp");
 function arrayToRegexp(paths, keys, options) {
   var parts = paths.map(function(path) {
     return pathToRegexp(path, keys, options).source;
@@ -2622,12 +2595,10 @@ function arrayToRegexp(paths, keys, options) {
   return new RegExp("(?:".concat(parts.join("|"), ")"), flags(options));
 }
 __name(arrayToRegexp, "arrayToRegexp");
-__name2(arrayToRegexp, "arrayToRegexp");
 function stringToRegexp(path, keys, options) {
   return tokensToRegexp(parse(path, options), keys, options);
 }
 __name(stringToRegexp, "stringToRegexp");
-__name2(stringToRegexp, "stringToRegexp");
 function tokensToRegexp(tokens, keys, options) {
   if (options === void 0) {
     options = {};
@@ -2683,7 +2654,6 @@ function tokensToRegexp(tokens, keys, options) {
   return new RegExp(route, flags(options));
 }
 __name(tokensToRegexp, "tokensToRegexp");
-__name2(tokensToRegexp, "tokensToRegexp");
 function pathToRegexp(path, keys, options) {
   if (path instanceof RegExp)
     return regexpToRegexp(path, keys);
@@ -2692,7 +2662,8 @@ function pathToRegexp(path, keys, options) {
   return stringToRegexp(path, keys, options);
 }
 __name(pathToRegexp, "pathToRegexp");
-__name2(pathToRegexp, "pathToRegexp");
+
+// ../node_modules/wrangler/templates/pages-template-worker.ts
 var escapeRegex = /[.+?^${}()|[\]\\]/g;
 function* executeRequest(request) {
   const requestPath = new URL(request.url).pathname;
@@ -2743,14 +2714,13 @@ function* executeRequest(request) {
   }
 }
 __name(executeRequest, "executeRequest");
-__name2(executeRequest, "executeRequest");
 var pages_template_worker_default = {
   async fetch(originalRequest, env, workerContext) {
     let request = originalRequest;
     const handlerIterator = executeRequest(request);
     let data = {};
     let isFailOpen = false;
-    const next = /* @__PURE__ */ __name2(async (input, init) => {
+    const next = /* @__PURE__ */ __name(async (input, init) => {
       if (input !== void 0) {
         let url = input;
         if (typeof input === "string") {
@@ -2777,9 +2747,9 @@ var pages_template_worker_default = {
           },
           env,
           waitUntil: workerContext.waitUntil.bind(workerContext),
-          passThroughOnException: /* @__PURE__ */ __name2(() => {
+          passThroughOnException: () => {
             isFailOpen = true;
-          }, "passThroughOnException")
+          }
         };
         const response = await handler(context);
         if (!(response instanceof Response)) {
@@ -2805,14 +2775,16 @@ var pages_template_worker_default = {
     }
   }
 };
-var cloneResponse = /* @__PURE__ */ __name2((response) => (
+var cloneResponse = /* @__PURE__ */ __name((response) => (
   // https://fetch.spec.whatwg.org/#null-body-status
   new Response(
     [101, 204, 205, 304].includes(response.status) ? null : response.body,
     response
   )
 ), "cloneResponse");
-var drainBody = /* @__PURE__ */ __name2(async (request, env, _ctx, middlewareCtx) => {
+
+// ../node_modules/wrangler/templates/middleware/middleware-ensure-req-body-drained.ts
+var drainBody = /* @__PURE__ */ __name(async (request, env, _ctx, middlewareCtx) => {
   try {
     return await middlewareCtx.next(request, env);
   } finally {
@@ -2828,6 +2800,8 @@ var drainBody = /* @__PURE__ */ __name2(async (request, env, _ctx, middlewareCtx
   }
 }, "drainBody");
 var middleware_ensure_req_body_drained_default = drainBody;
+
+// ../node_modules/wrangler/templates/middleware/middleware-miniflare3-json-error.ts
 function reduceError(e) {
   return {
     name: e?.name,
@@ -2837,8 +2811,7 @@ function reduceError(e) {
   };
 }
 __name(reduceError, "reduceError");
-__name2(reduceError, "reduceError");
-var jsonError = /* @__PURE__ */ __name2(async (request, env, _ctx, middlewareCtx) => {
+var jsonError = /* @__PURE__ */ __name(async (request, env, _ctx, middlewareCtx) => {
   try {
     return await middlewareCtx.next(request, env);
   } catch (e) {
@@ -2850,17 +2823,20 @@ var jsonError = /* @__PURE__ */ __name2(async (request, env, _ctx, middlewareCtx
   }
 }, "jsonError");
 var middleware_miniflare3_json_error_default = jsonError;
+
+// ../.wrangler/tmp/bundle-Vbnod8/middleware-insertion-facade.js
 var __INTERNAL_WRANGLER_MIDDLEWARE__ = [
   middleware_ensure_req_body_drained_default,
   middleware_miniflare3_json_error_default
 ];
 var middleware_insertion_facade_default = pages_template_worker_default;
+
+// ../node_modules/wrangler/templates/middleware/common.ts
 var __facade_middleware__ = [];
 function __facade_register__(...args) {
   __facade_middleware__.push(...args.flat());
 }
 __name(__facade_register__, "__facade_register__");
-__name2(__facade_register__, "__facade_register__");
 function __facade_invokeChain__(request, env, ctx, dispatch, middlewareChain) {
   const [head, ...tail] = middlewareChain;
   const middlewareCtx = {
@@ -2872,7 +2848,6 @@ function __facade_invokeChain__(request, env, ctx, dispatch, middlewareChain) {
   return head(request, env, ctx, middlewareCtx);
 }
 __name(__facade_invokeChain__, "__facade_invokeChain__");
-__name2(__facade_invokeChain__, "__facade_invokeChain__");
 function __facade_invoke__(request, env, ctx, dispatch, finalMiddleware) {
   return __facade_invokeChain__(request, env, ctx, dispatch, [
     ...__facade_middleware__,
@@ -2880,27 +2855,23 @@ function __facade_invoke__(request, env, ctx, dispatch, finalMiddleware) {
   ]);
 }
 __name(__facade_invoke__, "__facade_invoke__");
-__name2(__facade_invoke__, "__facade_invoke__");
-var __Facade_ScheduledController__ = class ___Facade_ScheduledController__ {
-  static {
-    __name(this, "___Facade_ScheduledController__");
-  }
+
+// ../.wrangler/tmp/bundle-Vbnod8/middleware-loader.entry.ts
+var __Facade_ScheduledController__ = class {
   constructor(scheduledTime, cron, noRetry) {
     this.scheduledTime = scheduledTime;
     this.cron = cron;
     this.#noRetry = noRetry;
   }
-  static {
-    __name2(this, "__Facade_ScheduledController__");
-  }
   #noRetry;
   noRetry() {
-    if (!(this instanceof ___Facade_ScheduledController__)) {
+    if (!(this instanceof __Facade_ScheduledController__)) {
       throw new TypeError("Illegal invocation");
     }
     this.#noRetry();
   }
 };
+__name(__Facade_ScheduledController__, "__Facade_ScheduledController__");
 function wrapExportedHandler(worker) {
   if (__INTERNAL_WRANGLER_MIDDLEWARE__ === void 0 || __INTERNAL_WRANGLER_MIDDLEWARE__.length === 0) {
     return worker;
@@ -2908,7 +2879,7 @@ function wrapExportedHandler(worker) {
   for (const middleware of __INTERNAL_WRANGLER_MIDDLEWARE__) {
     __facade_register__(middleware);
   }
-  const fetchDispatcher = /* @__PURE__ */ __name2(function(request, env, ctx) {
+  const fetchDispatcher = /* @__PURE__ */ __name(function(request, env, ctx) {
     if (worker.fetch === void 0) {
       throw new Error("Handler does not export a fetch() function.");
     }
@@ -2917,7 +2888,7 @@ function wrapExportedHandler(worker) {
   return {
     ...worker,
     fetch(request, env, ctx) {
-      const dispatcher = /* @__PURE__ */ __name2(function(type, init) {
+      const dispatcher = /* @__PURE__ */ __name(function(type, init) {
         if (type === "scheduled" && worker.scheduled !== void 0) {
           const controller = new __Facade_ScheduledController__(
             Date.now(),
@@ -2933,7 +2904,6 @@ function wrapExportedHandler(worker) {
   };
 }
 __name(wrapExportedHandler, "wrapExportedHandler");
-__name2(wrapExportedHandler, "wrapExportedHandler");
 function wrapWorkerEntrypoint(klass) {
   if (__INTERNAL_WRANGLER_MIDDLEWARE__ === void 0 || __INTERNAL_WRANGLER_MIDDLEWARE__.length === 0) {
     return klass;
@@ -2942,15 +2912,15 @@ function wrapWorkerEntrypoint(klass) {
     __facade_register__(middleware);
   }
   return class extends klass {
-    #fetchDispatcher = /* @__PURE__ */ __name2((request, env, ctx) => {
+    #fetchDispatcher = (request, env, ctx) => {
       this.env = env;
       this.ctx = ctx;
       if (super.fetch === void 0) {
         throw new Error("Entrypoint class does not define a fetch() function.");
       }
       return super.fetch(request);
-    }, "#fetchDispatcher");
-    #dispatcher = /* @__PURE__ */ __name2((type, init) => {
+    };
+    #dispatcher = (type, init) => {
       if (type === "scheduled" && super.scheduled !== void 0) {
         const controller = new __Facade_ScheduledController__(
           Date.now(),
@@ -2960,7 +2930,7 @@ function wrapWorkerEntrypoint(klass) {
         );
         return super.scheduled(controller);
       }
-    }, "#dispatcher");
+    };
     fetch(request) {
       return __facade_invoke__(
         request,
@@ -2973,7 +2943,6 @@ function wrapWorkerEntrypoint(klass) {
   };
 }
 __name(wrapWorkerEntrypoint, "wrapWorkerEntrypoint");
-__name2(wrapWorkerEntrypoint, "wrapWorkerEntrypoint");
 var WRAPPED_ENTRY;
 if (typeof middleware_insertion_facade_default === "object") {
   WRAPPED_ENTRY = wrapExportedHandler(middleware_insertion_facade_default);
@@ -2981,178 +2950,8 @@ if (typeof middleware_insertion_facade_default === "object") {
   WRAPPED_ENTRY = wrapWorkerEntrypoint(middleware_insertion_facade_default);
 }
 var middleware_loader_entry_default = WRAPPED_ENTRY;
-
-// ../../../usr/lib/node_modules/wrangler/templates/middleware/middleware-ensure-req-body-drained.ts
-var drainBody2 = /* @__PURE__ */ __name(async (request, env, _ctx, middlewareCtx) => {
-  try {
-    return await middlewareCtx.next(request, env);
-  } finally {
-    try {
-      if (request.body !== null && !request.bodyUsed) {
-        const reader = request.body.getReader();
-        while (!(await reader.read()).done) {
-        }
-      }
-    } catch (e) {
-      console.error("Failed to drain the unused request body.", e);
-    }
-  }
-}, "drainBody");
-var middleware_ensure_req_body_drained_default2 = drainBody2;
-
-// ../../../usr/lib/node_modules/wrangler/templates/middleware/middleware-miniflare3-json-error.ts
-function reduceError2(e) {
-  return {
-    name: e?.name,
-    message: e?.message ?? String(e),
-    stack: e?.stack,
-    cause: e?.cause === void 0 ? void 0 : reduceError2(e.cause)
-  };
-}
-__name(reduceError2, "reduceError");
-var jsonError2 = /* @__PURE__ */ __name(async (request, env, _ctx, middlewareCtx) => {
-  try {
-    return await middlewareCtx.next(request, env);
-  } catch (e) {
-    const error = reduceError2(e);
-    return Response.json(error, {
-      status: 500,
-      headers: { "MF-Experimental-Error-Stack": "true" }
-    });
-  }
-}, "jsonError");
-var middleware_miniflare3_json_error_default2 = jsonError2;
-
-// .wrangler/tmp/bundle-uVoKzk/middleware-insertion-facade.js
-var __INTERNAL_WRANGLER_MIDDLEWARE__2 = [
-  middleware_ensure_req_body_drained_default2,
-  middleware_miniflare3_json_error_default2
-];
-var middleware_insertion_facade_default2 = middleware_loader_entry_default;
-
-// ../../../usr/lib/node_modules/wrangler/templates/middleware/common.ts
-var __facade_middleware__2 = [];
-function __facade_register__2(...args) {
-  __facade_middleware__2.push(...args.flat());
-}
-__name(__facade_register__2, "__facade_register__");
-function __facade_invokeChain__2(request, env, ctx, dispatch, middlewareChain) {
-  const [head, ...tail] = middlewareChain;
-  const middlewareCtx = {
-    dispatch,
-    next(newRequest, newEnv) {
-      return __facade_invokeChain__2(newRequest, newEnv, ctx, dispatch, tail);
-    }
-  };
-  return head(request, env, ctx, middlewareCtx);
-}
-__name(__facade_invokeChain__2, "__facade_invokeChain__");
-function __facade_invoke__2(request, env, ctx, dispatch, finalMiddleware) {
-  return __facade_invokeChain__2(request, env, ctx, dispatch, [
-    ...__facade_middleware__2,
-    finalMiddleware
-  ]);
-}
-__name(__facade_invoke__2, "__facade_invoke__");
-
-// .wrangler/tmp/bundle-uVoKzk/middleware-loader.entry.ts
-var __Facade_ScheduledController__2 = class ___Facade_ScheduledController__2 {
-  constructor(scheduledTime, cron, noRetry) {
-    this.scheduledTime = scheduledTime;
-    this.cron = cron;
-    this.#noRetry = noRetry;
-  }
-  static {
-    __name(this, "__Facade_ScheduledController__");
-  }
-  #noRetry;
-  noRetry() {
-    if (!(this instanceof ___Facade_ScheduledController__2)) {
-      throw new TypeError("Illegal invocation");
-    }
-    this.#noRetry();
-  }
-};
-function wrapExportedHandler2(worker) {
-  if (__INTERNAL_WRANGLER_MIDDLEWARE__2 === void 0 || __INTERNAL_WRANGLER_MIDDLEWARE__2.length === 0) {
-    return worker;
-  }
-  for (const middleware of __INTERNAL_WRANGLER_MIDDLEWARE__2) {
-    __facade_register__2(middleware);
-  }
-  const fetchDispatcher = /* @__PURE__ */ __name(function(request, env, ctx) {
-    if (worker.fetch === void 0) {
-      throw new Error("Handler does not export a fetch() function.");
-    }
-    return worker.fetch(request, env, ctx);
-  }, "fetchDispatcher");
-  return {
-    ...worker,
-    fetch(request, env, ctx) {
-      const dispatcher = /* @__PURE__ */ __name(function(type, init) {
-        if (type === "scheduled" && worker.scheduled !== void 0) {
-          const controller = new __Facade_ScheduledController__2(
-            Date.now(),
-            init.cron ?? "",
-            () => {
-            }
-          );
-          return worker.scheduled(controller, env, ctx);
-        }
-      }, "dispatcher");
-      return __facade_invoke__2(request, env, ctx, dispatcher, fetchDispatcher);
-    }
-  };
-}
-__name(wrapExportedHandler2, "wrapExportedHandler");
-function wrapWorkerEntrypoint2(klass) {
-  if (__INTERNAL_WRANGLER_MIDDLEWARE__2 === void 0 || __INTERNAL_WRANGLER_MIDDLEWARE__2.length === 0) {
-    return klass;
-  }
-  for (const middleware of __INTERNAL_WRANGLER_MIDDLEWARE__2) {
-    __facade_register__2(middleware);
-  }
-  return class extends klass {
-    #fetchDispatcher = /* @__PURE__ */ __name((request, env, ctx) => {
-      this.env = env;
-      this.ctx = ctx;
-      if (super.fetch === void 0) {
-        throw new Error("Entrypoint class does not define a fetch() function.");
-      }
-      return super.fetch(request);
-    }, "#fetchDispatcher");
-    #dispatcher = /* @__PURE__ */ __name((type, init) => {
-      if (type === "scheduled" && super.scheduled !== void 0) {
-        const controller = new __Facade_ScheduledController__2(
-          Date.now(),
-          init.cron ?? "",
-          () => {
-          }
-        );
-        return super.scheduled(controller);
-      }
-    }, "#dispatcher");
-    fetch(request) {
-      return __facade_invoke__2(
-        request,
-        this.env,
-        this.ctx,
-        this.#dispatcher,
-        this.#fetchDispatcher
-      );
-    }
-  };
-}
-__name(wrapWorkerEntrypoint2, "wrapWorkerEntrypoint");
-var WRAPPED_ENTRY2;
-if (typeof middleware_insertion_facade_default2 === "object") {
-  WRAPPED_ENTRY2 = wrapExportedHandler2(middleware_insertion_facade_default2);
-} else if (typeof middleware_insertion_facade_default2 === "function") {
-  WRAPPED_ENTRY2 = wrapWorkerEntrypoint2(middleware_insertion_facade_default2);
-}
-var middleware_loader_entry_default2 = WRAPPED_ENTRY2;
 export {
-  __INTERNAL_WRANGLER_MIDDLEWARE__2 as __INTERNAL_WRANGLER_MIDDLEWARE__,
-  middleware_loader_entry_default2 as default
+  __INTERNAL_WRANGLER_MIDDLEWARE__,
+  middleware_loader_entry_default as default
 };
-//# sourceMappingURL=functionsWorker-0.7809655782187492.js.map
+//# sourceMappingURL=functionsWorker-0.8259685783237671.mjs.map

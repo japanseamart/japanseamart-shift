@@ -16,6 +16,7 @@ import MonthlyReport from './pages/MonthlyReport';
 import SpecialDayManagement from './pages/SpecialDayManagement';
 import AnnouncementManagement from './pages/AnnouncementManagement';
 import PasswordManagement from './pages/PasswordManagement';
+import StoreRanking from './pages/StoreRanking';
 
 function App() {
   const [role, setRole] = useState<Role | null>(null);
@@ -269,6 +270,16 @@ function App() {
           element={
             role ? (
               <PasswordManagement role={role} storeId={storeId} onLogout={handleLogout} />
+            ) : (
+              <Navigate to="/admin/login" replace />
+            )
+          }
+        />
+        <Route
+          path="/admin/ranking"
+          element={
+            role ? (
+              <StoreRanking role={role} storeId={storeId} onLogout={handleLogout} />
             ) : (
               <Navigate to="/admin/login" replace />
             )
