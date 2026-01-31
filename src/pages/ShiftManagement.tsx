@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
-import { format, addMonths, eachDayOfInterval, differenceInMinutes, getDaysInMonth } from 'date-fns';
+import { format, addMonths, eachDayOfInterval, differenceInMinutes } from 'date-fns';
 import { ja } from 'date-fns/locale';
 import { Role, Employee, Shift, Store, SpecialDay, ShiftRequest } from '../types';
 import AdminLayout from '../components/AdminLayout';
 import { getApiUrl } from '../config/api';
+import { getPeriodDates } from '../utils/dateUtils';
 
 interface ShiftManagementProps {
   role: Role;
@@ -19,18 +20,6 @@ interface ShiftInput {
   end_time: string;
   break_minutes: number;
 }
-
-// 前半/後半の期間を計算するヘルパー関数
-const getPeriodDates = (year: number, month: number, period: 'first' | 'second') => {
-  const daysInMonth = getDaysInMonth(new Date(year, month - 1));
-  const startDay = period === 'first' ? 1 : 16;
-  const endDay = period === 'first' ? 15 : daysInMonth;
-  
-  const start = new Date(year, month - 1, startDay);
-  const end = new Date(year, month - 1, endDay);
-  
-  return { start, end };
-};
 
 export default function ShiftManagement({ role, storeId, onLogout }: ShiftManagementProps) {
   const [stores, setStores] = useState<Store[]>([]);

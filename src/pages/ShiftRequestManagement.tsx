@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
-import { format, addWeeks, startOfWeek, endOfWeek, eachDayOfInterval } from 'date-fns';
+import { format, eachDayOfInterval, getDaysInMonth } from 'date-fns';
 import { ja } from 'date-fns/locale';
 import { Role, Employee, ShiftRequest, Store } from '../types';
 import AdminLayout from '../components/AdminLayout';
 import { getApiUrl } from '../config/api';
+import { getPeriodDates } from '../utils/dateUtils';
 
 interface ShiftRequestManagementProps {
   role: Role;
@@ -18,16 +19,43 @@ interface EmployeeSubmissionStatus {
   submissionRate: number;
 }
 
+interface ShiftDeadline {
+  id: number;
+  store_id: number;
+  target_year: number;
+  target_month: number;
+  target_period: 'first' | 'second';
+  deadline_date: string;
+  notification_message: string | null;
+  is_changed: number;
+  change_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
 export default function ShiftRequestManagement({ role, storeId, onLogout }: ShiftRequestManagementProps) {
   const [stores, setStores] = useState<Store[]>([]);
   const [selectedStoreId, setSelectedStoreId] = useState<number | null>(storeId);
-  const [targetWeekStart, setTargetWeekStart] = useState(startOfWeek(addWeeks(new Date(), 1), { locale: ja }));
+  
+  // 期間選択（年/月/前半・後半）
+  const [targetYear, setTargetYear] = useState(new Date().getFullYear());
+  const [targetMonth, setTargetMonth] = useState(new Date().getMonth() + 1);
+  const [targetPeriod, setTargetPeriod] = useState<'first' | 'second'>(new Date().getDate() <= 15 ? 'first' : 'second');
+  
   const [submissionStatuses, setSubmissionStatuses] = useState<EmployeeSubmissionStatus[]>([]);
   const [loading, setLoading] = useState(false);
-  const [deadline, setDeadline] = useState<string | null>(null);
+  
+  // 締切関連
+  const [deadline, setDeadline] = useState<ShiftDeadline | null>(null);
   const [isEditingDeadline, setIsEditingDeadline] = useState(false);
   const [deadlineInput, setDeadlineInput] = useState('');
+  const [notificationMessage, setNotificationMessage] = useState('');
+  
   const [allEmployees, setAllEmployees] = useState<Employee[]>([]);
+
+  // 期間の日付リストを計算
+  const { start: periodStart, end: periodEnd } = getPeriodDates(targetYear, targetMonth, targetPeriod);
+  const periodDates = eachDayOfInterval({ start: periodStart, end: periodEnd });
 
   useEffect(() => {
     fetchStores();
@@ -41,18 +69,16 @@ export default function ShiftRequestManagement({ role, storeId, onLogout }: Shif
       fetchSubmissionStatus();
       fetchDeadline();
     } else if (role === 'admin') {
-      // 全店舗モード
       fetchSubmissionStatus();
     }
-  }, [selectedStoreId, targetWeekStart]);
+  }, [selectedStoreId, targetYear, targetMonth, targetPeriod]);
 
   const fetchStores = async () => {
     try {
       const res = await fetch(getApiUrl('/api/stores'));
       const data = await res.json();
-      setStores(data.filter((s: Store) => s.id !== 8)); // 本部以外
+      setStores(data.filter((s: Store) => s.id !== 8));
       
-      // 管理者の場合は初期値をnull(全店舗)に設定
       if (role === 'admin' && selectedStoreId === null) {
         setSelectedStoreId(null);
       } else if (!selectedStoreId && data.length > 0) {
@@ -67,26 +93,31 @@ export default function ShiftRequestManagement({ role, storeId, onLogout }: Shif
     try {
       const res = await fetch(getApiUrl('/api/employees'));
       const data = await res.json();
-      setAllEmployees(data.filter((e: Employee) => e.store_id !== 8)); // 本部以外
+      setAllEmployees(data.filter((e: Employee) => e.store_id !== 8));
     } catch (error) {
       console.error('全従業員取得エラー:', error);
     }
   };
 
   const fetchDeadline = async () => {
-    if (!selectedStoreId) return;
+    if (!selectedStoreId) {
+      setDeadline(null);
+      return;
+    }
     
     try {
-      const targetMonth = format(targetWeekStart, 'yyyy-MM');
-      const res = await fetch(getApiUrl(`/api/shift-deadlines?store_id=${selectedStoreId}&target_month=${targetMonth}`));
+      const res = await fetch(getApiUrl(
+        `/api/shift-deadlines?store_id=${selectedStoreId}&target_year=${targetYear}&target_month=${targetMonth}&target_period=${targetPeriod}`
+      ));
       const data = await res.json();
       if (data.length > 0) {
-        setDeadline(data[0].deadline_date);
+        setDeadline(data[0]);
       } else {
         setDeadline(null);
       }
     } catch (error) {
       console.error('締切取得エラー:', error);
+      setDeadline(null);
     }
   };
 
@@ -94,35 +125,29 @@ export default function ShiftRequestManagement({ role, storeId, onLogout }: Shif
     setLoading(true);
     
     try {
-      // 対象週の日付リスト
-      const weekEnd = endOfWeek(targetWeekStart, { locale: ja });
-      const weekDates = eachDayOfInterval({ start: targetWeekStart, end: weekEnd });
-      const dateStrings = weekDates.map(d => format(d, 'yyyy-MM-dd'));
+      const dateStrings = periodDates.map(d => format(d, 'yyyy-MM-dd'));
+      const startDate = format(periodStart, 'yyyy-MM-dd');
+      const endDate = format(periodEnd, 'yyyy-MM-dd');
 
       let employees: Employee[] = [];
       let requests: ShiftRequest[] = [];
 
       if (selectedStoreId !== null) {
-        // 単一店舗モード
         const empRes = await fetch(getApiUrl(`/api/employees?store_id=${selectedStoreId}`));
         employees = await empRes.json();
 
         const reqRes = await fetch(
-          getApiUrl(`/api/shift-requests?store_id=${selectedStoreId}&start_date=${format(targetWeekStart, 'yyyy-MM-dd')}&end_date=${format(weekEnd, 'yyyy-MM-dd')}`)
+          getApiUrl(`/api/shift-requests?store_id=${selectedStoreId}&start_date=${startDate}&end_date=${endDate}`)
         );
         requests = await reqRes.json();
       } else {
-        // 全店舗モード
         employees = allEmployees;
-
-        // 全店舗のシフト希望を取得
         const reqRes = await fetch(
-          getApiUrl(`/api/shift-requests?start_date=${format(targetWeekStart, 'yyyy-MM-dd')}&end_date=${format(weekEnd, 'yyyy-MM-dd')}`)
+          getApiUrl(`/api/shift-requests?start_date=${startDate}&end_date=${endDate}`)
         );
         requests = await reqRes.json();
       }
 
-      // 従業員ごとの提出状況を集計
       const statuses: EmployeeSubmissionStatus[] = employees.map(employee => {
         const employeeRequests = requests.filter(r => r.employee_id === employee.id);
         const submittedDates = employeeRequests.map(r => r.date);
@@ -137,9 +162,7 @@ export default function ShiftRequestManagement({ role, storeId, onLogout }: Shif
         };
       });
 
-      // 提出率の低い順にソート
       statuses.sort((a, b) => a.submissionRate - b.submissionRate);
-
       setSubmissionStatuses(statuses);
     } catch (error) {
       console.error('提出状況取得エラー:', error);
@@ -149,7 +172,16 @@ export default function ShiftRequestManagement({ role, storeId, onLogout }: Shif
   };
 
   const handleOpenDeadlineEdit = () => {
-    setDeadlineInput(deadline || format(new Date(), 'yyyy-MM-dd'));
+    if (deadline) {
+      setDeadlineInput(deadline.deadline_date);
+      setNotificationMessage(deadline.notification_message || '');
+    } else {
+      // デフォルト: 対象期間の5日前
+      const defaultDate = new Date(periodStart);
+      defaultDate.setDate(defaultDate.getDate() - 5);
+      setDeadlineInput(format(defaultDate, 'yyyy-MM-dd'));
+      setNotificationMessage('');
+    }
     setIsEditingDeadline(true);
   };
 
@@ -157,19 +189,16 @@ export default function ShiftRequestManagement({ role, storeId, onLogout }: Shif
     if (!selectedStoreId || !deadlineInput) return;
 
     try {
-      const targetMonth = format(targetWeekStart, 'yyyy-MM');
-      
-      // 既存の締切があるか確認
-      const existingRes = await fetch(getApiUrl(`/api/shift-deadlines?store_id=${selectedStoreId}&target_month=${targetMonth}`));
-      const existing = await existingRes.json();
-
-      if (existing.length > 0) {
+      if (deadline) {
         // 更新
-        await fetch(getApiUrl(`/api/shift-deadlines/${existing[0].id}`), {
+        await fetch(getApiUrl(`/api/shift-deadlines/${deadline.id}`), {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           credentials: 'include',
-          body: JSON.stringify({ deadline_date: deadlineInput })
+          body: JSON.stringify({ 
+            deadline_date: deadlineInput,
+            notification_message: notificationMessage || null
+          })
         });
       } else {
         // 新規作成
@@ -179,25 +208,93 @@ export default function ShiftRequestManagement({ role, storeId, onLogout }: Shif
           credentials: 'include',
           body: JSON.stringify({
             store_id: selectedStoreId,
+            target_year: targetYear,
             target_month: targetMonth,
-            deadline_date: deadlineInput
+            target_period: targetPeriod,
+            deadline_date: deadlineInput,
+            notification_message: notificationMessage || null
           })
         });
       }
 
       setIsEditingDeadline(false);
       fetchDeadline();
+      alert(deadline ? '締切を変更しました。従業員に再告知されます。' : '締切を設定しました。従業員に告知されます。');
     } catch (error) {
       console.error('締切設定エラー:', error);
       alert('締切の設定に失敗しました');
     }
   };
 
+  const handleDeleteDeadline = async () => {
+    if (!deadline) return;
+    if (!confirm('この締切を削除しますか？')) return;
+
+    try {
+      await fetch(getApiUrl(`/api/shift-deadlines/${deadline.id}`), {
+        method: 'DELETE',
+        credentials: 'include'
+      });
+      setDeadline(null);
+      alert('締切を削除しました');
+    } catch (error) {
+      console.error('締切削除エラー:', error);
+      alert('締切の削除に失敗しました');
+    }
+  };
+
+  // 期間ナビゲーション
+  const handlePrevPeriod = () => {
+    if (targetPeriod === 'second') {
+      setTargetPeriod('first');
+    } else {
+      setTargetPeriod('second');
+      if (targetMonth === 1) {
+        setTargetMonth(12);
+        setTargetYear(targetYear - 1);
+      } else {
+        setTargetMonth(targetMonth - 1);
+      }
+    }
+  };
+
+  const handleNextPeriod = () => {
+    if (targetPeriod === 'first') {
+      setTargetPeriod('second');
+    } else {
+      setTargetPeriod('first');
+      if (targetMonth === 12) {
+        setTargetMonth(1);
+        setTargetYear(targetYear + 1);
+      } else {
+        setTargetMonth(targetMonth + 1);
+      }
+    }
+  };
+
+  const handleCurrentPeriod = () => {
+    const now = new Date();
+    setTargetYear(now.getFullYear());
+    setTargetMonth(now.getMonth() + 1);
+    setTargetPeriod(now.getDate() <= 15 ? 'first' : 'second');
+  };
+
   const unsubmittedEmployees = submissionStatuses.filter(s => s.submissionRate < 100);
   const fullySubmittedEmployees = submissionStatuses.filter(s => s.submissionRate === 100);
 
-  const weekEnd = endOfWeek(targetWeekStart, { locale: ja });
-  const weekDates = eachDayOfInterval({ start: targetWeekStart, end: weekEnd });
+  // 締切までの日数計算
+  const getDaysUntilDeadline = () => {
+    if (!deadline) return null;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const deadlineDate = new Date(deadline.deadline_date);
+    deadlineDate.setHours(0, 0, 0, 0);
+    const diffTime = deadlineDate.getTime() - today.getTime();
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    return diffDays;
+  };
+
+  const daysUntilDeadline = getDaysUntilDeadline();
 
   return (
     <AdminLayout role={role} storeId={storeId} onLogout={onLogout}>
@@ -208,7 +305,7 @@ export default function ShiftRequestManagement({ role, storeId, onLogout }: Shif
 
         {/* フィルター */}
         <div className="card">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* 店舗選択 */}
             {role === 'admin' && (
               <div>
@@ -226,70 +323,152 @@ export default function ShiftRequestManagement({ role, storeId, onLogout }: Shif
               </div>
             )}
 
-            {/* 対象週選択 */}
+            {/* 対象期間選択（前半/後半） */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">対象週</label>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setTargetWeekStart(addWeeks(targetWeekStart, -1))}
-                  className="btn-secondary"
-                >
-                  ← 前週
+              <label className="block text-sm font-medium text-gray-700 mb-2">対象期間</label>
+              <div className="flex gap-2 items-center">
+                <button onClick={handlePrevPeriod} className="btn-secondary px-3">
+                  ←
                 </button>
-                <div className="flex-1 flex items-center justify-center text-sm font-medium">
-                  {format(targetWeekStart, 'M/d', { locale: ja })} - {format(weekEnd, 'M/d', { locale: ja })}
+                <div className="flex-1 flex items-center justify-center gap-2">
+                  <select
+                    value={targetYear}
+                    onChange={(e) => setTargetYear(Number(e.target.value))}
+                    className="input-field w-24"
+                  >
+                    {[targetYear - 1, targetYear, targetYear + 1].map(y => (
+                      <option key={y} value={y}>{y}年</option>
+                    ))}
+                  </select>
+                  <select
+                    value={targetMonth}
+                    onChange={(e) => setTargetMonth(Number(e.target.value))}
+                    className="input-field w-20"
+                  >
+                    {Array.from({ length: 12 }, (_, i) => i + 1).map(m => (
+                      <option key={m} value={m}>{m}月</option>
+                    ))}
+                  </select>
+                  <select
+                    value={targetPeriod}
+                    onChange={(e) => setTargetPeriod(e.target.value as 'first' | 'second')}
+                    className="input-field w-24"
+                  >
+                    <option value="first">前半</option>
+                    <option value="second">後半</option>
+                  </select>
                 </div>
-                <button
-                  onClick={() => setTargetWeekStart(addWeeks(targetWeekStart, 1))}
-                  className="btn-secondary"
-                >
-                  次週 →
+                <button onClick={handleNextPeriod} className="btn-secondary px-3">
+                  →
+                </button>
+                <button onClick={handleCurrentPeriod} className="btn-secondary px-3 text-xs">
+                  今期
                 </button>
               </div>
             </div>
+          </div>
+        </div>
 
-            {/* 締切設定 */}
-            {selectedStoreId !== null && (
+        {/* 締切設定カード */}
+        {selectedStoreId !== null && (
+          <div className={`card ${
+            deadline ? (
+              daysUntilDeadline !== null && daysUntilDeadline < 0 ? 'bg-gray-100 border-gray-300' :
+              daysUntilDeadline !== null && daysUntilDeadline <= 3 ? 'bg-red-50 border-red-300' :
+              daysUntilDeadline !== null && daysUntilDeadline <= 7 ? 'bg-yellow-50 border-yellow-300' :
+              'bg-green-50 border-green-300'
+            ) : 'bg-orange-50 border-orange-300'
+          } border-2`}>
+            <div className="flex items-center justify-between">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">提出締切</label>
+                <h3 className="text-lg font-bold text-gray-800">
+                  📅 {targetMonth}月{targetPeriod === 'first' ? '前半' : '後半'}の提出締切
+                </h3>
                 {!isEditingDeadline ? (
-                  <div className="flex gap-2">
-                    <div className="flex-1 px-3 py-2 bg-gray-50 rounded-lg text-sm">
-                      {deadline ? format(new Date(deadline), 'yyyy年M月d日(E)', { locale: ja }) : '未設定'}
-                    </div>
-                    <button
-                      onClick={handleOpenDeadlineEdit}
-                      className="btn-secondary whitespace-nowrap"
-                    >
-                      設定
-                    </button>
+                  <div className="mt-2">
+                    {deadline ? (
+                      <div className="space-y-1">
+                        <div className="text-xl font-bold">
+                          {format(new Date(deadline.deadline_date), 'yyyy年M月d日(E)', { locale: ja })}
+                          {daysUntilDeadline !== null && (
+                            <span className={`ml-3 text-sm ${
+                              daysUntilDeadline < 0 ? 'text-gray-500' :
+                              daysUntilDeadline === 0 ? 'text-red-600 font-bold' :
+                              daysUntilDeadline <= 3 ? 'text-red-600' :
+                              daysUntilDeadline <= 7 ? 'text-yellow-600' :
+                              'text-green-600'
+                            }`}>
+                              {daysUntilDeadline < 0 ? '（締切終了）' :
+                               daysUntilDeadline === 0 ? '⚠️ 本日締切！' :
+                               `あと${daysUntilDeadline}日`}
+                            </span>
+                          )}
+                        </div>
+                        {deadline.notification_message && (
+                          <div className="text-sm text-gray-600 bg-white/50 px-3 py-2 rounded">
+                            💬 {deadline.notification_message}
+                          </div>
+                        )}
+                        {deadline.change_count > 0 && (
+                          <div className="text-xs text-orange-600">
+                            ⚠️ {deadline.change_count}回変更されました（最終更新: {format(new Date(deadline.updated_at), 'M/d H:mm')}）
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="text-orange-700">未設定 - 締切を設定してください</div>
+                    )}
                   </div>
                 ) : (
-                  <div className="flex gap-2">
-                    <input
-                      type="date"
-                      value={deadlineInput}
-                      onChange={(e) => setDeadlineInput(e.target.value)}
-                      className="input-field flex-1"
-                    />
-                    <button
-                      onClick={handleSaveDeadline}
-                      className="btn-primary whitespace-nowrap"
-                    >
-                      保存
-                    </button>
-                    <button
-                      onClick={() => setIsEditingDeadline(false)}
-                      className="btn-secondary whitespace-nowrap"
-                    >
-                      キャンセル
-                    </button>
+                  <div className="mt-3 space-y-3">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">締切日</label>
+                      <input
+                        type="date"
+                        value={deadlineInput}
+                        onChange={(e) => setDeadlineInput(e.target.value)}
+                        className="input-field w-48"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">告知メッセージ（オプション）</label>
+                      <input
+                        type="text"
+                        value={notificationMessage}
+                        onChange={(e) => setNotificationMessage(e.target.value)}
+                        placeholder="例: 早めの提出をお願いします"
+                        className="input-field w-full"
+                      />
+                    </div>
                   </div>
                 )}
               </div>
-            )}
+              <div className="flex flex-col gap-2">
+                {!isEditingDeadline ? (
+                  <>
+                    <button onClick={handleOpenDeadlineEdit} className="btn-primary whitespace-nowrap">
+                      {deadline ? '変更' : '設定'}
+                    </button>
+                    {deadline && (
+                      <button onClick={handleDeleteDeadline} className="btn-secondary text-red-600 whitespace-nowrap text-sm">
+                        削除
+                      </button>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <button onClick={handleSaveDeadline} className="btn-primary whitespace-nowrap">
+                      💾 保存
+                    </button>
+                    <button onClick={() => setIsEditingDeadline(false)} className="btn-secondary whitespace-nowrap">
+                      キャンセル
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
           </div>
-        </div>
+        )}
 
         {loading ? (
           <div className="card text-center py-12">
@@ -429,16 +608,25 @@ export default function ShiftRequestManagement({ role, storeId, onLogout }: Shif
 
             {/* 対象日一覧 */}
             <div className="card">
-              <h2 className="text-lg font-bold text-gray-800 mb-4">対象期間</h2>
+              <h2 className="text-lg font-bold text-gray-800 mb-4">
+                対象期間: {targetMonth}月{targetPeriod === 'first' ? '前半（1〜15日）' : `後半（16〜${getDaysInMonth(new Date(targetYear, targetMonth - 1))}日）`}
+              </h2>
               <div className="flex flex-wrap gap-2">
-                {weekDates.map(date => (
-                  <div
-                    key={date.toISOString()}
-                    className="px-4 py-2 bg-gray-100 rounded-lg text-sm"
-                  >
-                    {format(date, 'M月d日(E)', { locale: ja })}
-                  </div>
-                ))}
+                {periodDates.map(date => {
+                  const dayOfWeek = date.getDay();
+                  return (
+                    <div
+                      key={date.toISOString()}
+                      className={`px-4 py-2 rounded-lg text-sm ${
+                        dayOfWeek === 0 ? 'bg-red-100 text-red-700' :
+                        dayOfWeek === 6 ? 'bg-blue-100 text-blue-700' :
+                        'bg-gray-100 text-gray-700'
+                      }`}
+                    >
+                      {format(date, 'M/d(E)', { locale: ja })}
+                    </div>
+                  );
+                })}
               </div>
             </div>
           </>

@@ -700,10 +700,12 @@ app.delete('/shift-requests/:id', async (c) => {
 
 // ==================== その他のAPI ====================
 
-// シフト締切一覧取得
+// シフト締切一覧取得（新スキーマ: 年/月/期間別）
 app.get('/shift-deadlines', async (c) => {
   const storeId = c.req.query('store_id')
+  const targetYear = c.req.query('target_year')
   const targetMonth = c.req.query('target_month')
+  const targetPeriod = c.req.query('target_period') // 'first' or 'second'
   
   let query = 'SELECT * FROM shift_deadlines WHERE 1=1'
   const params: any[] = []
@@ -713,23 +715,35 @@ app.get('/shift-deadlines', async (c) => {
     params.push(storeId)
   }
   
+  if (targetYear) {
+    query += ' AND target_year = ?'
+    params.push(targetYear)
+  }
+  
   if (targetMonth) {
     query += ' AND target_month = ?'
     params.push(targetMonth)
   }
   
+  if (targetPeriod) {
+    query += ' AND target_period = ?'
+    params.push(targetPeriod)
+  }
+  
+  query += ' ORDER BY target_year DESC, target_month DESC, target_period'
+  
   const { results } = await c.env.DB.prepare(query).bind(...params).all()
   return c.json(results)
 })
 
-// シフト締切追加
+// シフト締切追加（新スキーマ）
 app.post('/shift-deadlines', async (c) => {
-  const { store_id, target_month, deadline_date } = await c.req.json()
+  const { store_id, target_year, target_month, target_period, deadline_date, notification_message } = await c.req.json()
   
   const result = await c.env.DB.prepare(`
-    INSERT INTO shift_deadlines (store_id, target_month, deadline_date)
-    VALUES (?, ?, ?)
-  `).bind(store_id, target_month, deadline_date).run()
+    INSERT INTO shift_deadlines (store_id, target_year, target_month, target_period, deadline_date, notification_message, is_changed, change_count)
+    VALUES (?, ?, ?, ?, ?, ?, 0, 0)
+  `).bind(store_id, target_year, target_month, target_period, deadline_date, notification_message || null).run()
 
   const newDeadline = await c.env.DB.prepare('SELECT * FROM shift_deadlines WHERE id = ?')
     .bind(result.meta.last_row_id).first()
@@ -737,17 +751,31 @@ app.post('/shift-deadlines', async (c) => {
   return c.json(newDeadline)
 })
 
-// シフト締切更新
+// シフト締切更新（変更フラグと回数もセット）
 app.put('/shift-deadlines/:id', async (c) => {
   const id = c.req.param('id')
-  const { deadline_date } = await c.req.json()
+  const { deadline_date, notification_message, reset_changed } = await c.req.json()
   
-  await c.env.DB.prepare(`
-    UPDATE shift_deadlines SET 
-      deadline_date = ?,
-      updated_at = CURRENT_TIMESTAMP
-    WHERE id = ?
-  `).bind(deadline_date, id).run()
+  // reset_changedがtrueの場合、is_changedを0にリセット（従業員が確認した後）
+  if (reset_changed) {
+    await c.env.DB.prepare(`
+      UPDATE shift_deadlines SET 
+        is_changed = 0,
+        updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `).bind(id).run()
+  } else {
+    // 通常の更新：変更フラグを立てて変更回数を増やす
+    await c.env.DB.prepare(`
+      UPDATE shift_deadlines SET 
+        deadline_date = ?,
+        notification_message = ?,
+        is_changed = 1,
+        change_count = change_count + 1,
+        updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `).bind(deadline_date, notification_message || null, id).run()
+  }
 
   const updatedDeadline = await c.env.DB.prepare('SELECT * FROM shift_deadlines WHERE id = ?')
     .bind(id).first()
@@ -760,6 +788,34 @@ app.delete('/shift-deadlines/:id', async (c) => {
   const id = c.req.param('id')
   await c.env.DB.prepare('DELETE FROM shift_deadlines WHERE id = ?').bind(id).run()
   return c.json({ success: true })
+})
+
+// 従業員用: 自店舗の締切情報を取得（告知用）
+app.get('/shift-deadlines/for-employee', async (c) => {
+  const storeId = c.req.query('store_id')
+  
+  if (!storeId) {
+    return c.json({ error: 'store_id is required' }, 400)
+  }
+  
+  // 現在の日付から対象となる締切を取得（今月と来月）
+  const now = new Date()
+  const currentYear = now.getFullYear()
+  const currentMonth = now.getMonth() + 1
+  const nextMonth = currentMonth === 12 ? 1 : currentMonth + 1
+  const nextYear = currentMonth === 12 ? currentYear + 1 : currentYear
+  
+  const { results } = await c.env.DB.prepare(`
+    SELECT * FROM shift_deadlines 
+    WHERE store_id = ?
+    AND (
+      (target_year = ? AND target_month >= ?)
+      OR (target_year = ? AND target_month <= ?)
+    )
+    ORDER BY target_year ASC, target_month ASC, target_period
+  `).bind(storeId, currentYear, currentMonth, nextYear, nextMonth).all()
+  
+  return c.json(results)
 })
 
 // ==================== お知らせAPI ====================
