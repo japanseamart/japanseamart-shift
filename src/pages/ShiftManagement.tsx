@@ -817,76 +817,78 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
             </div>
           </div>
 
-          {/* 人件費サマリー */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4" data-salary>
-            {/* 期間人件費 */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                {targetPeriod === 'first' ? '前半' : '後半'}人件費
-                {periodStatus === 'danger' && <span className="ml-2 text-xs text-red-600 font-bold">🔴 予算超過</span>}
-                {periodStatus === 'warning' && <span className="ml-2 text-xs text-yellow-600 font-bold">🟡 予算警告</span>}
-              </label>
-              <div className={`rounded-lg p-3 ${
-                periodStatus === 'danger' ? 'bg-gradient-to-r from-red-50 to-red-100 border-2 border-red-300' :
-                periodStatus === 'warning' ? 'bg-gradient-to-r from-yellow-50 to-yellow-100 border-2 border-yellow-300' :
-                'bg-gradient-to-r from-ocean-50 to-ocean-100'
-              }`}>
-                <div className={`text-xl font-bold ${
-                  periodStatus === 'danger' ? 'text-red-900' : periodStatus === 'warning' ? 'text-yellow-900' : 'text-ocean-900'
+          {/* 人件費サマリー（本部のみ表示） */}
+          {role === 'admin' && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4" data-salary>
+              {/* 期間人件費 */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  {targetPeriod === 'first' ? '前半' : '後半'}人件費
+                  {periodStatus === 'danger' && <span className="ml-2 text-xs text-red-600 font-bold">🔴 予算超過</span>}
+                  {periodStatus === 'warning' && <span className="ml-2 text-xs text-yellow-600 font-bold">🟡 予算警告</span>}
+                </label>
+                <div className={`rounded-lg p-3 ${
+                  periodStatus === 'danger' ? 'bg-gradient-to-r from-red-50 to-red-100 border-2 border-red-300' :
+                  periodStatus === 'warning' ? 'bg-gradient-to-r from-yellow-50 to-yellow-100 border-2 border-yellow-300' :
+                  'bg-gradient-to-r from-ocean-50 to-ocean-100'
                 }`}>
-                  ¥{totalLaborCost.toLocaleString()}
-                </div>
-                {periodBudget > 0 && (
-                  <div className="text-xs text-gray-600 mt-1">
-                    <div className="flex justify-between items-center mb-1">
-                      <span>半期予算: ¥{periodBudget.toLocaleString()}</span>
-                      <span className={`font-bold ${
-                        periodStatus === 'danger' ? 'text-red-600' : periodStatus === 'warning' ? 'text-yellow-600' : 'text-gray-700'
-                      }`}>{Math.round(budgetUsagePercent)}%</span>
-                    </div>
-                    <div className="w-full bg-gray-200 rounded-full h-1.5">
-                      <div className={`h-1.5 rounded-full transition-all ${
-                        periodStatus === 'danger' ? 'bg-red-500' : periodStatus === 'warning' ? 'bg-yellow-500' : 'bg-green-500'
-                      }`} style={{ width: `${Math.min(budgetUsagePercent, 100)}%` }} />
-                    </div>
+                  <div className={`text-xl font-bold ${
+                    periodStatus === 'danger' ? 'text-red-900' : periodStatus === 'warning' ? 'text-yellow-900' : 'text-ocean-900'
+                  }`}>
+                    ¥{totalLaborCost.toLocaleString()}
                   </div>
-                )}
+                  {periodBudget > 0 && (
+                    <div className="text-xs text-gray-600 mt-1">
+                      <div className="flex justify-between items-center mb-1">
+                        <span>半期予算: ¥{periodBudget.toLocaleString()}</span>
+                        <span className={`font-bold ${
+                          periodStatus === 'danger' ? 'text-red-600' : periodStatus === 'warning' ? 'text-yellow-600' : 'text-gray-700'
+                        }`}>{Math.round(budgetUsagePercent)}%</span>
+                      </div>
+                      <div className="w-full bg-gray-200 rounded-full h-1.5">
+                        <div className={`h-1.5 rounded-full transition-all ${
+                          periodStatus === 'danger' ? 'bg-red-500' : periodStatus === 'warning' ? 'bg-yellow-500' : 'bg-green-500'
+                        }`} style={{ width: `${Math.min(budgetUsagePercent, 100)}%` }} />
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
 
-            {/* 月末人件費予想 */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                {targetMonth}月末 人件費予想
-                {monthlyStatus === 'danger' && <span className="ml-2 text-xs text-red-600 font-bold">🔴 予算超過</span>}
-                {monthlyStatus === 'warning' && <span className="ml-2 text-xs text-yellow-600 font-bold">🟡 予算警告</span>}
-              </label>
-              <div className={`rounded-lg p-3 ${
-                monthlyStatus === 'danger' ? 'bg-gradient-to-r from-red-50 to-red-100 border-2 border-red-300' :
-                monthlyStatus === 'warning' ? 'bg-gradient-to-r from-yellow-50 to-yellow-100 border-2 border-yellow-300' :
-                'bg-gradient-to-r from-blue-50 to-blue-100'
-              }`}>
-                <div className={`text-xl font-bold ${
-                  monthlyStatus === 'danger' ? 'text-red-900' : monthlyStatus === 'warning' ? 'text-yellow-900' : 'text-blue-900'
+              {/* 月末人件費予想 */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  {targetMonth}月末 人件費予想
+                  {monthlyStatus === 'danger' && <span className="ml-2 text-xs text-red-600 font-bold">🔴 予算超過</span>}
+                  {monthlyStatus === 'warning' && <span className="ml-2 text-xs text-yellow-600 font-bold">🟡 予算警告</span>}
+                </label>
+                <div className={`rounded-lg p-3 ${
+                  monthlyStatus === 'danger' ? 'bg-gradient-to-r from-red-50 to-red-100 border-2 border-red-300' :
+                  monthlyStatus === 'warning' ? 'bg-gradient-to-r from-yellow-50 to-yellow-100 border-2 border-yellow-300' :
+                  'bg-gradient-to-r from-blue-50 to-blue-100'
                 }`}>
-                  ¥{monthlyLaborCostForecast.toLocaleString()}
-                </div>
-                {selectedStore && selectedStore.monthly_budget > 0 && (
-                  <div className="text-xs text-gray-600 mt-1">
-                    <div className="flex justify-between items-center mb-1">
-                      <span>月予算: ¥{selectedStore.monthly_budget.toLocaleString()}</span>
-                      <span className="font-bold">{Math.round(monthlyLaborCostForecast / selectedStore.monthly_budget * 100)}%</span>
-                    </div>
-                    <div className="w-full bg-gray-200 rounded-full h-1.5">
-                      <div className={`h-1.5 rounded-full transition-all ${
-                        monthlyStatus === 'danger' ? 'bg-red-500' : monthlyStatus === 'warning' ? 'bg-yellow-500' : 'bg-green-500'
-                      }`} style={{ width: `${Math.min(monthlyLaborCostForecast / selectedStore.monthly_budget * 100, 100)}%` }} />
-                    </div>
+                  <div className={`text-xl font-bold ${
+                    monthlyStatus === 'danger' ? 'text-red-900' : monthlyStatus === 'warning' ? 'text-yellow-900' : 'text-blue-900'
+                  }`}>
+                    ¥{monthlyLaborCostForecast.toLocaleString()}
                   </div>
-                )}
+                  {selectedStore && selectedStore.monthly_budget > 0 && (
+                    <div className="text-xs text-gray-600 mt-1">
+                      <div className="flex justify-between items-center mb-1">
+                        <span>月予算: ¥{selectedStore.monthly_budget.toLocaleString()}</span>
+                        <span className="font-bold">{Math.round(monthlyLaborCostForecast / selectedStore.monthly_budget * 100)}%</span>
+                      </div>
+                      <div className="w-full bg-gray-200 rounded-full h-1.5">
+                        <div className={`h-1.5 rounded-full transition-all ${
+                          monthlyStatus === 'danger' ? 'bg-red-500' : monthlyStatus === 'warning' ? 'bg-yellow-500' : 'bg-green-500'
+                        }`} style={{ width: `${Math.min(monthlyLaborCostForecast / selectedStore.monthly_budget * 100, 100)}%` }} />
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
-          </div>
+          )}
 
           {/* 公開状態インジケーター */}
           <div className={`mt-4 p-3 rounded-lg border-2 no-print ${isPublished ? 'bg-green-50 border-green-300' : 'bg-yellow-50 border-yellow-300'}`}>
@@ -906,14 +908,14 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
           </div>
 
           {/* ビューモード切り替え */}
-          <div className="mt-4 grid grid-cols-3 md:grid-cols-5 gap-2 no-print">
+          <div className={`mt-4 grid gap-2 no-print ${role === 'admin' ? 'grid-cols-3 md:grid-cols-5' : 'grid-cols-2 md:grid-cols-4'}`}>
             {[
-              { mode: 'table', label: '📅 表', desc: '' },
-              { mode: 'list', label: '👥 従業員', desc: '' },
-              { mode: 'day', label: '📆 日別', desc: '' },
-              { mode: 'heatmap', label: '🔥 ヒート', desc: '' },
-              { mode: 'cost', label: '💰 人件費', desc: '' }
-            ].map(({ mode, label }) => (
+              { mode: 'table', label: '📅 表', desc: '', adminOnly: false },
+              { mode: 'list', label: '👥 従業員', desc: '', adminOnly: false },
+              { mode: 'day', label: '📆 日別', desc: '', adminOnly: false },
+              { mode: 'heatmap', label: '🔥 ヒート', desc: '', adminOnly: false },
+              { mode: 'cost', label: '💰 人件費', desc: '', adminOnly: true }
+            ].filter(item => !item.adminOnly || role === 'admin').map(({ mode, label }) => (
               <button key={mode} onClick={() => setViewMode(mode as typeof viewMode)}
                 className={`h-12 rounded-lg text-sm font-medium transition-all ${
                   viewMode === mode ? 'bg-ocean-600 text-white shadow-md' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
@@ -1118,7 +1120,7 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
                               className="cursor-pointer bg-ocean-600 hover:bg-ocean-700 text-white rounded px-1 py-1 text-xs transition-colors">
                               <div className="font-medium">{shift.start_time.slice(0, 5)}-{shift.end_time.slice(0, 5)}</div>
                               {shift.break_minutes > 0 && <div className="text-[9px] opacity-75">休{shift.break_minutes}分</div>}
-                              <div className="text-[10px] opacity-90" data-salary>¥{calculateLaborCost(shift, employee).toLocaleString()}</div>
+                              {role === 'admin' && <div className="text-[10px] opacity-90" data-salary>¥{calculateLaborCost(shift, employee).toLocaleString()}</div>}
                             </div>
                           ) : (
                             <button onClick={() => handleAddShift(employee.id, dateStr)}
@@ -1145,12 +1147,14 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
                   <div className="bg-ocean-500 text-white px-4 py-3 -m-6 mb-4 rounded-t-lg flex justify-between items-center">
                     <div>
                       <h3 className="text-lg font-bold">👤 {employee.name}</h3>
-                      <p className="text-sm opacity-90">時給 ¥{employee.hourly_wage?.toLocaleString()}</p>
+                      {/* 時給は本部のみ表示 */}
+                      {role === 'admin' && <p className="text-sm opacity-90">時給 ¥{employee.hourly_wage?.toLocaleString()}</p>}
                     </div>
                     <div className="text-right">
                       <div className="text-sm">シフト数</div>
                       <div className="text-2xl font-bold">{employeeShifts.length}日</div>
-                      <div className="text-sm" data-salary>¥{totalCost.toLocaleString()}</div>
+                      {/* 人件費は本部のみ表示 */}
+                      {role === 'admin' && <div className="text-sm" data-salary>¥{totalCost.toLocaleString()}</div>}
                     </div>
                   </div>
                   <div className="space-y-2">
@@ -1168,7 +1172,7 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
                             </div>
                           </div>
                           <div className="text-right">
-                            <div className="font-bold" data-salary>¥{calculateLaborCost(shift, employee).toLocaleString()}</div>
+                            {role === 'admin' && <div className="font-bold" data-salary>¥{calculateLaborCost(shift, employee).toLocaleString()}</div>}
                             <button onClick={(e) => { e.stopPropagation(); handleDeleteShift(shift.id); }}
                               className="text-xs text-red-600 hover:text-red-800">削除</button>
                           </div>
@@ -1203,7 +1207,7 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
                     <div className="text-right">
                       <div className="text-sm">出勤</div>
                       <div className="text-2xl font-bold">{dayShifts.length}名</div>
-                      <div className="text-sm" data-salary>¥{totalDayCost.toLocaleString()}</div>
+                      {role === 'admin' && <div className="text-sm" data-salary>¥{totalDayCost.toLocaleString()}</div>}
                     </div>
                   </div>
                   {dayShifts.length === 0 ? (
@@ -1224,7 +1228,7 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
                               </div>
                             </div>
                             <div className="text-right">
-                              <div className="font-bold" data-salary>¥{calculateLaborCost(shift, emp).toLocaleString()}</div>
+                              {role === 'admin' && <div className="font-bold" data-salary>¥{calculateLaborCost(shift, emp).toLocaleString()}</div>}
                               <button onClick={(e) => { e.stopPropagation(); handleDeleteShift(shift.id); }}
                                 className="text-xs text-red-600 hover:text-red-800">削除</button>
                             </div>
@@ -1294,8 +1298,8 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
           </div>
         )}
 
-        {/* 日別人件費ビュー */}
-        {viewMode === 'cost' && (
+        {/* 日別人件費ビュー（本部のみ） */}
+        {viewMode === 'cost' && role === 'admin' && (
           <div className="card">
             <h3 className="text-lg font-bold text-gray-800 mb-4">💰 日別人件費一覧</h3>
             {/* 予算目安 */}

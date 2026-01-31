@@ -344,7 +344,8 @@ export default function EmployeeManagement({ role, storeId, onLogout }: Employee
                   </select>
                 </div>
 
-                {formData.employment_type !== 'full_time' && (
+                {/* 時給入力は本部のみ */}
+                {role === 'admin' && formData.employment_type !== 'full_time' && (
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       時給（円） <span className="text-red-500">*</span>
@@ -391,8 +392,9 @@ export default function EmployeeManagement({ role, storeId, onLogout }: Employee
                 onChange={(e) => setSortBy(e.target.value as 'wage_asc' | 'wage_desc' | 'employment_type')}
                 className="input-field"
               >
-                <option value="wage_asc">時給（低い順）</option>
-                <option value="wage_desc">時給（高い順）</option>
+                {/* 時給ソートは本部のみ */}
+                {role === 'admin' && <option value="wage_asc">時給（低い順）</option>}
+                {role === 'admin' && <option value="wage_desc">時給（高い順）</option>}
                 <option value="employment_type">給与タイプ</option>
               </select>
             </div>
@@ -414,7 +416,8 @@ export default function EmployeeManagement({ role, storeId, onLogout }: Employee
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">氏名</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">所属店舗</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">給与タイプ</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">時給</th>
+                  {/* 時給は本部のみ表示 */}
+                  {role === 'admin' && <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">時給</th>}
                   <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">操作</th>
                 </tr>
               </thead>
@@ -435,9 +438,12 @@ export default function EmployeeManagement({ role, storeId, onLogout }: Employee
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                         {employmentTypeLabel(employee.employment_type)}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {employee.hourly_wage ? `¥${employee.hourly_wage.toLocaleString()}` : '-'}
-                      </td>
+                      {/* 時給は本部のみ表示 */}
+                      {role === 'admin' && (
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          {employee.hourly_wage ? `¥${employee.hourly_wage.toLocaleString()}` : '-'}
+                        </td>
+                      )}
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-2">
                         <button
                           onClick={() => handleEdit(employee)}
@@ -486,7 +492,8 @@ export default function EmployeeManagement({ role, storeId, onLogout }: Employee
                           <span className="text-ocean-600">💼</span>
                           <span>{employmentTypeLabel(employee.employment_type)}</span>
                         </div>
-                        {employee.hourly_wage && (
+                        {/* 時給は本部のみ表示 */}
+                        {role === 'admin' && employee.hourly_wage && (
                           <div className="flex items-center gap-2">
                             <span className="text-ocean-600">💰</span>
                             <span className="font-bold text-ocean-700">
