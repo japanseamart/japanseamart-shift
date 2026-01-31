@@ -60,9 +60,15 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
   const [viewMode, setViewMode] = useState<'table' | 'list' | 'day' | 'heatmap' | 'cost'>('table');
   // const [requestsViewMode, setRequestsViewMode] = useState<'card' | 'table'>('card');
   
-  // 従業員並び順（画面内のみ保持）
+  // 従業員並び順（期間ごとにlocalStorageで保持）
   const [orderedEmployees, setOrderedEmployees] = useState<Employee[]>([]);
   const [draggedEmployee, setDraggedEmployee] = useState<Employee | null>(null);
+  
+  // 期間キーを生成（店舗ID-年-月-期間）
+  const getPeriodKey = () => {
+    const storeKey = isAllStores ? 'all' : selectedStoreId;
+    return `employee_order_${storeKey}_${targetYear}_${targetMonth}_${targetPeriod}`;
+  };
 
   // 期間の日付リストを計算
   const { start: periodStart, end: periodEnd } = getPeriodDates(targetYear, targetMonth, targetPeriod);
@@ -89,10 +95,43 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
     }
   }, [selectedStoreId, targetYear, targetMonth, targetPeriod, isAllStores]);
 
-  // 従業員リスト更新時に並び順をリセット
+  // 従業員リスト更新時に保存された並び順を復元、なければデフォルト順
   useEffect(() => {
-    setOrderedEmployees(employees);
-  }, [employees]);
+    if (employees.length === 0) {
+      setOrderedEmployees([]);
+      return;
+    }
+    
+    const periodKey = getPeriodKey();
+    const savedOrder = localStorage.getItem(periodKey);
+    
+    if (savedOrder) {
+      try {
+        const savedIds: number[] = JSON.parse(savedOrder);
+        // 保存された順序に従って従業員を並べ替え
+        const orderedList: Employee[] = [];
+        const employeeMap = new Map(employees.map(e => [e.id, e]));
+        
+        // 保存された順序の従業員を追加
+        savedIds.forEach(id => {
+          const emp = employeeMap.get(id);
+          if (emp) {
+            orderedList.push(emp);
+            employeeMap.delete(id);
+          }
+        });
+        
+        // 新しく追加された従業員（保存されていなかった）を末尾に追加
+        employeeMap.forEach(emp => orderedList.push(emp));
+        
+        setOrderedEmployees(orderedList);
+      } catch {
+        setOrderedEmployees(employees);
+      }
+    } else {
+      setOrderedEmployees(employees);
+    }
+  }, [employees, targetYear, targetMonth, targetPeriod, selectedStoreId, isAllStores]);
 
   useEffect(() => {
     calculateTotalLaborCost();
@@ -686,6 +725,11 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
       newOrder.splice(draggedIndex, 1);
       newOrder.splice(targetIndex, 0, draggedEmployee);
       setOrderedEmployees(newOrder);
+      
+      // 選択期間ごとにlocalStorageに保存
+      const periodKey = getPeriodKey();
+      const orderIds = newOrder.map(e => e.id);
+      localStorage.setItem(periodKey, JSON.stringify(orderIds));
     }
   };
 
