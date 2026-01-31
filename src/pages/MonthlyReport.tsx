@@ -620,23 +620,19 @@ export default function MonthlyReport({ role, storeId, onLogout }: MonthlyReport
               const colorScheme = periodTab === 'all' ? 'ocean' :
                 periodTab === 'first' ? 'purple' : 'indigo';
               
-              // 本部のみ人件費を表示、店舗はシフト数と労働時間のみ
               return (
-                <div className={`grid grid-cols-1 md:grid-cols-2 ${role === 'admin' ? 'lg:grid-cols-4' : ''} gap-4`}>
-                  {/* 人件費（本部のみ） */}
-                  {role === 'admin' && (
-                    <div className={`card bg-gradient-to-br from-${colorScheme}-50 to-${colorScheme}-100`}>
-                      <div className={`text-sm text-${colorScheme}-700 mb-1`}>人件費</div>
-                      <div className={`text-3xl font-bold text-${colorScheme}-900`}>
-                        ¥{cost.toLocaleString()}
-                      </div>
-                      {budget > 0 && (
-                        <div className={`text-xs mt-2 ${budgetUsage > 100 ? 'text-red-600' : `text-${colorScheme}-600`}`}>
-                          予算使用率: {budgetUsage}%
-                        </div>
-                      )}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                  <div className={`card bg-gradient-to-br from-${colorScheme}-50 to-${colorScheme}-100`}>
+                    <div className={`text-sm text-${colorScheme}-700 mb-1`}>人件費</div>
+                    <div className={`text-3xl font-bold text-${colorScheme}-900`}>
+                      ¥{cost.toLocaleString()}
                     </div>
-                  )}
+                    {budget > 0 && (
+                      <div className={`text-xs mt-2 ${budgetUsage > 100 ? 'text-red-600' : `text-${colorScheme}-600`}`}>
+                        予算使用率: {budgetUsage}%
+                      </div>
+                    )}
+                  </div>
 
                   <div className="card bg-gradient-to-br from-blue-50 to-blue-100">
                     <div className="text-sm text-blue-700 mb-1">労働時間</div>
@@ -660,24 +656,21 @@ export default function MonthlyReport({ role, storeId, onLogout }: MonthlyReport
                     </div>
                   </div>
 
-                  {/* 平均人件費（本部のみ） */}
-                  {role === 'admin' && (
-                    <div className="card bg-gradient-to-br from-yellow-50 to-yellow-100">
-                      <div className="text-sm text-yellow-700 mb-1">平均人件費</div>
-                      <div className="text-3xl font-bold text-yellow-900">
-                        ¥{shifts > 0 ? Math.round(cost / shifts).toLocaleString() : 0}
-                      </div>
-                      <div className="text-xs text-yellow-600 mt-2">
-                        1シフトあたり
-                      </div>
+                  <div className="card bg-gradient-to-br from-yellow-50 to-yellow-100">
+                    <div className="text-sm text-yellow-700 mb-1">平均人件費</div>
+                    <div className="text-3xl font-bold text-yellow-900">
+                      ¥{shifts > 0 ? Math.round(cost / shifts).toLocaleString() : 0}
                     </div>
-                  )}
+                    <div className="text-xs text-yellow-600 mt-2">
+                      1シフトあたり
+                    </div>
+                  </div>
                 </div>
               );
             })()}
 
-            {/* 予算比較 - 期間に応じて表示（本部のみ） */}
-            {role === 'admin' && selectedStore?.monthly_budget && (() => {
+            {/* 予算比較 - 期間に応じて表示 */}
+            {selectedStore?.monthly_budget && (() => {
               const rawStats = periodTab === 'all' ? stats :
                 periodTab === 'first' ? firstHalfStats : secondHalfStats;
               const budget = periodTab === 'all' 
@@ -781,9 +774,8 @@ export default function MonthlyReport({ role, storeId, onLogout }: MonthlyReport
                           <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">雇用形態</th>
                           <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">シフト数</th>
                           <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">総労働時間</th>
-                          {/* 人件費関連は本部のみ */}
-                          {role === 'admin' && <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">総人件費</th>}
-                          {role === 'admin' && <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">平均/シフト</th>}
+                          <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">総人件費</th>
+                          <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">平均/シフト</th>
                         </tr>
                       </thead>
                       <tbody className="bg-white divide-y divide-gray-200">
@@ -803,17 +795,12 @@ export default function MonthlyReport({ role, storeId, onLogout }: MonthlyReport
                             <td className="px-4 py-3 whitespace-nowrap text-right text-sm">
                               {empStat.totalHours}h
                             </td>
-                            {/* 人件費関連は本部のみ */}
-                            {role === 'admin' && (
-                              <td className="px-4 py-3 whitespace-nowrap text-right text-sm font-medium">
-                                ¥{empStat.totalCost.toLocaleString()}
-                              </td>
-                            )}
-                            {role === 'admin' && (
-                              <td className="px-4 py-3 whitespace-nowrap text-right text-sm text-gray-500">
-                                ¥{empStat.shifts > 0 ? Math.round(empStat.totalCost / empStat.shifts).toLocaleString() : 0}
-                              </td>
-                            )}
+                            <td className="px-4 py-3 whitespace-nowrap text-right text-sm font-medium">
+                              ¥{empStat.totalCost.toLocaleString()}
+                            </td>
+                            <td className="px-4 py-3 whitespace-nowrap text-right text-sm text-gray-500">
+                              ¥{empStat.shifts > 0 ? Math.round(empStat.totalCost / empStat.shifts).toLocaleString() : 0}
+                            </td>
                           </tr>
                         ))}
                       </tbody>
@@ -824,19 +811,14 @@ export default function MonthlyReport({ role, storeId, onLogout }: MonthlyReport
                           <td className="px-4 py-3 text-right font-bold text-gray-900">
                             {totalWorkHours}h
                           </td>
-                          {/* 人件費関連は本部のみ */}
-                          {role === 'admin' && (
-                            <td className="px-4 py-3 text-right font-bold text-gray-900">
-                              ¥{totalCost.toLocaleString()}
-                            </td>
-                          )}
-                          {role === 'admin' && (
-                            <td className="px-4 py-3 text-right font-bold text-gray-900">
-                              ¥{totalShifts > 0 
-                                ? Math.round(totalCost / totalShifts).toLocaleString() 
-                                : 0}
-                            </td>
-                          )}
+                          <td className="px-4 py-3 text-right font-bold text-gray-900">
+                            ¥{totalCost.toLocaleString()}
+                          </td>
+                          <td className="px-4 py-3 text-right font-bold text-gray-900">
+                            ¥{totalShifts > 0 
+                              ? Math.round(totalCost / totalShifts).toLocaleString() 
+                              : 0}
+                          </td>
                         </tr>
                       </tfoot>
                     </table>
@@ -860,19 +842,16 @@ export default function MonthlyReport({ role, storeId, onLogout }: MonthlyReport
                   >
                     👥 人数
                   </button>
-                  {/* 人件費ヒートマップは本部のみ */}
-                  {role === 'admin' && (
-                    <button
-                      onClick={() => setHeatmapMode('cost')}
-                      className={`px-3 py-1 rounded text-sm font-medium transition ${
-                        heatmapMode === 'cost'
-                          ? 'bg-ocean-600 text-white'
-                          : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                      }`}
-                    >
-                      💰 人件費
-                    </button>
-                  )}
+                  <button
+                    onClick={() => setHeatmapMode('cost')}
+                    className={`px-3 py-1 rounded text-sm font-medium transition ${
+                      heatmapMode === 'cost'
+                        ? 'bg-ocean-600 text-white'
+                        : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                    }`}
+                  >
+                    💰 人件費
+                  </button>
                 </div>
               </div>
               
@@ -929,8 +908,8 @@ export default function MonthlyReport({ role, storeId, onLogout }: MonthlyReport
               </div>
             </div>
 
-            {/* 日別推移グラフ - 期間に応じて表示（本部のみ） */}
-            {role === 'admin' && (() => {
+            {/* 日別推移グラフ - 期間に応じて表示 */}
+            {(() => {
               const currentDailyData = periodTab === 'all' ? dailyData :
                 periodTab === 'first' ? firstHalfDailyData : secondHalfDailyData;
               const budget = periodTab === 'all' 

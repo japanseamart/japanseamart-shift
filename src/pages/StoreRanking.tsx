@@ -230,9 +230,7 @@ export default function StoreRanking({ role, storeId, onLogout }: StoreRankingPr
         <div className="flex flex-col gap-3">
           <h1 className="text-xl md:text-2xl font-bold text-gray-800">🏆 店舗ランキング</h1>
           <p className="text-sm text-gray-600">
-            {role === 'admin' 
-              ? '各店舗の人件費・予算消化率を比較して、自店舗の立ち位置を確認できます'
-              : '各店舗の従業員数・シフト数を比較して、自店舗の立ち位置を確認できます'}
+            各店舗の人件費・予算消化率を比較して、自店舗の立ち位置を確認できます
           </p>
         </div>
 
@@ -286,8 +284,7 @@ export default function StoreRanking({ role, storeId, onLogout }: StoreRankingPr
               </div>
             </div>
 
-            {/* ソート選択（本部のみ） */}
-            {role === 'admin' && (
+            {/* ソート選択 */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">並び順</label>
               <div className="flex gap-2">
@@ -308,7 +305,6 @@ export default function StoreRanking({ role, storeId, onLogout }: StoreRankingPr
                 </button>
               </div>
             </div>
-            )}
           </div>
         </div>
 
@@ -358,78 +354,55 @@ export default function StoreRanking({ role, storeId, onLogout }: StoreRankingPr
                     </div>
 
                     {/* 統計 */}
-                    <div className={`flex-1 grid grid-cols-2 ${role === 'admin' ? 'md:grid-cols-4' : 'md:grid-cols-2'} gap-4`}>
-                      {/* 人件費（本部のみ） */}
-                      {role === 'admin' && (
-                        <div className="bg-white rounded-lg p-3 border">
-                          <div className="text-xs text-gray-500 mb-1">
-                            {targetPeriod === 'first' ? '前半' : targetPeriod === 'second' ? '後半' : '月間'}人件費
-                          </div>
-                          <div className="text-lg font-bold text-gray-800" data-salary>
-                            ¥{stat.laborCost.toLocaleString()}
-                          </div>
-                        </div>
-                      )}
-
-                      {/* 予算消化率（本部のみ） */}
-                      {role === 'admin' && (
-                        <div className="bg-white rounded-lg p-3 border">
-                          <div className="text-xs text-gray-500 mb-1">予算消化率</div>
-                          <div className="flex items-center gap-2">
-                            <span className={`px-2 py-1 rounded text-sm font-bold ${getBudgetStatusColor(stat.budgetUsage)}`}>
-                              {Math.round(stat.budgetUsage)}%
-                            </span>
-                          </div>
-                          <div className="mt-2 w-full bg-gray-200 rounded-full h-2">
-                            <div
-                              className={`h-2 rounded-full transition-all ${
-                                stat.budgetUsage >= 100 ? 'bg-red-500' :
-                                stat.budgetUsage >= 90 ? 'bg-yellow-500' :
-                                'bg-green-500'
-                              }`}
-                              style={{ width: `${Math.min(stat.budgetUsage, 100)}%` }}
-                            />
-                          </div>
-                        </div>
-                      )}
-
-                      {/* 従業員数・シフト数（全員表示） */}
+                    <div className="flex-1 grid grid-cols-2 md:grid-cols-4 gap-4">
+                      {/* 人件費 */}
                       <div className="bg-white rounded-lg p-3 border">
-                        <div className="text-xs text-gray-500 mb-1">従業員数</div>
-                        <div className="text-lg font-bold text-gray-800">
-                          {stat.employeeCount}名
+                        <div className="text-xs text-gray-500 mb-1">
+                          {targetPeriod === 'first' ? '前半' : targetPeriod === 'second' ? '後半' : '月間'}人件費
+                        </div>
+                        <div className="text-lg font-bold text-gray-800" data-salary>
+                          ¥{stat.laborCost.toLocaleString()}
                         </div>
                       </div>
 
+                      {/* 予算消化率 */}
                       <div className="bg-white rounded-lg p-3 border">
-                        <div className="text-xs text-gray-500 mb-1">シフト数</div>
-                        <div className="text-lg font-bold text-gray-800">
-                          {stat.shiftCount}件
+                        <div className="text-xs text-gray-500 mb-1">予算消化率</div>
+                        <div className="flex items-center gap-2">
+                          <span className={`px-2 py-1 rounded text-sm font-bold ${getBudgetStatusColor(stat.budgetUsage)}`}>
+                            {Math.round(stat.budgetUsage)}%
+                          </span>
+                        </div>
+                        <div className="mt-2 w-full bg-gray-200 rounded-full h-2">
+                          <div
+                            className={`h-2 rounded-full transition-all ${
+                              stat.budgetUsage >= 100 ? 'bg-red-500' :
+                              stat.budgetUsage >= 90 ? 'bg-yellow-500' :
+                              'bg-green-500'
+                            }`}
+                            style={{ width: `${Math.min(stat.budgetUsage, 100)}%` }}
+                          />
                         </div>
                       </div>
 
-                      {/* 月末予想（本部のみ） */}
-                      {role === 'admin' && (
-                        <div className="bg-white rounded-lg p-3 border">
-                          <div className="text-xs text-gray-500 mb-1">月末予想</div>
-                          <div className="text-lg font-bold text-gray-800" data-salary>
-                            ¥{stat.monthlyForecast.toLocaleString()}
-                          </div>
-                          <div className={`text-xs ${forecastUsage >= 100 ? 'text-red-600' : 'text-gray-500'}`}>
-                            予算比 {Math.round(forecastUsage)}%
-                          </div>
+                      {/* 月末予想 */}
+                      <div className="bg-white rounded-lg p-3 border">
+                        <div className="text-xs text-gray-500 mb-1">月末予想</div>
+                        <div className="text-lg font-bold text-gray-800" data-salary>
+                          ¥{stat.monthlyForecast.toLocaleString()}
                         </div>
-                      )}
+                        <div className={`text-xs ${forecastUsage >= 100 ? 'text-red-600' : 'text-gray-500'}`}>
+                          予算比 {Math.round(forecastUsage)}%
+                        </div>
+                      </div>
 
-                      {/* 日平均（本部のみ） */}
-                      {role === 'admin' && (
-                        <div className="bg-white rounded-lg p-3 border">
-                          <div className="text-xs text-gray-500 mb-1">日平均人件費</div>
-                          <div className="text-lg font-bold text-gray-800" data-salary>
-                            ¥{stat.avgDailyCost.toLocaleString()}
-                          </div>
+                      {/* 日平均 */}
+                      <div className="bg-white rounded-lg p-3 border">
+                        <div className="text-xs text-gray-500 mb-1">日平均人件費</div>
+                        <div className="text-lg font-bold text-gray-800" data-salary>
+                          ¥{stat.avgDailyCost.toLocaleString()}
                         </div>
-                      )}
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -438,30 +411,28 @@ export default function StoreRanking({ role, storeId, onLogout }: StoreRankingPr
           </div>
         )}
 
-        {/* 凡例（本部のみ） */}
-        {role === 'admin' && (
-          <div className="card bg-gray-50">
-            <h3 className="text-sm font-bold text-gray-700 mb-3">📊 予算消化率の見方</h3>
-            <div className="flex flex-wrap gap-4 text-sm">
-              <div className="flex items-center gap-2">
-                <span className="px-2 py-1 rounded bg-green-400 text-white font-medium">〜79%</span>
-                <span className="text-gray-600">余裕あり</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="px-2 py-1 rounded bg-green-500 text-white font-medium">80〜89%</span>
-                <span className="text-gray-600">適正</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="px-2 py-1 rounded bg-yellow-500 text-white font-medium">90〜99%</span>
-                <span className="text-gray-600">注意</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="px-2 py-1 rounded bg-red-500 text-white font-medium">100%〜</span>
-                <span className="text-gray-600">超過</span>
-              </div>
+        {/* 凡例 */}
+        <div className="card bg-gray-50">
+          <h3 className="text-sm font-bold text-gray-700 mb-3">📊 予算消化率の見方</h3>
+          <div className="flex flex-wrap gap-4 text-sm">
+            <div className="flex items-center gap-2">
+              <span className="px-2 py-1 rounded bg-green-400 text-white font-medium">〜79%</span>
+              <span className="text-gray-600">余裕あり</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="px-2 py-1 rounded bg-green-500 text-white font-medium">80〜89%</span>
+              <span className="text-gray-600">適正</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="px-2 py-1 rounded bg-yellow-500 text-white font-medium">90〜99%</span>
+              <span className="text-gray-600">注意</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="px-2 py-1 rounded bg-red-500 text-white font-medium">100%〜</span>
+              <span className="text-gray-600">超過</span>
             </div>
           </div>
-        )}
+        </div>
       </div>
     </AdminLayout>
   );
