@@ -308,17 +308,65 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
     try {
       const monthStart = new Date(targetYear, targetMonth - 1, 1);
       const monthEnd = new Date(targetYear, targetMonth, 0);
+      const daysInMonth = monthEnd.getDate();
+      const today = new Date();
+      const currentDay = today.getFullYear() === targetYear && today.getMonth() + 1 === targetMonth 
+        ? today.getDate() 
+        : (targetMonth < today.getMonth() + 1 || targetYear < today.getFullYear()) ? daysInMonth : 0;
+      
       const res = await fetch(
         getApiUrl(`/api/shifts?store_id=${selectedStoreId}&start_date=${format(monthStart, 'yyyy-MM-dd')}&end_date=${format(monthEnd, 'yyyy-MM-dd')}`)
       );
       const monthlyShifts: Shift[] = await res.json();
 
-      let confirmedTotal = 0;
+      // 前半（1-15日）と後半（16日以降）に分けて集計
+      let firstHalfCost = 0;
+      let secondHalfCost = 0;
+      
       monthlyShifts.forEach(shift => {
         const employee = employees.find(e => e.id === shift.employee_id);
-        if (employee) confirmedTotal += calculateLaborCost(shift, employee);
+        if (employee) {
+          const day = parseInt(shift.date.split('-')[2]);
+          const cost = calculateLaborCost(shift, employee);
+          if (day <= 15) {
+            firstHalfCost += cost;
+          } else {
+            secondHalfCost += cost;
+          }
+        }
       });
-      setMonthlyLaborCostForecast(Math.round(confirmedTotal));
+
+      // 月末予測ロジック
+      let forecast = 0;
+      
+      if (currentDay <= 15) {
+        // 現在が前半の場合: 前半の日割りで月末を予測
+        const dailyAverage = currentDay > 0 ? firstHalfCost / currentDay : 0;
+        forecast = Math.round(dailyAverage * daysInMonth);
+      } else {
+        // 現在が後半の場合: 前半実績 + 後半の日割り予測
+        const firstHalfDays = 15;
+        const secondHalfDays = daysInMonth - 15;
+        const passedSecondHalfDays = currentDay - 15;
+        
+        if (passedSecondHalfDays > 0) {
+          const secondHalfDailyAverage = secondHalfCost / passedSecondHalfDays;
+          const secondHalfForecast = secondHalfDailyAverage * secondHalfDays;
+          forecast = Math.round(firstHalfCost + secondHalfForecast);
+        } else {
+          // 後半初日: 前半の日割りで後半を予測
+          const firstHalfDailyAverage = firstHalfCost / firstHalfDays;
+          forecast = Math.round(firstHalfCost + (firstHalfDailyAverage * secondHalfDays));
+        }
+      }
+      
+      // 過去の月の場合は実績をそのまま表示
+      if (targetYear < today.getFullYear() || 
+          (targetYear === today.getFullYear() && targetMonth < today.getMonth() + 1)) {
+        forecast = firstHalfCost + secondHalfCost;
+      }
+      
+      setMonthlyLaborCostForecast(forecast);
     } catch (error) {
       console.error('月間人件費計算エラー:', error);
     }
@@ -590,7 +638,7 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
 
   return (
     <AdminLayout role={role} storeId={storeId} onLogout={onLogout}>
-      <div className="space-y-6">
+      <div className={`space-y-6 ${showShiftForm ? 'pb-48 md:pb-32' : ''}`}>
         {/* ヘッダー */}
         <div className="flex flex-col gap-3">
           <div className="flex justify-between items-center">
@@ -847,42 +895,59 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
           </div>
         </div>
 
-        {/* シフト編集フォーム */}
+        {/* シフト編集フォーム - 画面下部に固定表示 */}
         {showShiftForm && editingShift && (
-          <div className="card bg-blue-50 border-2 border-blue-200">
-            <h3 className="font-bold text-gray-800 mb-4">{editingShift.id ? 'シフト編集' : 'シフト追加'}</h3>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">従業員</label>
-                <div className="input-field bg-gray-100">{employees.find(e => e.id === editingShift.employee_id)?.name}</div>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">日付</label>
-                <div className="input-field bg-gray-100">{format(new Date(editingShift.date), 'M月d日(E)', { locale: ja })}</div>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">開始時刻</label>
-                <input type="time" value={editingShift.start_time}
-                  onChange={(e) => setEditingShift({ ...editingShift, start_time: e.target.value })} className="input-field" />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">終了時刻</label>
-                <input type="time" value={editingShift.end_time}
-                  onChange={(e) => setEditingShift({ ...editingShift, end_time: e.target.value })} className="input-field" />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">休憩（分）</label>
-                <input type="number" value={editingShift.break_minutes}
-                  onChange={(e) => setEditingShift({ ...editingShift, break_minutes: Number(e.target.value) })}
-                  className="input-field" min="0" step="15" />
-              </div>
-              <div className="col-span-2 flex items-end gap-2">
-                <button onClick={handleSaveShift} disabled={saving} className="btn-primary flex-1">
-                  {saving ? '保存中...' : '保存'}
+          <div className="fixed bottom-0 left-0 right-0 z-50 bg-blue-50 border-t-4 border-blue-400 shadow-2xl p-4 md:p-6 no-print">
+            <div className="max-w-6xl mx-auto">
+              <div className="flex justify-between items-center mb-3">
+                <h3 className="font-bold text-gray-800 text-lg">
+                  {editingShift.id ? '✏️ シフト編集' : '➕ シフト追加'}
+                </h3>
+                <button 
+                  onClick={() => { setShowShiftForm(false); setEditingShift(null); }} 
+                  className="text-gray-500 hover:text-gray-700 text-2xl font-bold"
+                >
+                  ×
                 </button>
-                <button onClick={() => { setShowShiftForm(false); setEditingShift(null); }} className="btn-secondary flex-1">
-                  キャンセル
-                </button>
+              </div>
+              <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">従業員</label>
+                  <div className="input-field bg-white text-sm py-2">{employees.find(e => e.id === editingShift.employee_id)?.name}</div>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">日付</label>
+                  <div className="input-field bg-white text-sm py-2">{format(new Date(editingShift.date), 'M/d(E)', { locale: ja })}</div>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">開始</label>
+                  <input type="time" value={editingShift.start_time}
+                    onChange={(e) => setEditingShift({ ...editingShift, start_time: e.target.value })} 
+                    className="input-field text-sm py-2" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">終了</label>
+                  <input type="time" value={editingShift.end_time}
+                    onChange={(e) => setEditingShift({ ...editingShift, end_time: e.target.value })} 
+                    className="input-field text-sm py-2" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">休憩(分)</label>
+                  <input type="number" value={editingShift.break_minutes}
+                    onChange={(e) => setEditingShift({ ...editingShift, break_minutes: Number(e.target.value) })}
+                    className="input-field text-sm py-2" min="0" step="15" />
+                </div>
+                <div className="flex items-end gap-2">
+                  <button onClick={handleSaveShift} disabled={saving} className="btn-primary flex-1 py-2 text-sm">
+                    {saving ? '保存中...' : '💾 保存'}
+                  </button>
+                  {editingShift.id && (
+                    <button onClick={() => { handleDeleteShift(editingShift.id!); setShowShiftForm(false); setEditingShift(null); }} 
+                      className="bg-red-500 hover:bg-red-600 text-white px-3 py-2 rounded-lg text-sm">
+                      🗑️
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
           </div>
