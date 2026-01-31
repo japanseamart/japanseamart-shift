@@ -1,7 +1,7 @@
 var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
-// ../.wrangler/tmp/bundle-MJnnDe/strip-cf-connecting-ip-header.js
+// ../.wrangler/tmp/bundle-sWA0Nd/strip-cf-connecting-ip-header.js
 function stripCfConnectingIPHeader(input, init) {
   const request = new Request(input, init);
   request.headers.delete("CF-Connecting-IP");
@@ -1980,15 +1980,19 @@ app.delete("/shifts/:id", async (c) => {
   return c.json({ success: true });
 });
 app.post("/shifts/auto-fill-requests", async (c) => {
-  const { store_id, week_start_date } = await c.req.json();
-  if (!store_id || !week_start_date) {
-    return c.json({ success: false, error: "store_id\u3068week_start_date\u304C\u5FC5\u8981\u3067\u3059" }, 400);
+  const { store_id, start_date, end_date, week_start_date } = await c.req.json();
+  const periodStartDate = start_date || week_start_date;
+  let periodEndDate = end_date;
+  if (!store_id || !periodStartDate) {
+    return c.json({ success: false, error: "store_id\u3068start_date\uFF08\u307E\u305F\u306Fweek_start_date\uFF09\u304C\u5FC5\u8981\u3067\u3059" }, 400);
+  }
+  if (!periodEndDate) {
+    const startDateObj = new Date(periodStartDate);
+    const endDateObj = new Date(startDateObj);
+    endDateObj.setDate(endDateObj.getDate() + 6);
+    periodEndDate = endDateObj.toISOString().split("T")[0];
   }
   try {
-    const startDate = new Date(week_start_date);
-    const endDate = new Date(startDate);
-    endDate.setDate(endDate.getDate() + 6);
-    const weekEndDate = endDate.toISOString().split("T")[0];
     const { results: requests } = await c.env.DB.prepare(`
       SELECT sr.*, e.hourly_wage 
       FROM shift_requests sr
@@ -1997,7 +2001,7 @@ app.post("/shifts/auto-fill-requests", async (c) => {
         AND sr.date >= ? 
         AND sr.date <= ?
       ORDER BY sr.date, sr.employee_id
-    `).bind(store_id, week_start_date, weekEndDate).all();
+    `).bind(store_id, periodStartDate, periodEndDate).all();
     if (!requests || requests.length === 0) {
       return c.json({ success: true, createdCount: 0, totalRequests: 0 });
     }
@@ -2370,7 +2374,7 @@ var onRequest = /* @__PURE__ */ __name(async (context) => {
   return app.fetch(context.request, context.env, context);
 }, "onRequest");
 
-// ../.wrangler/tmp/pages-ws5ecs/functionsRoutes-0.3580210499590304.mjs
+// ../.wrangler/tmp/pages-xioJmC/functionsRoutes-0.031633716860337335.mjs
 var routes = [
   {
     routePath: "/api/:path*",
@@ -2868,7 +2872,7 @@ var jsonError = /* @__PURE__ */ __name(async (request, env, _ctx, middlewareCtx)
 }, "jsonError");
 var middleware_miniflare3_json_error_default = jsonError;
 
-// ../.wrangler/tmp/bundle-MJnnDe/middleware-insertion-facade.js
+// ../.wrangler/tmp/bundle-sWA0Nd/middleware-insertion-facade.js
 var __INTERNAL_WRANGLER_MIDDLEWARE__ = [
   middleware_ensure_req_body_drained_default,
   middleware_miniflare3_json_error_default
@@ -2900,7 +2904,7 @@ function __facade_invoke__(request, env, ctx, dispatch, finalMiddleware) {
 }
 __name(__facade_invoke__, "__facade_invoke__");
 
-// ../.wrangler/tmp/bundle-MJnnDe/middleware-loader.entry.ts
+// ../.wrangler/tmp/bundle-sWA0Nd/middleware-loader.entry.ts
 var __Facade_ScheduledController__ = class {
   constructor(scheduledTime, cron, noRetry) {
     this.scheduledTime = scheduledTime;
@@ -2998,4 +3002,4 @@ export {
   __INTERNAL_WRANGLER_MIDDLEWARE__,
   middleware_loader_entry_default as default
 };
-//# sourceMappingURL=functionsWorker-0.12790605978423453.mjs.map
+//# sourceMappingURL=functionsWorker-0.558500087091182.mjs.map

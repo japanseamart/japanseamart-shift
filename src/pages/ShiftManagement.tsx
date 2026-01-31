@@ -236,7 +236,8 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
         credentials: 'include',
         body: JSON.stringify({
           store_id: selectedStoreId,
-          week_start_date: format(periodStart, 'yyyy-MM-dd')
+          start_date: format(periodStart, 'yyyy-MM-dd'),
+          end_date: format(periodEnd, 'yyyy-MM-dd')
         })
       });
       const result = await res.json();
@@ -244,7 +245,7 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
         alert(`シフト希望の自動反映が完了しました\n作成: ${result.createdCount}件`);
         fetchShifts();
       } else {
-        alert('シフト希望の自動反映に失敗しました');
+        alert('シフト希望の自動反映に失敗しました: ' + (result.error || ''));
       }
     } catch (error) {
       console.error('自動反映エラー:', error);

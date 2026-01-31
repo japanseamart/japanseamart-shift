@@ -472,20 +472,26 @@ app.delete('/shifts/:id', async (c) => {
 
 // シフト希望の自動反映
 app.post('/shifts/auto-fill-requests', async (c) => {
-  const { store_id, week_start_date } = await c.req.json()
+  const { store_id, start_date, end_date, week_start_date } = await c.req.json()
   
-  if (!store_id || !week_start_date) {
-    return c.json({ success: false, error: 'store_idとweek_start_dateが必要です' }, 400)
+  // 新しいパラメータ（start_date, end_date）または従来のパラメータ（week_start_date）をサポート
+  const periodStartDate = start_date || week_start_date
+  let periodEndDate = end_date
+  
+  if (!store_id || !periodStartDate) {
+    return c.json({ success: false, error: 'store_idとstart_date（またはweek_start_date）が必要です' }, 400)
+  }
+  
+  // end_dateが指定されていない場合は従来の週単位（+6日）
+  if (!periodEndDate) {
+    const startDateObj = new Date(periodStartDate)
+    const endDateObj = new Date(startDateObj)
+    endDateObj.setDate(endDateObj.getDate() + 6)
+    periodEndDate = endDateObj.toISOString().split('T')[0]
   }
   
   try {
-    // 週末日を計算（日曜日）
-    const startDate = new Date(week_start_date)
-    const endDate = new Date(startDate)
-    endDate.setDate(endDate.getDate() + 6)
-    const weekEndDate = endDate.toISOString().split('T')[0]
-    
-    // 対象週のシフト希望を取得
+    // 対象期間のシフト希望を取得
     const { results: requests } = await c.env.DB.prepare(`
       SELECT sr.*, e.hourly_wage 
       FROM shift_requests sr
@@ -494,7 +500,7 @@ app.post('/shifts/auto-fill-requests', async (c) => {
         AND sr.date >= ? 
         AND sr.date <= ?
       ORDER BY sr.date, sr.employee_id
-    `).bind(store_id, week_start_date, weekEndDate).all()
+    `).bind(store_id, periodStartDate, periodEndDate).all()
     
     if (!requests || requests.length === 0) {
       return c.json({ success: true, createdCount: 0, totalRequests: 0 })
