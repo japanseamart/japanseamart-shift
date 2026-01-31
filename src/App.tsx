@@ -239,7 +239,7 @@ function App() {
         <Route
           path="/admin/other-shifts"
           element={
-            role === 'admin' ? (
+            role ? (
               <OtherStoreShifts role={role} storeId={storeId} onLogout={handleLogout} />
             ) : (
               <Navigate to="/admin/login" replace />
