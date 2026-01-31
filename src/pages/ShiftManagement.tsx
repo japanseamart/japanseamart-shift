@@ -301,9 +301,12 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
       const monthEnd = new Date(targetYear, targetMonth, 0);
       const daysInMonth = monthEnd.getDate();
       const today = new Date();
-      const currentDay = today.getFullYear() === targetYear && today.getMonth() + 1 === targetMonth 
-        ? today.getDate() 
-        : (targetMonth < today.getMonth() + 1 || targetYear < today.getFullYear()) ? daysInMonth : 0;
+      
+      // 対象月が過去か将来かを判定
+      const isPastMonth = targetYear < today.getFullYear() || 
+                         (targetYear === today.getFullYear() && targetMonth < today.getMonth() + 1);
+      const isFutureMonth = targetYear > today.getFullYear() ||
+                           (targetYear === today.getFullYear() && targetMonth > today.getMonth() + 1);
       
       const res = await fetch(
         getApiUrl(`/api/shifts?store_id=${selectedStoreId}&start_date=${format(monthStart, 'yyyy-MM-dd')}&end_date=${format(monthEnd, 'yyyy-MM-dd')}`)
@@ -311,50 +314,82 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
       const monthlyShifts: Shift[] = await res.json();
 
       // 前半（1-15日）と後半（16日以降）に分けて集計
+      // シフトに保存されているlabor_costを使用
       let firstHalfCost = 0;
       let secondHalfCost = 0;
+      let firstHalfShiftDays = new Set<string>();
+      let secondHalfShiftDays = new Set<string>();
       
       monthlyShifts.forEach(shift => {
-        const employee = employees.find(e => e.id === shift.employee_id);
-        if (employee) {
-          const day = parseInt(shift.date.split('-')[2]);
-          const cost = calculateLaborCost(shift, employee);
-          if (day <= 15) {
-            firstHalfCost += cost;
-          } else {
-            secondHalfCost += cost;
+        const day = parseInt(shift.date.split('-')[2]);
+        // シフトに保存されたlabor_costを使用（なければ計算）
+        let cost = shift.labor_cost || 0;
+        if (!cost) {
+          const employee = employees.find(e => e.id === shift.employee_id);
+          if (employee) {
+            cost = calculateLaborCost(shift, employee);
           }
+        }
+        
+        if (day <= 15) {
+          firstHalfCost += cost;
+          firstHalfShiftDays.add(shift.date);
+        } else {
+          secondHalfCost += cost;
+          secondHalfShiftDays.add(shift.date);
         }
       });
 
       // 月末予測ロジック
       let forecast = 0;
+      const totalCurrentCost = firstHalfCost + secondHalfCost;
       
-      if (currentDay <= 15) {
-        // 現在が前半の場合: 前半の日割りで月末を予測
-        const dailyAverage = currentDay > 0 ? firstHalfCost / currentDay : 0;
-        forecast = Math.round(dailyAverage * daysInMonth);
-      } else {
-        // 現在が後半の場合: 前半実績 + 後半の日割り予測
-        const firstHalfDays = 15;
-        const secondHalfDays = daysInMonth - 15;
-        const passedSecondHalfDays = currentDay - 15;
-        
-        if (passedSecondHalfDays > 0) {
-          const secondHalfDailyAverage = secondHalfCost / passedSecondHalfDays;
-          const secondHalfForecast = secondHalfDailyAverage * secondHalfDays;
-          forecast = Math.round(firstHalfCost + secondHalfForecast);
+      if (isPastMonth) {
+        // 過去の月: 実績をそのまま表示
+        forecast = totalCurrentCost;
+      } else if (isFutureMonth) {
+        // 将来の月: 入力済みシフトの人件費を予測として使用
+        // シフトが入っている日数から日割り計算
+        const totalShiftDays = firstHalfShiftDays.size + secondHalfShiftDays.size;
+        if (totalShiftDays > 0) {
+          // 入力済み日数での日割り × 月の日数
+          const dailyAverage = totalCurrentCost / totalShiftDays;
+          forecast = Math.round(dailyAverage * daysInMonth);
         } else {
-          // 後半初日: 前半の日割りで後半を予測
-          const firstHalfDailyAverage = firstHalfCost / firstHalfDays;
-          forecast = Math.round(firstHalfCost + (firstHalfDailyAverage * secondHalfDays));
+          // シフトがない場合は0
+          forecast = 0;
         }
-      }
-      
-      // 過去の月の場合は実績をそのまま表示
-      if (targetYear < today.getFullYear() || 
-          (targetYear === today.getFullYear() && targetMonth < today.getMonth() + 1)) {
-        forecast = firstHalfCost + secondHalfCost;
+      } else {
+        // 現在の月
+        const currentDay = today.getDate();
+        
+        if (currentDay <= 15) {
+          // 現在が前半の場合
+          if (currentDay > 0 && firstHalfCost > 0) {
+            // 前半の日割りで月末を予測
+            const dailyAverage = firstHalfCost / currentDay;
+            forecast = Math.round(dailyAverage * daysInMonth);
+          } else if (firstHalfShiftDays.size > 0) {
+            // シフト入力日数で計算
+            const dailyAverage = firstHalfCost / firstHalfShiftDays.size;
+            forecast = Math.round(dailyAverage * daysInMonth);
+          }
+        } else {
+          // 現在が後半の場合: 前半実績 + 後半の日割り予測
+          const firstHalfDays = 15;
+          const secondHalfDays = daysInMonth - 15;
+          const passedSecondHalfDays = currentDay - 15;
+          
+          if (passedSecondHalfDays > 0 && secondHalfCost > 0) {
+            const secondHalfDailyAverage = secondHalfCost / passedSecondHalfDays;
+            const secondHalfForecast = secondHalfDailyAverage * secondHalfDays;
+            forecast = Math.round(firstHalfCost + secondHalfForecast);
+          } else if (firstHalfCost > 0) {
+            // 後半初日または後半データなし: 前半の日割りで後半を予測
+            const firstHalfDailyAverage = firstHalfCost / firstHalfDays;
+            forecast = Math.round(firstHalfCost + (firstHalfDailyAverage * secondHalfDays));
+          }
+        }
       }
       
       setMonthlyLaborCostForecast(forecast);
