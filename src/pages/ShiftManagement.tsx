@@ -772,20 +772,25 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
             </button>
           </div>
           {showRequestsPanel && (
-            <div className="overflow-x-auto">
+            <div className="overflow-auto max-h-[400px] border rounded-lg">
               <table className="min-w-full text-sm">
-                <thead className="bg-ocean-50">
+                <thead className="bg-ocean-50 sticky top-0 z-20">
                   <tr>
-                    <th className="sticky left-0 z-10 bg-ocean-50 px-3 py-2 text-left font-medium text-gray-700 min-w-[100px]">従業員</th>
-                    {periodDates.map(date => (
-                      <th key={date.toISOString()} className="px-2 py-2 text-center font-medium text-gray-700 min-w-[60px]">
-                        <div>{format(date, 'd', { locale: ja })}</div>
-                        <div className="text-[10px]">{format(date, 'E', { locale: ja })}</div>
-                      </th>
-                    ))}
+                    <th className="sticky left-0 z-30 bg-ocean-50 px-3 py-2 text-left font-medium text-gray-700 min-w-[100px] border-b border-r">従業員</th>
+                    {periodDates.map(date => {
+                      const dayOfWeek = date.getDay();
+                      return (
+                        <th key={date.toISOString()} className={`px-2 py-2 text-center font-medium min-w-[60px] border-b ${
+                          dayOfWeek === 0 ? 'bg-red-100 text-red-700' : dayOfWeek === 6 ? 'bg-blue-100 text-blue-700' : 'bg-ocean-50 text-gray-700'
+                        }`}>
+                          <div className="font-bold">{format(date, 'd', { locale: ja })}</div>
+                          <div className="text-[10px]">{format(date, 'E', { locale: ja })}</div>
+                        </th>
+                      );
+                    })}
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-200">
+                <tbody className="divide-y divide-gray-200 bg-white">
                   {employees.map(employee => (
                     <tr key={employee.id} className="hover:bg-gray-50">
                       <td className="sticky left-0 z-10 bg-white px-3 py-2 font-medium text-gray-800 border-r">{employee.name}</td>
@@ -814,11 +819,11 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
 
         {/* 表ビュー */}
         {viewMode === 'table' && (
-          <div className="card overflow-x-auto">
+          <div className="card overflow-auto max-h-[600px] border rounded-lg">
             <table className="min-w-full">
-              <thead>
+              <thead className="sticky top-0 z-20">
                 <tr className="bg-gray-50">
-                  <th className="sticky left-0 z-10 bg-gray-50 px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase border-r min-w-[120px]">
+                  <th className="sticky left-0 z-30 bg-gray-50 px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase border-r border-b min-w-[120px]">
                     従業員
                   </th>
                   {periodDates.map(date => {
@@ -827,10 +832,10 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
                     const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
                     return (
                       <th key={date.toISOString()}
-                        className={`px-2 py-3 text-center text-xs font-medium uppercase border-r min-w-[80px] ${
-                          specialDay?.type === 1 ? 'bg-red-100 text-red-700' : dayOfWeek === 0 ? 'bg-red-50 text-red-600' : isWeekend ? 'bg-blue-50 text-blue-700' : 'text-gray-500'
+                        className={`px-2 py-3 text-center text-xs font-medium uppercase border-r border-b min-w-[80px] ${
+                          specialDay?.type === 1 ? 'bg-red-100 text-red-700' : dayOfWeek === 0 ? 'bg-red-50 text-red-600' : isWeekend ? 'bg-blue-50 text-blue-700' : 'bg-gray-50 text-gray-500'
                         }`}>
-                        <div>{format(date, 'd', { locale: ja })}</div>
+                        <div className="font-bold">{format(date, 'd', { locale: ja })}</div>
                         <div className="text-[10px] mt-1">{format(date, 'E', { locale: ja })}</div>
                       </th>
                     );
