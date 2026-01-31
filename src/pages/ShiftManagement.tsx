@@ -49,6 +49,7 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
   
   const [editingShift, setEditingShift] = useState<ShiftInput | null>(null);
   const [showShiftForm, setShowShiftForm] = useState(false);
+  const [breakManuallySet, setBreakManuallySet] = useState(false); // 休憩時間を手動で変更したかどうか
   const [totalLaborCost, setTotalLaborCost] = useState(0);
   const [monthlyLaborCostForecast, setMonthlyLaborCostForecast] = useState(0);
   const [saving, setSaving] = useState(false);
@@ -101,22 +102,23 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
     calculateMonthlyForecast();
   }, [shifts, selectedStore, specialDays, employees]);
 
-  // 自動休憩時間計算
+  // 自動休憩時間計算（6時間ちょうど→休憩なし、6時間超→60分）
+  // 手動で変更された場合は自動計算しない
   useEffect(() => {
-    if (!editingShift) return;
+    if (!editingShift || breakManuallySet) return;
     const { start_time, end_time } = editingShift;
     if (!start_time || !end_time) return;
 
     const startTime = new Date(`2000-01-01T${start_time}`);
     const endTime = new Date(`2000-01-01T${end_time}`);
     const totalMinutes = differenceInMinutes(endTime, startTime);
-    const totalHours = totalMinutes / 60;
-    const autoBreakMinutes = totalHours >= 6 ? 60 : 0;
+    // 6時間ちょうど（360分）は休憩なし、6時間超（361分以上）で60分休憩
+    const autoBreakMinutes = totalMinutes > 360 ? 60 : 0;
 
     if (editingShift.break_minutes !== autoBreakMinutes) {
       setEditingShift({ ...editingShift, break_minutes: autoBreakMinutes });
     }
-  }, [editingShift?.start_time, editingShift?.end_time]);
+  }, [editingShift?.start_time, editingShift?.end_time, breakManuallySet]);
 
   const fetchStores = async () => {
     try {
@@ -373,6 +375,7 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
   };
 
   const handleAddShift = (employeeId: number, date: string) => {
+    setBreakManuallySet(false); // 新規追加時は自動計算を有効に
     setEditingShift({
       employee_id: employeeId,
       date,
@@ -384,6 +387,7 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
   };
 
   const handleEditShift = (shift: Shift) => {
+    setBreakManuallySet(true); // 編集時は既存の休憩時間を保持（手動設定済みとして扱う）
     setEditingShift({
       id: shift.id,
       employee_id: shift.employee_id,
@@ -421,6 +425,7 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
       }
       setShowShiftForm(false);
       setEditingShift(null);
+      setBreakManuallySet(false);
       fetchShifts();
     } catch (error) {
       console.error('シフト保存エラー:', error);
@@ -904,7 +909,7 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
                   {editingShift.id ? '✏️ シフト編集' : '➕ シフト追加'}
                 </h3>
                 <button 
-                  onClick={() => { setShowShiftForm(false); setEditingShift(null); }} 
+                  onClick={() => { setShowShiftForm(false); setEditingShift(null); setBreakManuallySet(false); }} 
                   className="text-gray-500 hover:text-gray-700 text-2xl font-bold"
                 >
                   ×
@@ -932,9 +937,15 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
                     className="input-field text-sm py-2" />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1">休憩(分)</label>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">
+                    休憩(分)
+                    {!breakManuallySet && <span className="text-[10px] text-blue-500 ml-1">自動</span>}
+                  </label>
                   <input type="number" value={editingShift.break_minutes}
-                    onChange={(e) => setEditingShift({ ...editingShift, break_minutes: Number(e.target.value) })}
+                    onChange={(e) => {
+                      setBreakManuallySet(true); // 手動変更フラグを設定
+                      setEditingShift({ ...editingShift, break_minutes: Number(e.target.value) });
+                    }}
                     className="input-field text-sm py-2" min="0" step="15" />
                 </div>
                 <div className="flex items-end gap-2">
@@ -942,7 +953,7 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
                     {saving ? '保存中...' : '💾 保存'}
                   </button>
                   {editingShift.id && (
-                    <button onClick={() => { handleDeleteShift(editingShift.id!); setShowShiftForm(false); setEditingShift(null); }} 
+                    <button onClick={() => { handleDeleteShift(editingShift.id!); setShowShiftForm(false); setEditingShift(null); setBreakManuallySet(false); }} 
                       className="bg-red-500 hover:bg-red-600 text-white px-3 py-2 rounded-lg text-sm">
                       🗑️
                     </button>
@@ -1082,6 +1093,7 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
                             <div onClick={() => handleEditShift(shift)}
                               className="cursor-pointer bg-ocean-600 hover:bg-ocean-700 text-white rounded px-1 py-1 text-xs transition-colors">
                               <div className="font-medium">{shift.start_time.slice(0, 5)}-{shift.end_time.slice(0, 5)}</div>
+                              {shift.break_minutes > 0 && <div className="text-[9px] opacity-75">休{shift.break_minutes}分</div>}
                               <div className="text-[10px] opacity-90" data-salary>¥{calculateLaborCost(shift, employee).toLocaleString()}</div>
                             </div>
                           ) : (
@@ -1126,7 +1138,10 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
                           className="p-3 rounded-lg border-2 border-gray-200 hover:border-ocean-400 cursor-pointer flex justify-between items-center">
                           <div>
                             <div className="font-bold">{format(date, 'M/d(E)', { locale: ja })}</div>
-                            <div className="text-ocean-700">{shift.start_time.slice(0, 5)} - {shift.end_time.slice(0, 5)}</div>
+                            <div className="text-ocean-700">
+                              {shift.start_time.slice(0, 5)} - {shift.end_time.slice(0, 5)}
+                              {shift.break_minutes > 0 && <span className="text-gray-500 text-xs ml-2">休{shift.break_minutes}分</span>}
+                            </div>
                           </div>
                           <div className="text-right">
                             <div className="font-bold" data-salary>¥{calculateLaborCost(shift, employee).toLocaleString()}</div>
@@ -1179,7 +1194,10 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
                             className="p-3 rounded-lg border-2 border-gray-200 hover:border-ocean-400 cursor-pointer flex justify-between items-center">
                             <div>
                               <div className="font-bold">{emp.name}</div>
-                              <div className="text-ocean-700">{shift.start_time.slice(0, 5)} - {shift.end_time.slice(0, 5)}</div>
+                              <div className="text-ocean-700">
+                                {shift.start_time.slice(0, 5)} - {shift.end_time.slice(0, 5)}
+                                {shift.break_minutes > 0 && <span className="text-gray-500 text-xs ml-2">休{shift.break_minutes}分</span>}
+                              </div>
                             </div>
                             <div className="text-right">
                               <div className="font-bold" data-salary>¥{calculateLaborCost(shift, emp).toLocaleString()}</div>
