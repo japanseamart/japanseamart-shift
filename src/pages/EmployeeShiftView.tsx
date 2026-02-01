@@ -55,20 +55,54 @@ export default function EmployeeShiftView() {
       const weekStart = startOfWeek(currentWeek, { weekStartsOn: 1 });
       const weekEnd = endOfWeek(currentWeek, { weekStartsOn: 1 });
       
-      // 週の公開状態を確認
-      const pubRes = await fetch(
-        `/api/weekly-publications?store_id=${selectedStoreId}&week_start_date=${format(weekStart, 'yyyy-MM-dd')}`
+      // 週に該当する前半/後半の公開状態を確認
+      // 前半: 1日〜15日、後半: 16日〜月末
+      // 週の開始日と終了日が属する期間の公開状態を両方チェック
+      const weekStartDay = weekStart.getDate();
+      const weekEndDay = weekEnd.getDate();
+      const weekStartMonth = weekStart.getMonth();
+      const weekEndMonth = weekEnd.getMonth();
+      const weekStartYear = weekStart.getFullYear();
+      const weekEndYear = weekEnd.getFullYear();
+      
+      // 前半の開始日（1日）と後半の開始日（16日）を計算
+      const getHalfStartDate = (year: number, month: number, isFirstHalf: boolean) => {
+        const day = isFirstHalf ? 1 : 16;
+        return format(new Date(year, month, day), 'yyyy-MM-dd');
+      };
+      
+      // 週の開始日が属する期間
+      const startIsFirstHalf = weekStartDay <= 15;
+      const startHalfDate = getHalfStartDate(weekStartYear, weekStartMonth, startIsFirstHalf);
+      
+      // 週の終了日が属する期間
+      const endIsFirstHalf = weekEndDay <= 15;
+      const endHalfDate = getHalfStartDate(weekEndYear, weekEndMonth, endIsFirstHalf);
+      
+      // 両方の公開状態を確認
+      const pubRes1 = await fetch(
+        getApiUrl(`/api/weekly-publications?store_id=${selectedStoreId}&week_start_date=${startHalfDate}`)
       );
-      const pubData = await pubRes.json();
-      console.log('従業員画面 - 公開状態取得:', pubData);
-      // APIは単一オブジェクトを返す（配列ではない）
-      const published = pubData.is_published === 1;
+      const pubData1 = await pubRes1.json();
+      
+      let pubData2 = pubData1;
+      if (startHalfDate !== endHalfDate) {
+        const pubRes2 = await fetch(
+          getApiUrl(`/api/weekly-publications?store_id=${selectedStoreId}&week_start_date=${endHalfDate}`)
+        );
+        pubData2 = await pubRes2.json();
+      }
+      
+      console.log('従業員画面 - 公開状態取得:', { startHalfDate, endHalfDate, pubData1, pubData2 });
+      
+      // どちらかの期間が公開されていれば公開済みとする
+      const published = pubData1.is_published === 1 || pubData2.is_published === 1;
       setIsPublished(published);
       
       // 公開済みの場合のみシフトを取得
       if (published) {
         const res = await fetch(
-          `/api/shifts?store_id=${selectedStoreId}&start_date=${format(weekStart, 'yyyy-MM-dd')}&end_date=${format(weekEnd, 'yyyy-MM-dd')}`
+          getApiUrl(`/api/shifts?store_id=${selectedStoreId}&start_date=${format(weekStart, 'yyyy-MM-dd')}&end_date=${format(weekEnd, 'yyyy-MM-dd')}`)
         );
         const data = await res.json();
         setShifts(data);
