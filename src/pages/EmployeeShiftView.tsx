@@ -93,7 +93,7 @@ export default function EmployeeShiftView() {
         pubData2 = await pubRes2.json();
       }
       
-      console.log('従業員画面 - 公開状態取得:', { startHalfDate, endHalfDate, pubData1, pubData2 });
+      console.log('従業員画面 - 公開状態取得 v2:', { startHalfDate, endHalfDate, pubData1, pubData2, published: pubData1.is_published === 1 || pubData2.is_published === 1 });
       
       // どちらかの期間が公開されていれば公開済みとする
       const published = pubData1.is_published === 1 || pubData2.is_published === 1;
