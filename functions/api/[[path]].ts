@@ -796,6 +796,84 @@ app.delete('/shift-deadlines/:id', async (c) => {
   return c.json({ success: true })
 })
 
+// シフト締切自動設定（未設定の店舗に対してデフォルト締切を設定）
+// 前半の締切: 前月の20日、後半の締切: 該当月の5日
+app.post('/shift-deadlines/auto-setup', async (c) => {
+  try {
+    const { target_year, target_month } = await c.req.json()
+    
+    if (!target_year || !target_month) {
+      return c.json({ error: 'target_year and target_month are required' }, 400)
+    }
+    
+    // 全店舗を取得（本部ID:8を除く）
+    const { results: stores } = await c.env.DB.prepare(
+      'SELECT id, name FROM stores WHERE id != 8'
+    ).all()
+    
+    // 既存の締切を取得
+    const { results: existingDeadlines } = await c.env.DB.prepare(`
+      SELECT store_id, target_period FROM shift_deadlines 
+      WHERE target_year = ? AND target_month = ?
+    `).bind(target_year, target_month).all()
+    
+    // 既存の締切をマップ化
+    const existingMap = new Set(
+      existingDeadlines.map((d: any) => `${d.store_id}-${d.target_period}`)
+    )
+    
+    // 前半の締切日: 前月の20日
+    const prevMonth = target_month === 1 ? 12 : target_month - 1
+    const prevYear = target_month === 1 ? target_year - 1 : target_year
+    const firstHalfDeadline = `${prevYear}-${String(prevMonth).padStart(2, '0')}-20`
+    
+    // 後半の締切日: 該当月の5日
+    const secondHalfDeadline = `${target_year}-${String(target_month).padStart(2, '0')}-05`
+    
+    const created: any[] = []
+    const skipped: any[] = []
+    
+    for (const store of stores as any[]) {
+      // 前半チェック
+      if (!existingMap.has(`${store.id}-first`)) {
+        await c.env.DB.prepare(`
+          INSERT INTO shift_deadlines (store_id, target_year, target_month, target_period, deadline_date, notification_message, is_changed, change_count)
+          VALUES (?, ?, ?, 'first', ?, '【自動設定】シフト希望の提出をお願いします', 0, 0)
+        `).bind(store.id, target_year, target_month, firstHalfDeadline).run()
+        created.push({ store_id: store.id, store_name: store.name, period: 'first', deadline: firstHalfDeadline })
+      } else {
+        skipped.push({ store_id: store.id, store_name: store.name, period: 'first', reason: '既に設定済み' })
+      }
+      
+      // 後半チェック
+      if (!existingMap.has(`${store.id}-second`)) {
+        await c.env.DB.prepare(`
+          INSERT INTO shift_deadlines (store_id, target_year, target_month, target_period, deadline_date, notification_message, is_changed, change_count)
+          VALUES (?, ?, ?, 'second', ?, '【自動設定】シフト希望の提出をお願いします', 0, 0)
+        `).bind(store.id, target_year, target_month, secondHalfDeadline).run()
+        created.push({ store_id: store.id, store_name: store.name, period: 'second', deadline: secondHalfDeadline })
+      } else {
+        skipped.push({ store_id: store.id, store_name: store.name, period: 'second', reason: '既に設定済み' })
+      }
+    }
+    
+    return c.json({ 
+      success: true, 
+      target_year,
+      target_month,
+      first_half_deadline: firstHalfDeadline,
+      second_half_deadline: secondHalfDeadline,
+      created_count: created.length,
+      skipped_count: skipped.length,
+      created,
+      skipped
+    })
+  } catch (error) {
+    console.error('自動設定エラー:', error)
+    return c.json({ error: '自動設定に失敗しました' }, 500)
+  }
+})
+
 // 従業員用: 自店舗の締切情報を取得（告知用）
 app.get('/shift-deadlines/for-employee', async (c) => {
   const storeId = c.req.query('store_id')

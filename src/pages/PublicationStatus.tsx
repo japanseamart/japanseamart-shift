@@ -48,6 +48,8 @@ export default function PublicationStatus({ role, storeId, onLogout }: Publicati
   const [, setDeadlines] = useState<ShiftDeadline[]>([]);
   const [storeStatuses, setStoreStatuses] = useState<StoreStatus[]>([]);
   const [loading, setLoading] = useState(true);
+  const [autoSetupLoading, setAutoSetupLoading] = useState(false);
+  const [autoSetupResult, setAutoSetupResult] = useState<{ success: boolean; message: string } | null>(null);
   
   // 対象期間
   const today = new Date();
@@ -57,6 +59,48 @@ export default function PublicationStatus({ role, storeId, onLogout }: Publicati
   useEffect(() => {
     fetchData();
   }, [targetYear, targetMonth]);
+
+  // 締切自動設定
+  const handleAutoSetup = async () => {
+    if (!confirm(`${targetYear}年${targetMonth}月の締切を未設定の店舗に自動設定しますか？\n\n・前半締切: ${targetMonth === 1 ? targetYear - 1 : targetYear}年${targetMonth === 1 ? 12 : targetMonth - 1}月20日\n・後半締切: ${targetYear}年${targetMonth}月5日`)) {
+      return;
+    }
+    
+    setAutoSetupLoading(true);
+    setAutoSetupResult(null);
+    
+    try {
+      const res = await fetch(getApiUrl('/api/shift-deadlines/auto-setup'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ target_year: targetYear, target_month: targetMonth }),
+      });
+      
+      const data = await res.json();
+      
+      if (data.success) {
+        setAutoSetupResult({
+          success: true,
+          message: `${data.created_count}件の締切を設定しました（スキップ: ${data.skipped_count}件）`,
+        });
+        // データを再取得
+        fetchData();
+      } else {
+        setAutoSetupResult({
+          success: false,
+          message: data.error || '自動設定に失敗しました',
+        });
+      }
+    } catch (error) {
+      console.error('自動設定エラー:', error);
+      setAutoSetupResult({
+        success: false,
+        message: '自動設定に失敗しました',
+      });
+    } finally {
+      setAutoSetupLoading(false);
+    }
+  };
 
   const fetchData = async () => {
     setLoading(true);
@@ -206,6 +250,43 @@ export default function PublicationStatus({ role, storeId, onLogout }: Publicati
             >
               今月
             </button>
+            <div className="flex-1"></div>
+            <button
+              onClick={handleAutoSetup}
+              disabled={autoSetupLoading}
+              className="btn-primary flex items-center gap-2"
+            >
+              {autoSetupLoading ? (
+                <>
+                  <span className="animate-spin">⏳</span>
+                  処理中...
+                </>
+              ) : (
+                <>
+                  ⚡ 締切を一括自動設定
+                </>
+              )}
+            </button>
+          </div>
+          
+          {/* 自動設定結果 */}
+          {autoSetupResult && (
+            <div className={`mt-4 p-3 rounded-lg ${autoSetupResult.success ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'}`}>
+              <div className={`flex items-center gap-2 ${autoSetupResult.success ? 'text-green-700' : 'text-red-700'}`}>
+                <span>{autoSetupResult.success ? '✅' : '❌'}</span>
+                <span>{autoSetupResult.message}</span>
+              </div>
+            </div>
+          )}
+          
+          {/* 自動設定ルール説明 */}
+          <div className="mt-4 text-xs text-gray-500 bg-gray-50 p-3 rounded-lg">
+            <div className="font-medium mb-1">📌 自動設定ルール:</div>
+            <ul className="list-disc list-inside space-y-1">
+              <li>前半（1〜15日）の締切 → 前月20日</li>
+              <li>後半（16〜末日）の締切 → 該当月5日</li>
+              <li>既に設定済みの店舗はスキップされます</li>
+            </ul>
           </div>
         </div>
 
