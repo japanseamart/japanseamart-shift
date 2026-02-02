@@ -406,11 +406,10 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
       const employeeList = isAllStores ? allEmployees : employees;
 
       // 前半（1-15日）と後半（16日以降）に分けて集計
-      // シフトに保存されているlabor_costを使用
       let firstHalfCost = 0;
       let secondHalfCost = 0;
-      let firstHalfShiftDays = new Set<string>();
-      let secondHalfShiftDays = new Set<string>();
+      const firstHalfShiftDays = new Set<string>();
+      const secondHalfShiftDays = new Set<string>();
       
       monthlyShifts.forEach(shift => {
         const day = parseInt(shift.date.split('-')[2]);
@@ -433,54 +432,54 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
       });
 
       // 月末予測ロジック
+      // 基本方針: 前半実績（確定） + 後半予測（入力済み + 残日数分の予測）
       let forecast = 0;
       const totalCurrentCost = firstHalfCost + secondHalfCost;
+      const secondHalfDays = daysInMonth - 15;
       
       if (isPastMonth) {
         // 過去の月: 実績をそのまま表示
         forecast = totalCurrentCost;
       } else if (isFutureMonth) {
-        // 将来の月: 入力済みシフトの人件費を予測として使用
-        // シフトが入っている日数から日割り計算
-        const totalShiftDays = firstHalfShiftDays.size + secondHalfShiftDays.size;
-        if (totalShiftDays > 0) {
-          // 入力済み日数での日割り × 月の日数
-          const dailyAverage = totalCurrentCost / totalShiftDays;
-          forecast = Math.round(dailyAverage * daysInMonth);
-        } else {
-          // シフトがない場合は0
-          forecast = 0;
-        }
+        // 将来の月: 入力済みシフトの合計を表示
+        // シフトが入力されていない日は予測しない（まだ先の話なので）
+        forecast = totalCurrentCost;
       } else {
         // 現在の月
         const currentDay = today.getDate();
         
+        // 前半の日平均を計算（シフト入力済み日数ベース）
+        const firstHalfDailyAverage = firstHalfShiftDays.size > 0 
+          ? firstHalfCost / firstHalfShiftDays.size 
+          : 0;
+        
         if (currentDay <= 15) {
-          // 現在が前半の場合
-          if (currentDay > 0 && firstHalfCost > 0) {
-            // 前半の日割りで月末を予測
-            const dailyAverage = firstHalfCost / currentDay;
-            forecast = Math.round(dailyAverage * daysInMonth);
-          } else if (firstHalfShiftDays.size > 0) {
-            // シフト入力日数で計算
-            const dailyAverage = firstHalfCost / firstHalfShiftDays.size;
-            forecast = Math.round(dailyAverage * daysInMonth);
+          // === 現在が前半の場合 ===
+          // 前半の入力済み実績から日平均を算出し、月末を予測
+          if (firstHalfShiftDays.size > 0) {
+            // 前半の日平均 × 月の日数
+            forecast = Math.round(firstHalfDailyAverage * daysInMonth);
+          } else {
+            forecast = 0;
           }
         } else {
-          // 現在が後半の場合: 前半実績 + 後半の日割り予測
-          const firstHalfDays = 15;
-          const secondHalfDays = daysInMonth - 15;
-          const passedSecondHalfDays = currentDay - 15;
+          // === 現在が後半の場合 ===
+          // 前半実績（確定） + 後半予測
           
-          if (passedSecondHalfDays > 0 && secondHalfCost > 0) {
-            const secondHalfDailyAverage = secondHalfCost / passedSecondHalfDays;
-            const secondHalfForecast = secondHalfDailyAverage * secondHalfDays;
-            forecast = Math.round(firstHalfCost + secondHalfForecast);
-          } else if (firstHalfCost > 0) {
-            // 後半初日または後半データなし: 前半の日割りで後半を予測
-            const firstHalfDailyAverage = firstHalfCost / firstHalfDays;
-            forecast = Math.round(firstHalfCost + (firstHalfDailyAverage * secondHalfDays));
+          // 後半のシフト入力済み日数
+          const secondHalfInputDays = secondHalfShiftDays.size;
+          // 後半の残り日数（シフト未入力日数）
+          const secondHalfRemainingDays = secondHalfDays - secondHalfInputDays;
+          
+          // 後半の予測 = 入力済み後半シフト + (前半の日平均 × 未入力日数)
+          let secondHalfForecast = secondHalfCost; // 入力済み後半シフト
+          
+          if (secondHalfRemainingDays > 0 && firstHalfDailyAverage > 0) {
+            // 未入力日数分を前半の日平均で予測
+            secondHalfForecast += firstHalfDailyAverage * secondHalfRemainingDays;
           }
+          
+          forecast = Math.round(firstHalfCost + secondHalfForecast);
         }
       }
       
