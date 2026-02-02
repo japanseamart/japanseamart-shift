@@ -18,6 +18,7 @@ import AnnouncementManagement from './pages/AnnouncementManagement';
 import PasswordManagement from './pages/PasswordManagement';
 import StoreRanking from './pages/StoreRanking';
 import OtherStoreShifts from './pages/OtherStoreShifts';
+import PublicationStatus from './pages/PublicationStatus';
 
 function App() {
   const [role, setRole] = useState<Role | null>(null);
@@ -241,6 +242,16 @@ function App() {
           element={
             role ? (
               <OtherStoreShifts role={role} storeId={storeId} onLogout={handleLogout} />
+            ) : (
+              <Navigate to="/admin/login" replace />
+            )
+          }
+        />
+        <Route
+          path="/admin/publication-status"
+          element={
+            role === 'admin' ? (
+              <PublicationStatus role={role} storeId={storeId} onLogout={handleLogout} />
             ) : (
               <Navigate to="/admin/login" replace />
             )
