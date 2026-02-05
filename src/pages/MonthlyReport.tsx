@@ -181,8 +181,12 @@ export default function MonthlyReport({ role, storeId, onLogout }: MonthlyReport
       const res = await fetch(apiUrl);
       const shiftsData: Shift[] = await res.json();
 
-      // 統計計算
-      const totalLaborCost = shiftsData.reduce((sum, shift) => sum + (shift.labor_cost || 0), 0);
+      // 統計計算（正社員は月給制のため人件費から除外）
+      const totalLaborCost = shiftsData.reduce((sum, shift) => {
+        const employee = (isAllStores ? allEmployees : employees).find(e => e.id === shift.employee_id);
+        if (employee?.employment_type === 'full_time') return sum; // 正社員は除外
+        return sum + (shift.labor_cost || 0);
+      }, 0);
       const totalWorkMinutes = shiftsData.reduce((sum, shift) => {
         const start = new Date(`2000-01-01T${shift.start_time}`);
         const end = new Date(`2000-01-01T${shift.end_time}`);
@@ -240,7 +244,8 @@ export default function MonthlyReport({ role, storeId, onLogout }: MonthlyReport
 
           empStats.shifts += 1;
           empStats.totalHours += hours;
-          empStats.totalCost += shift.labor_cost || 0;
+          // 正社員は月給制のため人件費は0
+          empStats.totalCost += empStats.employee.employment_type === 'full_time' ? 0 : (shift.labor_cost || 0);
         }
       });
 
@@ -250,6 +255,8 @@ export default function MonthlyReport({ role, storeId, onLogout }: MonthlyReport
       // ヒートマップデータの計算（時間帯 × 曜日）
       const heatmapMap = new Map<string, HeatmapData>();
       shiftsData.forEach(shift => {
+        const employee = (isAllStores ? allEmployees : employees).find(e => e.id === shift.employee_id);
+        const isFullTime = employee?.employment_type === 'full_time';
         const shiftDate = parseISO(shift.date);
         const weekday = shiftDate.getDay();
         const startHour = parseInt(shift.start_time.split(':')[0]);
@@ -263,9 +270,9 @@ export default function MonthlyReport({ role, storeId, onLogout }: MonthlyReport
           }
           const data = heatmapMap.get(key)!;
           data.staffCount += 1;
-          // 時間あたりの人件費を按分
+          // 時間あたりの人件費を按分（正社員は除外）
           const shiftHours = endHour - startHour;
-          data.laborCost += (shift.labor_cost || 0) / shiftHours;
+          data.laborCost += isFullTime ? 0 : (shift.labor_cost || 0) / shiftHours;
         }
       });
       setHeatmapData(Array.from(heatmapMap.values()));
@@ -273,6 +280,8 @@ export default function MonthlyReport({ role, storeId, onLogout }: MonthlyReport
       // 日別データの計算
       const dailyMap = new Map<string, DailyData>();
       shiftsData.forEach(shift => {
+        const employee = (isAllStores ? allEmployees : employees).find(e => e.id === shift.employee_id);
+        const isFullTime = employee?.employment_type === 'full_time';
         if (!dailyMap.has(shift.date)) {
           const shiftDate = parseISO(shift.date);
           dailyMap.set(shift.date, {
@@ -283,7 +292,7 @@ export default function MonthlyReport({ role, storeId, onLogout }: MonthlyReport
           });
         }
         const data = dailyMap.get(shift.date)!;
-        data.laborCost += shift.labor_cost || 0;
+        data.laborCost += isFullTime ? 0 : (shift.labor_cost || 0); // 正社員は除外
         data.staffCount += 1;
       });
       const sortedDailyData = Array.from(dailyMap.values()).sort((a, b) => a.date.localeCompare(b.date));
@@ -309,14 +318,24 @@ export default function MonthlyReport({ role, storeId, onLogout }: MonthlyReport
         }, 0);
       };
       
+      // 正社員除外のコスト計算
+      const calcCostExcludeFullTime = (shifts: Shift[]) => {
+        const employeeList = isAllStores ? allEmployees : employees;
+        return shifts.reduce((sum, s) => {
+          const emp = employeeList.find(e => e.id === s.employee_id);
+          if (emp?.employment_type === 'full_time') return sum;
+          return sum + (s.labor_cost || 0);
+        }, 0);
+      };
+      
       setFirstHalfStats({
-        cost: firstHalfShifts.reduce((sum, s) => sum + (s.labor_cost || 0), 0),
+        cost: calcCostExcludeFullTime(firstHalfShifts),
         shifts: firstHalfShifts.length,
         staffCount: new Set(firstHalfShifts.map(s => s.employee_id)).size,
         workHours: Math.round(calcWorkHours(firstHalfShifts) * 10) / 10
       });
       setSecondHalfStats({
-        cost: secondHalfShifts.reduce((sum, s) => sum + (s.labor_cost || 0), 0),
+        cost: calcCostExcludeFullTime(secondHalfShifts),
         shifts: secondHalfShifts.length,
         staffCount: new Set(secondHalfShifts.map(s => s.employee_id)).size,
         workHours: Math.round(calcWorkHours(secondHalfShifts) * 10) / 10
@@ -350,7 +369,8 @@ export default function MonthlyReport({ role, storeId, onLogout }: MonthlyReport
             const minutes = (end.getTime() - start.getTime()) / 60000 - (shift.break_minutes || 0);
             empStats.shifts += 1;
             empStats.totalHours += Math.round(minutes / 60 * 10) / 10;
-            empStats.totalCost += shift.labor_cost || 0;
+            // 正社員は月給制のため人件費は0
+            empStats.totalCost += empStats.employee.employment_type === 'full_time' ? 0 : (shift.labor_cost || 0);
           }
         });
         return Array.from(empStatsMap.values()).sort((a, b) => b.totalCost - a.totalCost);
@@ -378,15 +398,17 @@ export default function MonthlyReport({ role, storeId, onLogout }: MonthlyReport
       }));
       setHourlyStats(hourlyStatsArray);
 
-      // 曜日別統計
+      // 曜日別統計（正社員除外）
       const weekdayMap = new Map<number, { laborCost: number; shifts: number }>();
       for (let day = 0; day < 7; day++) {
         weekdayMap.set(day, { laborCost: 0, shifts: 0 });
       }
       shiftsData.forEach(shift => {
+        const employee = (isAllStores ? allEmployees : employees).find(e => e.id === shift.employee_id);
+        const isFullTime = employee?.employment_type === 'full_time';
         const weekday = parseISO(shift.date).getDay();
         const data = weekdayMap.get(weekday)!;
-        data.laborCost += shift.labor_cost || 0;
+        data.laborCost += isFullTime ? 0 : (shift.labor_cost || 0);
         data.shifts += 1;
       });
       const weekdayStatsArray: WeekdayStats[] = Array.from(weekdayMap.entries()).map(([weekday, data]) => ({

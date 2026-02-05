@@ -331,6 +331,8 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
   };
 
   const calculateLaborCost = (shift: Shift | ShiftInput, employee: Employee): number => {
+    // 正社員は月給制のため人件費計算から除外
+    if (employee.employment_type === 'full_time') return 0;
     if (!selectedStore) return 0;
     const startTime = new Date(`2000-01-01T${shift.start_time}`);
     const endTime = new Date(`2000-01-01T${shift.end_time}`);

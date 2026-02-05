@@ -140,6 +140,8 @@ export default function OtherStoreShifts({ role, storeId, onLogout }: OtherStore
 
   // 人件費計算（シフトに保存されたlabor_costを優先、なければ計算）
   const calculateLaborCost = (shift: Shift, employee: Employee): number => {
+    // 正社員は月給制のため人件費計算から除外
+    if (employee.employment_type === 'full_time') return 0;
     // シフトに保存されたlabor_costがあれば使用
     if (shift.labor_cost) return shift.labor_cost;
     
