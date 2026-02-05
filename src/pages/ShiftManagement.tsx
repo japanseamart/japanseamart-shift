@@ -64,6 +64,9 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
   const [orderedEmployees, setOrderedEmployees] = useState<Employee[]>([]);
   const [draggedEmployee, setDraggedEmployee] = useState<Employee | null>(null);
   
+  // 給与サマリーパネルの表示状態
+  const [showSalarySummary, setShowSalarySummary] = useState(true);
+  
   // 期間キーを生成（店舗ID-年-月-期間）
   const getPeriodKey = () => {
     const storeKey = isAllStores ? 'all' : selectedStoreId;
@@ -1224,6 +1227,57 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
             </div>
           )}
         </div>
+
+        {/* 従業員別給与サマリーパネル（テーブルビューで表示） */}
+        {viewMode === 'table' && (
+          <div className="card mb-4">
+            <div 
+              className="flex justify-between items-center cursor-pointer"
+              onClick={() => setShowSalarySummary(!showSalarySummary)}
+            >
+              <h3 className="text-lg font-bold text-gray-800">
+                💰 従業員別給与サマリー
+                <span className="ml-2 text-sm font-normal text-gray-500">
+                  （{orderedEmployees.length}名 / 期間合計: ¥{totalLaborCost.toLocaleString()}）
+                </span>
+              </h3>
+              <button className="text-gray-500 hover:text-gray-700">
+                {showSalarySummary ? '▲ 閉じる' : '▼ 開く'}
+              </button>
+            </div>
+            
+            {showSalarySummary && (
+              <div className="mt-4 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
+                {orderedEmployees.map(employee => {
+                  const employeeShifts = shifts.filter(s => s.employee_id === employee.id);
+                  const totalCost = employeeShifts.reduce((sum, s) => sum + calculateLaborCost(s, employee), 0);
+                  const employeeStore = isAllStores ? stores.find(s => s.id === employee.store_id) : null;
+                  return (
+                    <div 
+                      key={employee.id} 
+                      className={`p-3 rounded-lg border-2 ${
+                        employeeShifts.length > 0 ? 'border-ocean-300 bg-ocean-50' : 'border-gray-200 bg-gray-50'
+                      }`}
+                    >
+                      <div className="font-medium text-gray-800 text-sm truncate" title={employee.name}>
+                        {employee.name}
+                      </div>
+                      {isAllStores && employeeStore && (
+                        <div className="text-xs text-ocean-600 truncate">[{employeeStore.name}]</div>
+                      )}
+                      <div className="mt-1 flex justify-between items-center">
+                        <span className="text-xs text-gray-500">{employeeShifts.length}日</span>
+                        <span className={`font-bold text-sm ${totalCost > 0 ? 'text-ocean-700' : 'text-gray-400'}`}>
+                          ¥{totalCost.toLocaleString()}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* 表ビュー */}
         {viewMode === 'table' && (
