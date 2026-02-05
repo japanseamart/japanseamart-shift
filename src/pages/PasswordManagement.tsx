@@ -28,7 +28,8 @@ export default function PasswordManagement({ role, storeId, onLogout }: Password
     try {
       const res = await fetch(getApiUrl('/api/stores'));
       const data = await res.json();
-      setStores(data.filter((s: Store) => s.id !== 8)); // 本部以外
+      // 本部も含めて全店舗を表示（本部のパスワードも変更可能）
+      setStores(data);
       if (data.length > 0) {
         setSelectedStoreId(data[0].id);
       }

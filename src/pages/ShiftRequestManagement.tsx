@@ -77,7 +77,8 @@ export default function ShiftRequestManagement({ role, storeId, onLogout }: Shif
     try {
       const res = await fetch(getApiUrl('/api/stores'));
       const data = await res.json();
-      setStores(data.filter((s: Store) => s.id !== 8));
+      // 本部も含めて全店舗を表示（管理者は本部のシフト希望も確認可能）
+      setStores(data);
       
       if (role === 'admin' && selectedStoreId === null) {
         setSelectedStoreId(null);

@@ -112,7 +112,8 @@ export default function MonthlyReport({ role, storeId, onLogout }: MonthlyReport
     try {
       const res = await fetch(getApiUrl('/api/stores'));
       const data = await res.json();
-      setStores(data.filter((s: Store) => s.id !== 8));
+      // 本部も含めて全店舗を表示（管理者は本部のレポートも確認可能）
+      setStores(data);
       
       // 店舗責任者の場合は自店舗を選択、管理者の場合は未選択（全店計）
       if (role === 'store_manager' && storeId) {

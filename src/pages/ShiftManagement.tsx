@@ -160,7 +160,8 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
     try {
       const res = await fetch(getApiUrl('/api/stores'));
       const data = await res.json();
-      setStores(data.filter((s: Store) => s.id !== 8));
+      // 本部も含めて全店舗を表示（管理者は本部のシフトも管理可能）
+      setStores(data);
       if (!selectedStoreId && data.length > 0) {
         setSelectedStoreId(data[0].id);
       }
