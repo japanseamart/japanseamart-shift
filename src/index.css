@@ -228,36 +228,16 @@ body {
   .print-requests-only {
     display: none !important;
   }
-}
 
-/* シフト表印刷モード */
-body.print-mode-shift .print-requests-only {
-  display: none !important;
-}
-
-/* シフト希望一覧印刷モード */
-@media print {
+  /* シフト希望一覧印刷モード */
   body.print-mode-requests .print-requests-only {
     display: block !important;
   }
 
-  /* シフト希望印刷時はシフト表関連を非表示 */
-  body.print-mode-requests [data-requests-panel],
-  body.print-mode-requests .card:not(.print-requests-only):not([data-requests-panel]) {
+  /* シフト希望印刷時は他のカードを非表示 */
+  body.print-mode-requests .card,
+  body.print-mode-requests [data-salary-summary],
+  body.print-mode-requests .no-print {
     display: none !important;
-  }
-
-  /* シフト希望印刷モード専用 - 印刷パネルのみ表示 */
-  body.print-mode-requests .print-requests-only {
-    display: block !important;
-    page-break-inside: avoid;
-  }
-
-  body.print-mode-requests main > *:not(.print-requests-only) {
-    display: none !important;
-  }
-
-  body.print-mode-requests main .print-requests-only {
-    display: block !important;
   }
 }

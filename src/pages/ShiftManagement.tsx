@@ -1269,7 +1269,7 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
         </div>
 
         {/* 印刷専用: シフト希望一覧（画面では非表示、印刷時のみ表示） */}
-        <div className="hidden print-requests-only">
+        <div className="print-requests-only" style={{ display: 'none' }}>
           <div className="print-shift-header">
             <h2 className="text-xl font-bold">📋 シフト希望一覧</h2>
             <p>{selectedStore?.name || '全店計'} - {targetYear}年{targetMonth}月{targetPeriod === 'first' ? '前半(1〜15日)' : '後半(16日〜)'}</p>
