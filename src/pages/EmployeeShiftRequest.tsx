@@ -96,8 +96,8 @@ export default function EmployeeShiftRequest() {
     try {
       const res = await fetch(getApiUrl('/api/stores'));
       const data = await res.json();
-      // 本部以外を表示
-      setStores(data.filter((s: Store) => s.id !== 8));
+      // 全店舗を表示（本部含む）
+      setStores(data);
       if (data.length > 0) {
         setSelectedStoreId(data[0].id);
       }

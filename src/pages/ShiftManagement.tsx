@@ -55,6 +55,7 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
   
   // 印刷モード
   const [showPrintDialog, setShowPrintDialog] = useState(false);
+  const [printType, setPrintType] = useState<'shift' | 'requests'>('shift');
   
   // ビューモード
   const [viewMode, setViewMode] = useState<'table' | 'list' | 'day' | 'heatmap' | 'cost'>('table');
@@ -295,7 +296,12 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
 
   const handlePrint = () => {
     setShowPrintDialog(false);
-    setTimeout(() => window.print(), 100);
+    // 印刷タイプに応じてクラスを追加
+    document.body.classList.add(`print-mode-${printType}`);
+    setTimeout(() => {
+      window.print();
+      document.body.classList.remove(`print-mode-${printType}`);
+    }, 100);
   };
 
   const handleAutoFillRequests = async () => {
@@ -872,8 +878,40 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
           <div className="card bg-green-50 border-2 border-green-200">
             <h3 className="text-lg font-bold text-gray-800 mb-4">🖨️ 印刷</h3>
             <p className="text-sm text-gray-700 mb-4">
-              現在表示中の期間（{targetMonth}月{targetPeriod === 'first' ? '前半' : '後半'}）を印刷します。
+              {selectedStore?.name || '全店計'} - {targetMonth}月{targetPeriod === 'first' ? '前半' : '後半'}
             </p>
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-2">印刷内容</label>
+              <div className="flex gap-4">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input 
+                    type="radio" 
+                    name="printType" 
+                    value="shift" 
+                    checked={printType === 'shift'}
+                    onChange={() => setPrintType('shift')}
+                    className="w-4 h-4 text-ocean-600"
+                  />
+                  <span className="text-sm">📅 シフト表</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input 
+                    type="radio" 
+                    name="printType" 
+                    value="requests" 
+                    checked={printType === 'requests'}
+                    onChange={() => setPrintType('requests')}
+                    className="w-4 h-4 text-ocean-600"
+                  />
+                  <span className="text-sm">📋 シフト希望一覧</span>
+                </label>
+              </div>
+              <p className="text-xs text-gray-500 mt-2">
+                {printType === 'shift' 
+                  ? '※ A4横向き・人件費は非表示で印刷されます' 
+                  : '※ A4横向きで印刷されます（シフト入力の参考資料として）'}
+              </p>
+            </div>
             <div className="flex justify-end gap-2">
               <button onClick={() => setShowPrintDialog(false)} className="btn-secondary">キャンセル</button>
               <button onClick={handlePrint} className="btn-primary">🖨️ 印刷</button>
@@ -1230,9 +1268,67 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
           )}
         </div>
 
-        {/* 従業員別給与サマリーパネル（テーブルビューで表示） */}
+        {/* 印刷専用: シフト希望一覧（画面では非表示、印刷時のみ表示） */}
+        <div className="hidden print-requests-only">
+          <div className="print-shift-header">
+            <h2 className="text-xl font-bold">📋 シフト希望一覧</h2>
+            <p>{selectedStore?.name || '全店計'} - {targetYear}年{targetMonth}月{targetPeriod === 'first' ? '前半(1〜15日)' : '後半(16日〜)'}</p>
+          </div>
+          <table className="print-shift-table w-full border-collapse">
+            <thead>
+              <tr className="bg-gray-100">
+                <th className="border border-gray-400 px-1 py-1 text-left text-xs">従業員</th>
+                {periodDates.map(date => {
+                  const dayOfWeek = date.getDay();
+                  return (
+                    <th key={date.toISOString()} className={`border border-gray-400 px-1 py-1 text-center text-xs ${
+                      dayOfWeek === 0 ? 'bg-red-100' : dayOfWeek === 6 ? 'bg-blue-100' : ''
+                    }`}>
+                      <div>{format(date, 'd')}</div>
+                      <div className="text-[8px]">{format(date, 'E', { locale: ja })}</div>
+                    </th>
+                  );
+                })}
+              </tr>
+            </thead>
+            <tbody>
+              {orderedEmployees.map(employee => (
+                <tr key={employee.id}>
+                  <td className="border border-gray-400 px-1 py-1 text-xs font-medium">{employee.name}</td>
+                  {periodDates.map(date => {
+                    const dateStr = format(date, 'yyyy-MM-dd');
+                    const request = getShiftRequestForEmployeeAndDate(employee.id, dateStr);
+                    const hasShift = getShiftForEmployeeAndDate(employee.id, dateStr);
+                    const isOff = request && isOffRequest(request);
+                    const dayOfWeek = date.getDay();
+                    return (
+                      <td key={date.toISOString()} className={`border border-gray-400 px-1 py-1 text-center text-[7px] ${
+                        dayOfWeek === 0 ? 'bg-red-50' : dayOfWeek === 6 ? 'bg-blue-50' : ''
+                      }`}>
+                        {request ? (
+                          <span className={isOff ? 'text-red-600 font-bold' : hasShift ? 'text-green-600' : ''}>
+                            {formatShiftRequestPatterns(request)}
+                            {hasShift && !isOff && ' ✓'}
+                          </span>
+                        ) : '−'}
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <div className="mt-2 text-xs">
+            <span className="mr-4">【凡例】</span>
+            <span className="text-red-600 font-bold mr-4">休：休み希望</span>
+            <span className="text-green-600 mr-4">✓：シフト反映済み</span>
+            <span className="mr-4">朝/昼/夜：時間帯希望</span>
+          </div>
+        </div>
+
+        {/* 従業員別給与サマリーパネル（テーブルビューで表示）- 印刷時非表示 */}
         {viewMode === 'table' && (
-          <div className="card mb-4">
+          <div className="card mb-4" data-salary-summary>
             <div 
               className="flex justify-between items-center cursor-pointer"
               onClick={() => setShowSalarySummary(!showSalarySummary)}

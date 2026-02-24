@@ -66,10 +66,10 @@ body {
     padding: 0 !important;
   }
 
-  /* ページ設定 */
+  /* ページ設定 - A4横向き */
   @page {
-    size: A4 portrait;
-    margin: 10mm;
+    size: A4 landscape;
+    margin: 8mm;
   }
 
   /* 改ページ制御 */
@@ -94,7 +94,8 @@ body {
   .card {
     box-shadow: none !important;
     border: 1px solid #e5e7eb !important;
-    margin-bottom: 10mm !important;
+    margin-bottom: 5mm !important;
+    padding: 3mm !important;
   }
 
   /* ボタンを非表示 */
@@ -107,16 +108,19 @@ body {
     text-decoration: none !important;
   }
 
-  /* テーブルを見やすく */
+  /* テーブルを見やすく - A4横向き最適化 */
   table {
     border-collapse: collapse !important;
     width: 100% !important;
+    table-layout: fixed !important;
   }
 
   th, td {
     border: 1px solid #333 !important;
-    padding: 3mm 2mm !important;
-    font-size: 9pt !important;
+    padding: 1.5mm 1mm !important;
+    font-size: 8pt !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
   }
 
   th {
@@ -129,6 +133,16 @@ body {
     display: none !important;
   }
 
+  /* 人件費関連カードを非表示 */
+  [data-cost-card] {
+    display: none !important;
+  }
+
+  /* 給与サマリーパネルを非表示 */
+  [data-salary-summary] {
+    display: none !important;
+  }
+
   /* シフト要求パネルを非表示 */
   [data-requests-panel] {
     display: none !important;
@@ -136,36 +150,114 @@ body {
 
   /* フォントサイズ調整 */
   body {
-    font-size: 10pt !important;
+    font-size: 9pt !important;
     color: #000 !important;
   }
 
   h1 {
-    font-size: 14pt !important;
-    margin-bottom: 3mm !important;
-  }
-
-  h2 {
     font-size: 12pt !important;
     margin-bottom: 2mm !important;
   }
 
-  h3 {
+  h2 {
     font-size: 11pt !important;
-    margin-bottom: 2mm !important;
+    margin-bottom: 1.5mm !important;
+  }
+
+  h3 {
+    font-size: 10pt !important;
+    margin-bottom: 1.5mm !important;
   }
 
   /* 印刷時のシフト表ヘッダー */
   .print-shift-header {
     text-align: center;
-    margin-bottom: 5mm;
+    margin-bottom: 3mm;
     border-bottom: 2px solid #333;
-    padding-bottom: 2mm;
+    padding-bottom: 1.5mm;
+  }
+
+  /* シフト表テーブル専用スタイル */
+  .print-shift-table {
+    font-size: 7pt !important;
+  }
+
+  .print-shift-table th,
+  .print-shift-table td {
+    padding: 1mm !important;
+    font-size: 7pt !important;
+    min-width: auto !important;
+  }
+
+  /* 従業員名列を狭く */
+  .print-shift-table td:first-child,
+  .print-shift-table th:first-child {
+    width: 60px !important;
+    max-width: 60px !important;
+  }
+
+  /* シフトセルを小さく */
+  .print-shift-table .shift-cell {
+    font-size: 6pt !important;
+    line-height: 1.2 !important;
   }
 
   /* 背景色を印刷 */
   * {
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
+  }
+
+  /* オーバーフローの制御 */
+  .overflow-auto {
+    overflow: visible !important;
+    max-height: none !important;
+  }
+
+  /* 印刷専用表示要素 */
+  .print-only {
+    display: block !important;
+  }
+
+  /* 非印刷要素（画面表示のみ） */
+  .screen-only {
+    display: none !important;
+  }
+
+  /* シフト希望印刷専用パネル - デフォルトは非表示 */
+  .print-requests-only {
+    display: none !important;
+  }
+}
+
+/* シフト表印刷モード */
+body.print-mode-shift .print-requests-only {
+  display: none !important;
+}
+
+/* シフト希望一覧印刷モード */
+@media print {
+  body.print-mode-requests .print-requests-only {
+    display: block !important;
+  }
+
+  /* シフト希望印刷時はシフト表関連を非表示 */
+  body.print-mode-requests [data-requests-panel],
+  body.print-mode-requests .card:not(.print-requests-only):not([data-requests-panel]) {
+    display: none !important;
+  }
+
+  /* シフト希望印刷モード専用 - 印刷パネルのみ表示 */
+  body.print-mode-requests .print-requests-only {
+    display: block !important;
+    page-break-inside: avoid;
+  }
+
+  body.print-mode-requests main > *:not(.print-requests-only) {
+    display: none !important;
+  }
+
+  body.print-mode-requests main .print-requests-only {
+    display: block !important;
   }
 }
