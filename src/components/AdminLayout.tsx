@@ -1,6 +1,7 @@
 import { ReactNode, useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { Role } from '../types';
+import HelpPanel from './HelpPanel';
 
 interface AdminLayoutProps {
   children: ReactNode;
@@ -179,6 +180,9 @@ export default function AdminLayout({ children, role, onLogout }: AdminLayoutPro
           </main>
         </div>
       </div>
+
+      {/* ヘルプパネル */}
+      <HelpPanel isAdmin={true} />
     </div>
   );
 }

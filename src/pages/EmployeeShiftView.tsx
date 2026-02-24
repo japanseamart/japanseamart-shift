@@ -4,6 +4,7 @@ import { format, startOfWeek, endOfWeek, eachDayOfInterval, addWeeks, subWeeks }
 import { ja } from 'date-fns/locale';
 import { Store, Employee, Shift, Announcement } from '../types';
 import { getApiUrl } from '../config/api';
+import HelpPanel from '../components/HelpPanel';
 
 export default function EmployeeShiftView() {
   const [stores, setStores] = useState<Store[]>([]);
@@ -418,6 +419,9 @@ export default function EmployeeShiftView() {
           )}
         </div>
       </div>
+
+      {/* ヘルプパネル */}
+      <HelpPanel isAdmin={false} />
     </div>
   );
 }

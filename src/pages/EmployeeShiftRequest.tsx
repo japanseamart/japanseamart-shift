@@ -5,6 +5,7 @@ import { ja } from 'date-fns/locale';
 import type { Store, Employee, ShiftRequest, SpecialDay } from '../types';
 import { getApiUrl } from '../config/api';
 import { getPeriodDates } from '../utils/dateUtils';
+import HelpPanel from '../components/HelpPanel';
 
 interface ShiftPattern {
   id: string;
@@ -659,6 +660,9 @@ export default function EmployeeShiftRequest() {
           </>
         )}
       </div>
+
+      {/* ヘルプパネル */}
+      <HelpPanel isAdmin={false} />
     </div>
   );
 }
