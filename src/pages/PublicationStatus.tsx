@@ -169,14 +169,23 @@ export default function PublicationStatus({ role, storeId, onLogout }: Publicati
       return { text: '未設定', color: 'text-gray-400', bg: 'bg-gray-100', icon: '⚪' };
     }
     const deadlineDate = new Date(deadline.deadline_date);
+    deadlineDate.setHours(23, 59, 59, 999); // 締切日の23:59:59まで有効
     const now = new Date();
-    now.setHours(0, 0, 0, 0);
-    deadlineDate.setHours(0, 0, 0, 0);
     
     if (deadlineDate < now) {
       return { text: '締切済', color: 'text-gray-500', bg: 'bg-gray-200', icon: '⏰' };
     }
-    const diffDays = Math.ceil((deadlineDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+    
+    // 日数計算は0時基準で
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const deadlineDay = new Date(deadline.deadline_date);
+    deadlineDay.setHours(0, 0, 0, 0);
+    const diffDays = Math.ceil((deadlineDay.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+    
+    if (diffDays === 0) {
+      return { text: '本日締切', color: 'text-red-600', bg: 'bg-red-100', icon: '🔴' };
+    }
     if (diffDays <= 3) {
       return { text: `あと${diffDays}日`, color: 'text-red-600', bg: 'bg-red-100', icon: '🔴' };
     }

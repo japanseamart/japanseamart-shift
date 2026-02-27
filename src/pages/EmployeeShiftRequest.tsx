@@ -201,10 +201,14 @@ export default function EmployeeShiftRequest() {
       return;
     }
 
-    // 締切チェック
-    if (currentDeadline && isBefore(parseISO(currentDeadline.deadline_date), new Date())) {
-      setMessage({ type: 'error', text: 'シフト希望の締切が過ぎています' });
-      return;
+    // 締切チェック（締切日の23:59:59まで有効）
+    if (currentDeadline) {
+      const deadlineDateTime = new Date(currentDeadline.deadline_date);
+      deadlineDateTime.setHours(23, 59, 59, 999);
+      if (isBefore(deadlineDateTime, new Date())) {
+        setMessage({ type: 'error', text: 'シフト希望の締切が過ぎています' });
+        return;
+      }
     }
 
     setSaving(true);
@@ -307,15 +311,29 @@ export default function EmployeeShiftRequest() {
     setTargetPeriod(now.getDate() <= 15 ? 'first' : 'second');
   };
 
-  const isDeadlinePassed = currentDeadline ? isBefore(parseISO(currentDeadline.deadline_date), new Date()) : false;
+  // 締切判定（締切日の23:59:59まで有効）
+  const isDeadlinePassed = (() => {
+    if (!currentDeadline) return false;
+    const deadlineDateTime = new Date(currentDeadline.deadline_date);
+    deadlineDateTime.setHours(23, 59, 59, 999);
+    return isBefore(deadlineDateTime, new Date());
+  })();
 
   // 締切までの日数計算
   const getDaysUntilDeadline = (deadline: ShiftDeadline) => {
+    const now = new Date();
+    const deadlineDate = new Date(deadline.deadline_date);
+    deadlineDate.setHours(23, 59, 59, 999);
+    // 締切日が過ぎていれば負の値
+    if (isBefore(deadlineDate, now)) {
+      return -1;
+    }
+    // 今日の0時からの日数計算
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    const deadlineDate = new Date(deadline.deadline_date);
-    deadlineDate.setHours(0, 0, 0, 0);
-    const diffTime = deadlineDate.getTime() - today.getTime();
+    const deadlineDay = new Date(deadline.deadline_date);
+    deadlineDay.setHours(0, 0, 0, 0);
+    const diffTime = deadlineDay.getTime() - today.getTime();
     return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
   };
 
