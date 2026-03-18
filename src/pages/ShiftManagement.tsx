@@ -68,6 +68,10 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
   // 給与サマリーパネルの表示状態
   const [showSalarySummary, setShowSalarySummary] = useState(true);
   
+  // 月別予算
+  const [monthlyBudget, setMonthlyBudget] = useState<number | null>(null);
+  const [allStoresMonthlyBudgets, setAllStoresMonthlyBudgets] = useState<{ [storeId: number]: number }>({});
+  
   // 期間キーを生成（店舗ID-年-月-期間）
   const getPeriodKey = () => {
     const storeKey = isAllStores ? 'all' : selectedStoreId;
@@ -90,11 +94,13 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
     if (isAllStores) {
       // 全店フィルタモード
       fetchAllShifts();
+      fetchAllStoresMonthlyBudgets();
     } else if (selectedStoreId) {
       fetchStore(selectedStoreId);
       fetchEmployees(selectedStoreId);
       fetchShifts();
       fetchShiftRequests();
+      fetchMonthlyBudget(selectedStoreId);
       fetchPublicationStatus();
     }
   }, [selectedStoreId, targetYear, targetMonth, targetPeriod, isAllStores]);
@@ -191,6 +197,34 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
       setEmployees(data);
     } catch (error) {
       console.error('従業員取得エラー:', error);
+    }
+  };
+
+  // 月別予算を取得
+  const fetchMonthlyBudget = async (storeId: number) => {
+    try {
+      const res = await fetch(getApiUrl(`/api/monthly-budgets/${storeId}/${targetYear}/${targetMonth}`));
+      const data = await res.json();
+      setMonthlyBudget(data.budget || null);
+    } catch (error) {
+      console.error('月別予算取得エラー:', error);
+      setMonthlyBudget(null);
+    }
+  };
+
+  // 全店舗の月別予算を取得
+  const fetchAllStoresMonthlyBudgets = async () => {
+    try {
+      const res = await fetch(getApiUrl(`/api/monthly-budgets?year=${targetYear}&month=${targetMonth}`));
+      const data = await res.json();
+      const budgetMap: { [storeId: number]: number } = {};
+      data.forEach((b: { store_id: number; budget: number }) => {
+        budgetMap[b.store_id] = b.budget;
+      });
+      setAllStoresMonthlyBudgets(budgetMap);
+    } catch (error) {
+      console.error('全店舗月別予算取得エラー:', error);
+      setAllStoresMonthlyBudgets({});
     }
   };
 
@@ -795,9 +829,17 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
     return 'bg-blue-500';
   };
 
-  // 全店計モードでは全店舗の予算合計、単一店舗では選択店舗の予算
-  const allStoresBudget = stores.reduce((sum, store) => sum + (store.monthly_budget || 0), 0);
-  const totalMonthlyBudget = isAllStores ? allStoresBudget : (selectedStore?.monthly_budget || 0);
+  // 全店計モードでは全店舗の月別予算合計、単一店舗では選択店舗の月別予算（月別予算がなければ店舗デフォルト予算を使用）
+  const getMonthlyBudgetForStore = (store: Store): number => {
+    // 月別予算テーブルに設定があればそれを使用、なければ店舗のデフォルト予算
+    const monthlyBudgetValue = allStoresMonthlyBudgets[store.id];
+    return monthlyBudgetValue !== undefined ? monthlyBudgetValue : (store.monthly_budget || 0);
+  };
+  
+  const allStoresBudget = stores.reduce((sum, store) => sum + getMonthlyBudgetForStore(store), 0);
+  const totalMonthlyBudget = isAllStores 
+    ? allStoresBudget 
+    : (monthlyBudget !== null ? monthlyBudget : (selectedStore?.monthly_budget || 0));
   const periodBudget = totalMonthlyBudget ? Math.round(totalMonthlyBudget / 2) : 0;
   const budgetUsagePercent = periodBudget > 0 ? (totalLaborCost / periodBudget) * 100 : 0;
   const periodStatus = budgetUsagePercent >= dangerThreshold ? 'danger' : budgetUsagePercent >= warningThreshold ? 'warning' : 'normal';

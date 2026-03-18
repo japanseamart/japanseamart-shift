@@ -19,6 +19,7 @@ import PasswordManagement from './pages/PasswordManagement';
 import StoreRanking from './pages/StoreRanking';
 import OtherStoreShifts from './pages/OtherStoreShifts';
 import PublicationStatus from './pages/PublicationStatus';
+import BudgetManagement from './pages/BudgetManagement';
 
 function App() {
   const [role, setRole] = useState<Role | null>(null);
@@ -252,6 +253,16 @@ function App() {
           element={
             role === 'admin' ? (
               <PublicationStatus role={role} storeId={storeId} onLogout={handleLogout} />
+            ) : (
+              <Navigate to="/admin/login" replace />
+            )
+          }
+        />
+        <Route
+          path="/admin/budgets"
+          element={
+            role === 'admin' ? (
+              <BudgetManagement role={role} storeId={storeId} onLogout={handleLogout} />
             ) : (
               <Navigate to="/admin/login" replace />
             )

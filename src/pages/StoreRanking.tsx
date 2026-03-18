@@ -124,6 +124,14 @@ export default function StoreRanking({ role, storeId, onLogout }: StoreRankingPr
       const endStr = format(end, 'yyyy-MM-dd');
       const periodDays = (end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24) + 1;
 
+      // 全店舗の月別予算を取得
+      const budgetsRes = await fetch(getApiUrl(`/api/monthly-budgets?year=${targetYear}&month=${targetMonth}`));
+      const budgetsData = await budgetsRes.json();
+      const monthlyBudgets: { [storeId: number]: number } = {};
+      budgetsData.forEach((b: { store_id: number; budget: number }) => {
+        monthlyBudgets[b.store_id] = b.budget;
+      });
+
       const stats: StoreStats[] = await Promise.all(
         stores.map(async (store) => {
           // 従業員取得
@@ -143,10 +151,13 @@ export default function StoreRanking({ role, storeId, onLogout }: StoreRankingPr
             }
           });
 
-          // 予算消化率（期間に応じて調整）
+          // 予算消化率（月別予算がある場合はそれを使用、なければ店舗デフォルト予算）
+          const storeMonthlyBudget = monthlyBudgets[store.id] !== undefined 
+            ? monthlyBudgets[store.id] 
+            : store.monthly_budget;
           const periodBudget = targetPeriod === 'full' 
-            ? store.monthly_budget 
-            : store.monthly_budget / 2;
+            ? storeMonthlyBudget 
+            : storeMonthlyBudget / 2;
           const budgetUsage = periodBudget > 0 ? (laborCost / periodBudget) * 100 : 0;
 
           // 月末予想（前半の場合は2倍、後半の場合は前半+後半）

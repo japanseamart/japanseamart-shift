@@ -1110,6 +1110,189 @@ app.put('/passwords/:id', async (c) => {
   return c.json(updatedPassword)
 })
 
+// ==================== 月別予算API ====================
+
+// 月別予算一覧取得（年・店舗でフィルタ可能）
+app.get('/monthly-budgets', async (c) => {
+  const store_id = c.req.query('store_id')
+  const year = c.req.query('year')
+  
+  let query = 'SELECT * FROM monthly_budgets WHERE 1=1'
+  const params: (string | number)[] = []
+  
+  if (store_id) {
+    query += ' AND store_id = ?'
+    params.push(parseInt(store_id))
+  }
+  if (year) {
+    query += ' AND year = ?'
+    params.push(parseInt(year))
+  }
+  
+  query += ' ORDER BY store_id, year, month'
+  
+  const stmt = c.env.DB.prepare(query)
+  const { results } = params.length > 0 
+    ? await stmt.bind(...params).all()
+    : await stmt.all()
+  
+  return c.json(results)
+})
+
+// 特定月の予算取得
+app.get('/monthly-budgets/:store_id/:year/:month', async (c) => {
+  const store_id = c.req.param('store_id')
+  const year = c.req.param('year')
+  const month = c.req.param('month')
+  
+  const budget = await c.env.DB.prepare(`
+    SELECT * FROM monthly_budgets 
+    WHERE store_id = ? AND year = ? AND month = ?
+  `).bind(store_id, year, month).first()
+  
+  return c.json(budget || { store_id: parseInt(store_id), year: parseInt(year), month: parseInt(month), budget: null })
+})
+
+// 月別予算を設定/更新
+app.post('/monthly-budgets', async (c) => {
+  const { store_id, year, month, budget, note } = await c.req.json()
+  
+  // 既存レコードを確認
+  const existing = await c.env.DB.prepare(`
+    SELECT id FROM monthly_budgets 
+    WHERE store_id = ? AND year = ? AND month = ?
+  `).bind(store_id, year, month).first()
+  
+  if (existing) {
+    // 更新
+    await c.env.DB.prepare(`
+      UPDATE monthly_budgets 
+      SET budget = ?, note = ?, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `).bind(budget, note || null, existing.id).run()
+  } else {
+    // 新規作成
+    await c.env.DB.prepare(`
+      INSERT INTO monthly_budgets (store_id, year, month, budget, note)
+      VALUES (?, ?, ?, ?, ?)
+    `).bind(store_id, year, month, budget, note || null).run()
+  }
+  
+  const result = await c.env.DB.prepare(`
+    SELECT * FROM monthly_budgets 
+    WHERE store_id = ? AND year = ? AND month = ?
+  `).bind(store_id, year, month).first()
+  
+  return c.json(result)
+})
+
+// 前月から予算をコピー
+app.post('/monthly-budgets/copy-from-previous', async (c) => {
+  const { store_id, year, month } = await c.req.json()
+  
+  // 前月を計算
+  let prevYear = year
+  let prevMonth = month - 1
+  if (prevMonth === 0) {
+    prevMonth = 12
+    prevYear = year - 1
+  }
+  
+  // 前月の予算を取得
+  const prevBudget = await c.env.DB.prepare(`
+    SELECT budget, note FROM monthly_budgets 
+    WHERE store_id = ? AND year = ? AND month = ?
+  `).bind(store_id, prevYear, prevMonth).first()
+  
+  if (!prevBudget) {
+    // 前月の予算がない場合は店舗のデフォルト予算を使用
+    const store = await c.env.DB.prepare(`
+      SELECT monthly_budget FROM stores WHERE id = ?
+    `).bind(store_id).first()
+    
+    if (!store) {
+      return c.json({ error: '店舗が見つかりません' }, 404)
+    }
+    
+    // デフォルト予算で新規作成
+    await c.env.DB.prepare(`
+      INSERT INTO monthly_budgets (store_id, year, month, budget, note)
+      VALUES (?, ?, ?, ?, ?)
+      ON CONFLICT(store_id, year, month) DO UPDATE SET
+        budget = excluded.budget,
+        note = excluded.note,
+        updated_at = CURRENT_TIMESTAMP
+    `).bind(store_id, year, month, store.monthly_budget || 0, '店舗デフォルト予算からコピー').run()
+  } else {
+    // 前月の予算をコピー
+    await c.env.DB.prepare(`
+      INSERT INTO monthly_budgets (store_id, year, month, budget, note)
+      VALUES (?, ?, ?, ?, ?)
+      ON CONFLICT(store_id, year, month) DO UPDATE SET
+        budget = excluded.budget,
+        note = excluded.note,
+        updated_at = CURRENT_TIMESTAMP
+    `).bind(store_id, year, month, prevBudget.budget, `${prevYear}年${prevMonth}月からコピー`).run()
+  }
+  
+  const result = await c.env.DB.prepare(`
+    SELECT * FROM monthly_budgets 
+    WHERE store_id = ? AND year = ? AND month = ?
+  `).bind(store_id, year, month).first()
+  
+  return c.json(result)
+})
+
+// 全店舗の予算を一括コピー
+app.post('/monthly-budgets/copy-all-from-previous', async (c) => {
+  const { year, month } = await c.req.json()
+  
+  // 前月を計算
+  let prevYear = year
+  let prevMonth = month - 1
+  if (prevMonth === 0) {
+    prevMonth = 12
+    prevYear = year - 1
+  }
+  
+  // 全店舗を取得
+  const { results: stores } = await c.env.DB.prepare('SELECT id, monthly_budget FROM stores').all()
+  
+  let copiedCount = 0
+  let skippedCount = 0
+  
+  for (const store of stores as { id: number; monthly_budget: number }[]) {
+    // 既に設定されているか確認
+    const existing = await c.env.DB.prepare(`
+      SELECT id FROM monthly_budgets 
+      WHERE store_id = ? AND year = ? AND month = ?
+    `).bind(store.id, year, month).first()
+    
+    if (existing) {
+      skippedCount++
+      continue
+    }
+    
+    // 前月の予算を取得
+    const prevBudget = await c.env.DB.prepare(`
+      SELECT budget FROM monthly_budgets 
+      WHERE store_id = ? AND year = ? AND month = ?
+    `).bind(store.id, prevYear, prevMonth).first()
+    
+    const budgetValue = prevBudget ? (prevBudget as { budget: number }).budget : store.monthly_budget || 0
+    const noteText = prevBudget ? `${prevYear}年${prevMonth}月からコピー` : '店舗デフォルト予算'
+    
+    await c.env.DB.prepare(`
+      INSERT INTO monthly_budgets (store_id, year, month, budget, note)
+      VALUES (?, ?, ?, ?, ?)
+    `).bind(store.id, year, month, budgetValue, noteText).run()
+    
+    copiedCount++
+  }
+  
+  return c.json({ success: true, copied_count: copiedCount, skipped_count: skippedCount })
+})
+
 // Cloudflare Pages Functions エクスポート
 export const onRequest: PagesFunction = async (context) => {
   return app.fetch(context.request, context.env, context)

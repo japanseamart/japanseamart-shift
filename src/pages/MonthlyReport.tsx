@@ -73,6 +73,8 @@ export default function MonthlyReport({ role, storeId, onLogout }: MonthlyReport
   const [isAllStores, setIsAllStores] = useState(false); // 全店計モード
   const [allEmployees, setAllEmployees] = useState<Employee[]>([]); // 全従業員データ
   const [allStoresBudget, setAllStoresBudget] = useState(0); // 全店計予算
+  const [monthlyBudget, setMonthlyBudget] = useState<number | null>(null); // 月別予算
+  const [allStoresMonthlyBudgets, setAllStoresMonthlyBudgets] = useState<{ [storeId: number]: number }>({}); // 全店舗の月別予算
   
   // 前半/後半分析データ
   const [firstHalfStats, setFirstHalfStats] = useState<{ cost: number; shifts: number; staffCount: number; workHours: number } | null>(null);
@@ -100,11 +102,13 @@ export default function MonthlyReport({ role, storeId, onLogout }: MonthlyReport
     if (isAllStores) {
       // 全店計モード
       fetchMonthlyData();
+      fetchAllStoresMonthlyBudgets();
     } else if (selectedStoreId) {
       // 単一店舗モード
       fetchStore(selectedStoreId);
       fetchEmployees(selectedStoreId);
       fetchMonthlyData();
+      fetchMonthlyBudget(selectedStoreId);
     }
   }, [selectedStoreId, targetMonth, isAllStores]);
 
@@ -160,6 +164,43 @@ export default function MonthlyReport({ role, storeId, onLogout }: MonthlyReport
     }
   };
 
+  // 月別予算を取得
+  const fetchMonthlyBudget = async (storeId: number) => {
+    try {
+      const [year, month] = targetMonth.split('-').map(Number);
+      const res = await fetch(getApiUrl(`/api/monthly-budgets/${storeId}/${year}/${month}`));
+      const data = await res.json();
+      setMonthlyBudget(data.budget || null);
+    } catch (error) {
+      console.error('月別予算取得エラー:', error);
+      setMonthlyBudget(null);
+    }
+  };
+
+  // 全店舗の月別予算を取得
+  const fetchAllStoresMonthlyBudgets = async () => {
+    try {
+      const [year, month] = targetMonth.split('-').map(Number);
+      const res = await fetch(getApiUrl(`/api/monthly-budgets?year=${year}&month=${month}`));
+      const data = await res.json();
+      const budgetMap: { [storeId: number]: number } = {};
+      data.forEach((b: { store_id: number; budget: number }) => {
+        budgetMap[b.store_id] = b.budget;
+      });
+      setAllStoresMonthlyBudgets(budgetMap);
+      
+      // 全店舗の予算合計を計算
+      const totalBudget = stores.reduce((sum, store) => {
+        const monthlyBudgetValue = budgetMap[store.id];
+        return sum + (monthlyBudgetValue !== undefined ? monthlyBudgetValue : (store.monthly_budget || 0));
+      }, 0);
+      setAllStoresBudget(totalBudget);
+    } catch (error) {
+      console.error('全店舗月別予算取得エラー:', error);
+      setAllStoresMonthlyBudgets({});
+    }
+  };
+
   const fetchMonthlyData = async () => {
     if (!isAllStores && !selectedStoreId) return;
 
@@ -197,13 +238,18 @@ export default function MonthlyReport({ role, storeId, onLogout }: MonthlyReport
 
       const uniqueEmployees = new Set(shiftsData.map(s => s.employee_id)).size;
 
-      // 予算計算（全店計の場合は全店舗の予算合計）
+      // 予算計算（月別予算がある場合はそれを使用、なければ店舗デフォルト予算）
       let totalBudget = 0;
       if (isAllStores) {
-        totalBudget = stores.reduce((sum, store) => sum + (store.monthly_budget || 0), 0);
+        // 全店計の場合：月別予算を合計、月別予算がない店舗はデフォルト予算を使用
+        totalBudget = stores.reduce((sum, store) => {
+          const monthlyBudgetValue = allStoresMonthlyBudgets[store.id];
+          return sum + (monthlyBudgetValue !== undefined ? monthlyBudgetValue : (store.monthly_budget || 0));
+        }, 0);
         setAllStoresBudget(totalBudget); // 全店計予算を保存
       } else {
-        totalBudget = selectedStore?.monthly_budget || 0;
+        // 単一店舗の場合：月別予算があればそれを使用
+        totalBudget = monthlyBudget !== null ? monthlyBudget : (selectedStore?.monthly_budget || 0);
       }
 
       const monthlyStats: MonthlyStats = {
@@ -640,8 +686,8 @@ export default function MonthlyReport({ role, storeId, onLogout }: MonthlyReport
               const staffCount = periodTab === 'all' && stats ? stats.employeeCount :
                 ('staffCount' in rawStats ? rawStats.staffCount : 0);
               
-              // 全店計モードではallStoresBudget、単一店舗ではselectedStore.monthly_budgetを使用
-              const storeBudget = isAllStores ? allStoresBudget : (selectedStore?.monthly_budget || 0);
+              // 全店計モードではallStoresBudget、単一店舗では月別予算またはselectedStore.monthly_budgetを使用
+              const storeBudget = isAllStores ? allStoresBudget : (monthlyBudget !== null ? monthlyBudget : (selectedStore?.monthly_budget || 0));
               const budget = periodTab === 'all' ? storeBudget : storeBudget / 2;
               const budgetUsage = budget > 0 ? Math.round((cost / budget) * 100) : 0;
               
@@ -701,8 +747,8 @@ export default function MonthlyReport({ role, storeId, onLogout }: MonthlyReport
             {((isAllStores && allStoresBudget > 0) || selectedStore?.monthly_budget) && (() => {
               const rawStats = periodTab === 'all' ? stats :
                 periodTab === 'first' ? firstHalfStats : secondHalfStats;
-              // 全店計モードではallStoresBudget、単一店舗ではselectedStore.monthly_budgetを使用
-              const storeBudget = isAllStores ? allStoresBudget : (selectedStore?.monthly_budget || 0);
+              // 全店計モードではallStoresBudget、単一店舗では月別予算またはselectedStore.monthly_budgetを使用
+              const storeBudget = isAllStores ? allStoresBudget : (monthlyBudget !== null ? monthlyBudget : (selectedStore?.monthly_budget || 0));
               const budget = periodTab === 'all' ? storeBudget : storeBudget / 2;
               const actualCost = rawStats 
                 ? (periodTab === 'all' && stats ? stats.totalLaborCost : ('cost' in rawStats ? rawStats.cost : 0))
@@ -940,8 +986,8 @@ export default function MonthlyReport({ role, storeId, onLogout }: MonthlyReport
             {(() => {
               const currentDailyData = periodTab === 'all' ? dailyData :
                 periodTab === 'first' ? firstHalfDailyData : secondHalfDailyData;
-              // 全店計モードではallStoresBudget、単一店舗ではselectedStore.monthly_budgetを使用
-              const storeBudget = isAllStores ? allStoresBudget : (selectedStore?.monthly_budget || 0);
+              // 全店計モードではallStoresBudget、単一店舗では月別予算またはselectedStore.monthly_budgetを使用
+              const storeBudget = isAllStores ? allStoresBudget : (monthlyBudget !== null ? monthlyBudget : (selectedStore?.monthly_budget || 0));
               const budget = periodTab === 'all' ? storeBudget : storeBudget / 2;
               
               return (
