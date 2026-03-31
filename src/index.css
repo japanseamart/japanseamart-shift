@@ -232,6 +232,13 @@ body {
   /* シフト希望一覧印刷モード */
   body.print-mode-requests .print-requests-only {
     display: block !important;
+    visibility: visible !important;
+  }
+
+  /* シフト希望一覧印刷モード - hiddenクラスを上書き */
+  body.print-mode-requests .print-requests-only.hidden {
+    display: block !important;
+    visibility: visible !important;
   }
 
   /* シフト希望印刷時は他のカードを非表示 */
