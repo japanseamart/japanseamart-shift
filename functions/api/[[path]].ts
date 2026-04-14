@@ -1293,6 +1293,86 @@ app.post('/monthly-budgets/copy-all-from-previous', async (c) => {
   return c.json({ success: true, copied_count: copiedCount, skipped_count: skippedCount })
 })
 
+// ==================== 暗証番号（PIN）関連 ====================
+
+// 暗証番号認証（ログインチェック）
+app.post('/employees/:id/verify-pin', async (c) => {
+  const id = c.req.param('id')
+  const { pin } = await c.req.json()
+  
+  const employee = await c.env.DB.prepare(
+    'SELECT id, name, pin FROM employees WHERE id = ?'
+  ).bind(id).first() as { id: number; name: string; pin: string } | null
+  
+  if (!employee) {
+    return c.json({ error: '従業員が見つかりません' }, 404)
+  }
+  
+  const storedPin = employee.pin || '0000'
+  const isValid = storedPin === pin
+  const isDefaultPin = storedPin === '0000'
+  
+  return c.json({ 
+    valid: isValid, 
+    isDefaultPin: isDefaultPin,
+    employeeName: employee.name 
+  })
+})
+
+// 暗証番号変更
+app.put('/employees/:id/pin', async (c) => {
+  const id = c.req.param('id')
+  const { currentPin, newPin } = await c.req.json()
+  
+  // 新しいPINが4桁の数字かチェック
+  if (!newPin || !/^\d{4}$/.test(newPin)) {
+    return c.json({ error: '暗証番号は4桁の数字で入力してください' }, 400)
+  }
+  
+  const employee = await c.env.DB.prepare(
+    'SELECT id, pin FROM employees WHERE id = ?'
+  ).bind(id).first() as { id: number; pin: string } | null
+  
+  if (!employee) {
+    return c.json({ error: '従業員が見つかりません' }, 404)
+  }
+  
+  const storedPin = employee.pin || '0000'
+  
+  // 現在のPINが正しいかチェック
+  if (storedPin !== currentPin) {
+    return c.json({ error: '現在の暗証番号が正しくありません' }, 401)
+  }
+  
+  // 新しいPINに更新
+  await c.env.DB.prepare(
+    'UPDATE employees SET pin = ? WHERE id = ?'
+  ).bind(newPin, id).run()
+  
+  return c.json({ success: true, message: '暗証番号を変更しました' })
+})
+
+// 従業員のPIN状態を確認（デフォルトかどうか）
+app.get('/employees/:id/pin-status', async (c) => {
+  const id = c.req.param('id')
+  
+  const employee = await c.env.DB.prepare(
+    'SELECT id, name, pin FROM employees WHERE id = ?'
+  ).bind(id).first() as { id: number; name: string; pin: string } | null
+  
+  if (!employee) {
+    return c.json({ error: '従業員が見つかりません' }, 404)
+  }
+  
+  const storedPin = employee.pin || '0000'
+  const isDefaultPin = storedPin === '0000'
+  
+  return c.json({ 
+    isDefaultPin: isDefaultPin,
+    employeeName: employee.name 
+  })
+})
+
 // Cloudflare Pages Functions エクスポート
 export const onRequest: PagesFunction = async (context) => {
   return app.fetch(context.request, context.env, context)

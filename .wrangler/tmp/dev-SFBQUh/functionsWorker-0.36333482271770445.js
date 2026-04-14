@@ -2581,6 +2581,60 @@ app.post("/monthly-budgets/copy-all-from-previous", async (c) => {
   }
   return c.json({ success: true, copied_count: copiedCount, skipped_count: skippedCount });
 });
+app.post("/employees/:id/verify-pin", async (c) => {
+  const id = c.req.param("id");
+  const { pin } = await c.req.json();
+  const employee = await c.env.DB.prepare(
+    "SELECT id, name, pin FROM employees WHERE id = ?"
+  ).bind(id).first();
+  if (!employee) {
+    return c.json({ error: "\u5F93\u696D\u54E1\u304C\u898B\u3064\u304B\u308A\u307E\u305B\u3093" }, 404);
+  }
+  const storedPin = employee.pin || "0000";
+  const isValid = storedPin === pin;
+  const isDefaultPin = storedPin === "0000";
+  return c.json({
+    valid: isValid,
+    isDefaultPin,
+    employeeName: employee.name
+  });
+});
+app.put("/employees/:id/pin", async (c) => {
+  const id = c.req.param("id");
+  const { currentPin, newPin } = await c.req.json();
+  if (!newPin || !/^\d{4}$/.test(newPin)) {
+    return c.json({ error: "\u6697\u8A3C\u756A\u53F7\u306F4\u6841\u306E\u6570\u5B57\u3067\u5165\u529B\u3057\u3066\u304F\u3060\u3055\u3044" }, 400);
+  }
+  const employee = await c.env.DB.prepare(
+    "SELECT id, pin FROM employees WHERE id = ?"
+  ).bind(id).first();
+  if (!employee) {
+    return c.json({ error: "\u5F93\u696D\u54E1\u304C\u898B\u3064\u304B\u308A\u307E\u305B\u3093" }, 404);
+  }
+  const storedPin = employee.pin || "0000";
+  if (storedPin !== currentPin) {
+    return c.json({ error: "\u73FE\u5728\u306E\u6697\u8A3C\u756A\u53F7\u304C\u6B63\u3057\u304F\u3042\u308A\u307E\u305B\u3093" }, 401);
+  }
+  await c.env.DB.prepare(
+    "UPDATE employees SET pin = ? WHERE id = ?"
+  ).bind(newPin, id).run();
+  return c.json({ success: true, message: "\u6697\u8A3C\u756A\u53F7\u3092\u5909\u66F4\u3057\u307E\u3057\u305F" });
+});
+app.get("/employees/:id/pin-status", async (c) => {
+  const id = c.req.param("id");
+  const employee = await c.env.DB.prepare(
+    "SELECT id, name, pin FROM employees WHERE id = ?"
+  ).bind(id).first();
+  if (!employee) {
+    return c.json({ error: "\u5F93\u696D\u54E1\u304C\u898B\u3064\u304B\u308A\u307E\u305B\u3093" }, 404);
+  }
+  const storedPin = employee.pin || "0000";
+  const isDefaultPin = storedPin === "0000";
+  return c.json({
+    isDefaultPin,
+    employeeName: employee.name
+  });
+});
 var onRequest = /* @__PURE__ */ __name2(async (context) => {
   return app.fetch(context.request, context.env, context);
 }, "onRequest");

@@ -61,6 +61,18 @@ export default function EmployeeShiftRequest() {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
+  // 暗証番号認証関連
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [pinInput, setPinInput] = useState(['', '', '', '']);
+  const [pinError, setPinError] = useState<string | null>(null);
+  const [isDefaultPin, setIsDefaultPin] = useState(false);
+  const [showPinChangeModal, setShowPinChangeModal] = useState(false);
+  const [currentPinForChange, setCurrentPinForChange] = useState('');
+  const [newPinInput, setNewPinInput] = useState(['', '', '', '']);
+  const [confirmPinInput, setConfirmPinInput] = useState(['', '', '', '']);
+  const [pinChangeError, setPinChangeError] = useState<string | null>(null);
+  const [pinChangeSuccess, setPinChangeSuccess] = useState(false);
+
   // 期間の日付リストを計算
   const { start: periodStart, end: periodEnd } = getPeriodDates(targetYear, targetMonth, targetPeriod);
   const periodDates = eachDayOfInterval({ start: periodStart, end: periodEnd });
@@ -92,6 +104,14 @@ export default function EmployeeShiftRequest() {
       fetchExistingRequests();
     }
   }, [selectedEmployeeId, targetYear, targetMonth, targetPeriod]);
+
+  // 従業員変更時に認証をリセット
+  useEffect(() => {
+    setIsAuthenticated(false);
+    setPinInput(['', '', '', '']);
+    setPinError(null);
+    setIsDefaultPin(false);
+  }, [selectedEmployeeId]);
 
   const fetchStores = async () => {
     try {
@@ -136,6 +156,143 @@ export default function EmployeeShiftRequest() {
       console.error('締切取得エラー:', error);
       setDeadlines([]);
     }
+  };
+
+  // 暗証番号入力ハンドラー
+  const handlePinInputChange = (index: number, value: string) => {
+    if (!/^\d*$/.test(value)) return; // 数字のみ許可
+    
+    const newPinInput = [...pinInput];
+    newPinInput[index] = value.slice(-1); // 1文字のみ
+    setPinInput(newPinInput);
+    setPinError(null);
+    
+    // 次の入力欄に自動フォーカス
+    if (value && index < 3) {
+      const nextInput = document.getElementById(`pin-${index + 1}`);
+      nextInput?.focus();
+    }
+    
+    // 4桁入力完了時に自動認証
+    if (newPinInput.every(p => p !== '') && index === 3) {
+      verifyPin(newPinInput.join(''));
+    }
+  };
+
+  // 暗証番号認証
+  const verifyPin = async (pin: string) => {
+    if (!selectedEmployeeId) return;
+    
+    try {
+      const res = await fetch(getApiUrl(`/api/employees/${selectedEmployeeId}/verify-pin`), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pin })
+      });
+      const data = await res.json();
+      
+      if (data.valid) {
+        setIsAuthenticated(true);
+        setIsDefaultPin(data.isDefaultPin);
+        setPinError(null);
+      } else {
+        setPinError('暗証番号が正しくありません');
+        setPinInput(['', '', '', '']);
+        // 最初の入力欄にフォーカス
+        setTimeout(() => {
+          document.getElementById('pin-0')?.focus();
+        }, 100);
+      }
+    } catch (error) {
+      console.error('認証エラー:', error);
+      setPinError('認証処理中にエラーが発生しました');
+    }
+  };
+
+  // 暗証番号変更ハンドラー（新しいPIN入力）
+  const handleNewPinChange = (index: number, value: string) => {
+    if (!/^\d*$/.test(value)) return;
+    const newPin = [...newPinInput];
+    newPin[index] = value.slice(-1);
+    setNewPinInput(newPin);
+    setPinChangeError(null);
+    if (value && index < 3) {
+      document.getElementById(`new-pin-${index + 1}`)?.focus();
+    }
+  };
+
+  // 暗証番号変更ハンドラー（確認用PIN入力）
+  const handleConfirmPinChange = (index: number, value: string) => {
+    if (!/^\d*$/.test(value)) return;
+    const confirmPin = [...confirmPinInput];
+    confirmPin[index] = value.slice(-1);
+    setConfirmPinInput(confirmPin);
+    setPinChangeError(null);
+    if (value && index < 3) {
+      document.getElementById(`confirm-pin-${index + 1}`)?.focus();
+    }
+  };
+
+  // 暗証番号変更実行
+  const handlePinChange = async () => {
+    if (!selectedEmployeeId) return;
+    
+    const newPin = newPinInput.join('');
+    const confirmPin = confirmPinInput.join('');
+    
+    if (newPin.length !== 4) {
+      setPinChangeError('新しい暗証番号を4桁入力してください');
+      return;
+    }
+    
+    if (newPin !== confirmPin) {
+      setPinChangeError('新しい暗証番号が一致しません');
+      return;
+    }
+    
+    if (newPin === '0000') {
+      setPinChangeError('0000以外の暗証番号を設定してください');
+      return;
+    }
+    
+    try {
+      const res = await fetch(getApiUrl(`/api/employees/${selectedEmployeeId}/pin`), {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          currentPin: currentPinForChange || pinInput.join(''),
+          newPin 
+        })
+      });
+      const data = await res.json();
+      
+      if (res.ok) {
+        setPinChangeSuccess(true);
+        setIsDefaultPin(false);
+        setTimeout(() => {
+          setShowPinChangeModal(false);
+          setPinChangeSuccess(false);
+          setNewPinInput(['', '', '', '']);
+          setConfirmPinInput(['', '', '', '']);
+          setCurrentPinForChange('');
+        }, 2000);
+      } else {
+        setPinChangeError(data.error || '暗証番号の変更に失敗しました');
+      }
+    } catch (error) {
+      console.error('PIN変更エラー:', error);
+      setPinChangeError('暗証番号変更中にエラーが発生しました');
+    }
+  };
+
+  // 暗証番号変更モーダルを開く
+  const openPinChangeModal = () => {
+    setCurrentPinForChange(pinInput.join(''));
+    setNewPinInput(['', '', '', '']);
+    setConfirmPinInput(['', '', '', '']);
+    setPinChangeError(null);
+    setPinChangeSuccess(false);
+    setShowPinChangeModal(true);
   };
 
   const fetchExistingRequests = async () => {
@@ -495,8 +652,162 @@ export default function EmployeeShiftRequest() {
           </div>
         </div>
 
-        {selectedEmployeeId && (
+        {/* 暗証番号入力画面（従業員選択後、未認証時に表示） */}
+        {selectedEmployeeId && !isAuthenticated && (
+          <div className="card mb-4 sm:mb-6">
+            <div className="text-center py-6">
+              <div className="w-16 h-16 bg-ocean-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <span className="text-3xl">🔐</span>
+              </div>
+              <h3 className="text-lg font-bold text-gray-800 mb-2">暗証番号を入力してください</h3>
+              <p className="text-sm text-gray-600 mb-6">
+                {employees.find(e => e.id === selectedEmployeeId)?.name}さんのシフト希望を編集するには<br />
+                4桁の暗証番号を入力してください
+              </p>
+              
+              {/* 4桁PIN入力 */}
+              <div className="flex justify-center gap-3 mb-4">
+                {[0, 1, 2, 3].map((index) => (
+                  <input
+                    key={index}
+                    id={`pin-${index}`}
+                    type="password"
+                    inputMode="numeric"
+                    maxLength={1}
+                    value={pinInput[index]}
+                    onChange={(e) => handlePinInputChange(index, e.target.value)}
+                    onKeyDown={(e) => {
+                      // バックスペースで前の入力欄に戻る
+                      if (e.key === 'Backspace' && !pinInput[index] && index > 0) {
+                        document.getElementById(`pin-${index - 1}`)?.focus();
+                      }
+                    }}
+                    className="w-14 h-16 text-center text-2xl font-bold border-2 border-gray-300 rounded-lg focus:border-ocean-500 focus:ring-2 focus:ring-ocean-200 outline-none"
+                    autoFocus={index === 0}
+                  />
+                ))}
+              </div>
+              
+              {pinError && (
+                <p className="text-red-600 font-medium mb-4">{pinError}</p>
+              )}
+              
+              <p className="text-xs text-gray-500">
+                初期暗証番号は「0000」です
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* 初期暗証番号アラート */}
+        {selectedEmployeeId && isAuthenticated && isDefaultPin && (
+          <div className="bg-yellow-50 border-2 border-yellow-400 rounded-lg p-4 mb-4 sm:mb-6">
+            <div className="flex items-start gap-3">
+              <span className="text-2xl">⚠️</span>
+              <div className="flex-1">
+                <p className="font-bold text-yellow-800">暗証番号が初期値のままです</p>
+                <p className="text-sm text-yellow-700 mt-1">
+                  セキュリティのため、暗証番号を変更することをお勧めします。<br />
+                  他の人にシフト希望を変更される可能性があります。
+                </p>
+                <button
+                  onClick={openPinChangeModal}
+                  className="mt-3 bg-yellow-500 hover:bg-yellow-600 text-white px-4 py-2 rounded-lg text-sm font-bold"
+                >
+                  🔑 暗証番号を変更する
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 暗証番号変更モーダル */}
+        {showPinChangeModal && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 px-4">
+            <div className="bg-white rounded-xl p-6 max-w-md w-full">
+              <h3 className="text-lg font-bold text-gray-800 mb-4 text-center">🔑 暗証番号を変更</h3>
+              
+              {pinChangeSuccess ? (
+                <div className="text-center py-6">
+                  <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <span className="text-3xl">✅</span>
+                  </div>
+                  <p className="text-green-700 font-bold">暗証番号を変更しました</p>
+                </div>
+              ) : (
+                <>
+                  <div className="mb-6">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">新しい暗証番号（4桁）</label>
+                    <div className="flex justify-center gap-3">
+                      {[0, 1, 2, 3].map((index) => (
+                        <input
+                          key={index}
+                          id={`new-pin-${index}`}
+                          type="password"
+                          inputMode="numeric"
+                          maxLength={1}
+                          value={newPinInput[index]}
+                          onChange={(e) => handleNewPinChange(index, e.target.value)}
+                          className="w-12 h-14 text-center text-xl font-bold border-2 border-gray-300 rounded-lg focus:border-ocean-500 focus:ring-2 focus:ring-ocean-200 outline-none"
+                        />
+                      ))}
+                    </div>
+                  </div>
+                  
+                  <div className="mb-6">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">確認用（もう一度入力）</label>
+                    <div className="flex justify-center gap-3">
+                      {[0, 1, 2, 3].map((index) => (
+                        <input
+                          key={index}
+                          id={`confirm-pin-${index}`}
+                          type="password"
+                          inputMode="numeric"
+                          maxLength={1}
+                          value={confirmPinInput[index]}
+                          onChange={(e) => handleConfirmPinChange(index, e.target.value)}
+                          className="w-12 h-14 text-center text-xl font-bold border-2 border-gray-300 rounded-lg focus:border-ocean-500 focus:ring-2 focus:ring-ocean-200 outline-none"
+                        />
+                      ))}
+                    </div>
+                  </div>
+                  
+                  {pinChangeError && (
+                    <p className="text-red-600 text-sm text-center mb-4">{pinChangeError}</p>
+                  )}
+                  
+                  <div className="flex gap-3">
+                    <button
+                      onClick={() => setShowPinChangeModal(false)}
+                      className="flex-1 btn-secondary h-12"
+                    >
+                      キャンセル
+                    </button>
+                    <button
+                      onClick={handlePinChange}
+                      className="flex-1 btn-primary h-12"
+                    >
+                      変更する
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        )}
+
+        {selectedEmployeeId && isAuthenticated && (
           <>
+            {/* 認証済み: 暗証番号変更ボタン */}
+            <div className="flex justify-end mb-2">
+              <button
+                onClick={openPinChangeModal}
+                className="text-sm text-ocean-600 hover:text-ocean-800 underline"
+              >
+                🔑 暗証番号を変更
+              </button>
+            </div>
+            
             {/* 期間選択 */}
             <div className="card mb-4 sm:mb-6">
               <div className="flex flex-col sm:flex-row items-center gap-3 sm:gap-0 sm:justify-between">
