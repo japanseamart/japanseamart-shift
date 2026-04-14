@@ -613,7 +613,7 @@ export default function EmployeeShiftRequest() {
                   getDaysUntilDeadline(currentDeadline) <= 3 ? 'text-orange-700' :
                   'text-blue-700'
                 }`}>
-                  {isDeadlinePassed ? '⚠️ 締切が過ぎています' : '📅 提出締切'}
+                  {isDeadlinePassed ? '⚠️ この期間の締切は終了しています' : '📅 提出締切'}
                   {currentDeadline.is_changed ? ' - 変更されました！' : ''}
                 </p>
                 <p className={`text-base sm:text-lg font-bold mt-1 ${
@@ -628,12 +628,28 @@ export default function EmployeeShiftRequest() {
                     </span>
                   )}
                 </p>
+                {isDeadlinePassed && (
+                  <div className="mt-3 p-3 bg-white/70 rounded-lg">
+                    <p className="text-sm text-gray-700 mb-2">
+                      📌 {targetMonth}月{targetPeriod === 'first' ? '前半' : '後半'}のシフト希望提出期限は終了しました。<br />
+                      シフト変更が必要な場合は店舗責任者にご連絡ください。
+                    </p>
+                    <button
+                      onClick={handleNextPeriod}
+                      className="bg-ocean-500 hover:bg-ocean-600 text-white px-4 py-2 rounded-lg text-sm font-bold"
+                    >
+                      📅 次の期間（{targetPeriod === 'first' 
+                        ? `${targetMonth}月後半` 
+                        : `${targetMonth === 12 ? 1 : targetMonth + 1}月前半`}）へ移動
+                    </button>
+                  </div>
+                )}
                 {currentDeadline.notification_message && (
                   <p className="text-sm text-gray-700 mt-2 bg-white/50 px-3 py-2 rounded">
                     💬 {currentDeadline.notification_message}
                   </p>
                 )}
-                {currentDeadline.change_count > 0 && (
+                {currentDeadline.change_count > 0 && !isDeadlinePassed && (
                   <p className="text-xs text-orange-600 mt-2">
                     ※ この締切は{currentDeadline.change_count}回変更されています
                   </p>
