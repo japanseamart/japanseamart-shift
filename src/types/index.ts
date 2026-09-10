@@ -90,13 +90,34 @@ export interface ShiftDeadline {
   created_at: string;
 }
 
-// お知らせ
-export interface Announcement {
-  id: number;
-  title: string;
-  content: string;
-  created_at: string;
-  is_active: number; // SQLiteでは0/1
+// 全店舗締切ステータス（従業員お知らせ画面用）
+export interface AllStoresDeadlineStatus {
+  generated_at: string;
+  periods: Array<{
+    year: number;
+    month: number;
+    period: 'first' | 'second';
+  }>;
+  rows: Array<{
+    store_id: number;
+    store_name: string;
+    target_year: number;
+    target_month: number;
+    target_period: 'first' | 'second';
+    deadline: {
+      id: number;
+      store_id: number;
+      target_year: number;
+      target_month: number;
+      target_period: 'first' | 'second';
+      deadline_date: string;
+      notification_message: string | null;
+      is_changed: number;
+      change_count: number;
+      created_at: string;
+      updated_at: string;
+    } | null;
+  }>;
 }
 
 // パスワード管理

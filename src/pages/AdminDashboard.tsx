@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Role, Announcement, Store } from '../types';
+import { Role, Store } from '../types';
 import AdminLayout from '../components/AdminLayout';
 import { getApiUrl } from '../config/api';
 
@@ -12,27 +12,13 @@ interface AdminDashboardProps {
 
 export default function AdminDashboard({ role, storeId, onLogout }: AdminDashboardProps) {
   const navigate = useNavigate();
-  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [stores, setStores] = useState<Store[]>([]);
   const [unsubmittedCount, setUnsubmittedCount] = useState(0);
-  const [newAnnouncement, setNewAnnouncement] = useState({ title: '', content: '' });
-  const [showAnnouncementForm, setShowAnnouncementForm] = useState(false);
 
   useEffect(() => {
-    fetchAnnouncements();
     fetchStores();
     fetchUnsubmittedCount();
   }, []);
-
-  const fetchAnnouncements = async () => {
-    try {
-      const res = await fetch(getApiUrl('/api/announcements'));
-      const data = await res.json();
-      setAnnouncements(data);
-    } catch (error) {
-      console.error('お知らせ取得エラー:', error);
-    }
-  };
 
   const fetchStores = async () => {
     try {
@@ -55,27 +41,6 @@ export default function AdminDashboard({ role, storeId, onLogout }: AdminDashboa
       setUnsubmittedCount(data.count || 0);
     } catch (error) {
       console.error('未提出者数取得エラー:', error);
-    }
-  };
-
-  const handleCreateAnnouncement = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    try {
-      const res = await fetch(getApiUrl('/api/announcements'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify(newAnnouncement),
-      });
-
-      if (res.ok) {
-        setNewAnnouncement({ title: '', content: '' });
-        setShowAnnouncementForm(false);
-        fetchAnnouncements();
-      }
-    } catch (error) {
-      console.error('お知らせ投稿エラー:', error);
     }
   };
 
@@ -165,69 +130,6 @@ export default function AdminDashboard({ role, storeId, onLogout }: AdminDashboa
           </button>
         </div>
 
-        {/* お知らせセクション */}
-        <div className="card">
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-2xl font-bold text-gray-800 flex items-center">
-              <svg className="w-6 h-6 mr-2 text-ocean-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z" />
-              </svg>
-              本部からのお知らせ
-            </h2>
-            {role === 'admin' && (
-              <button
-                onClick={() => setShowAnnouncementForm(!showAnnouncementForm)}
-                className="btn-primary"
-              >
-                {showAnnouncementForm ? 'キャンセル' : '+ 新規投稿'}
-              </button>
-            )}
-          </div>
-
-          {/* お知らせ投稿フォーム */}
-          {showAnnouncementForm && role === 'admin' && (
-            <form onSubmit={handleCreateAnnouncement} className="mb-6 p-4 bg-ocean-50 rounded-lg">
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 mb-2">タイトル</label>
-                <input
-                  type="text"
-                  value={newAnnouncement.title}
-                  onChange={(e) => setNewAnnouncement({ ...newAnnouncement, title: e.target.value })}
-                  className="input-field"
-                  required
-                />
-              </div>
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 mb-2">内容</label>
-                <textarea
-                  value={newAnnouncement.content}
-                  onChange={(e) => setNewAnnouncement({ ...newAnnouncement, content: e.target.value })}
-                  className="input-field"
-                  rows={4}
-                  required
-                />
-              </div>
-              <button type="submit" className="btn-primary">投稿する</button>
-            </form>
-          )}
-
-          {/* お知らせ一覧 */}
-          <div className="space-y-4">
-            {announcements.length === 0 ? (
-              <p className="text-gray-500 text-center py-8">お知らせはありません</p>
-            ) : (
-              announcements.map((announcement) => (
-                <div key={announcement.id} className="border-l-4 border-ocean-500 bg-ocean-50 p-4 rounded-r-lg">
-                  <h3 className="font-semibold text-gray-800 mb-2">{announcement.title}</h3>
-                  <p className="text-gray-600 text-sm whitespace-pre-wrap">{announcement.content}</p>
-                  <p className="text-xs text-gray-500 mt-2">
-                    {new Date(announcement.created_at).toLocaleString('ja-JP')}
-                  </p>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
       </div>
     </AdminLayout>
   );

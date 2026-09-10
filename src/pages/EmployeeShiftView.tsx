@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { format, startOfWeek, endOfWeek, eachDayOfInterval, addWeeks, subWeeks } from 'date-fns';
 import { ja } from 'date-fns/locale';
-import { Store, Employee, Shift, Announcement } from '../types';
+import { Store, Employee, Shift } from '../types';
+import type { AllStoresDeadlineStatus } from '../types';
 import { getApiUrl } from '../config/api';
 import HelpPanel from '../components/HelpPanel';
 
@@ -12,7 +13,7 @@ export default function EmployeeShiftView() {
   const [currentWeek, setCurrentWeek] = useState(new Date());
   const [shifts, setShifts] = useState<Shift[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
-  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+  const [deadlineStatus, setDeadlineStatus] = useState<AllStoresDeadlineStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [isPublished, setIsPublished] = useState(false);
   const [viewMode, setViewMode] = useState<'list' | 'table'>('list'); // リストビュー or テーブルビュー
@@ -20,7 +21,7 @@ export default function EmployeeShiftView() {
 
   useEffect(() => {
     fetchStores();
-    fetchAnnouncements();
+    fetchDeadlineStatus();
   }, []);
 
   useEffect(() => {
@@ -40,13 +41,14 @@ export default function EmployeeShiftView() {
     }
   };
 
-  const fetchAnnouncements = async () => {
+  const fetchDeadlineStatus = async () => {
     try {
-      const res = await fetch(getApiUrl('/api/announcements'));
+      const res = await fetch(getApiUrl('/api/shift-deadlines/all-stores-status'));
       const data = await res.json();
-      setAnnouncements(data);
+      setDeadlineStatus(data);
     } catch (error) {
-      console.error('お知らせ取得エラー:', error);
+      console.error('締切ステータス取得エラー:', error);
+      setDeadlineStatus(null);
     }
   };
 
@@ -165,26 +167,95 @@ export default function EmployeeShiftView() {
       </header>
 
       <div className="max-w-7xl mx-auto px-4 py-4 sm:py-8 space-y-4 sm:space-y-6">
-        {/* お知らせ */}
-        {announcements.length > 0 && (
+        {/* 全店舗シフト締切ステータス */}
+        {deadlineStatus && deadlineStatus.rows.length > 0 && (
           <div className="card">
             <h2 className="text-base sm:text-lg font-bold text-gray-800 mb-3 sm:mb-4 flex items-center">
-              <svg className="w-5 h-5 mr-2 text-ocean-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z" />
-              </svg>
-              📢 本部からのお知らせ
+              <span className="mr-2">📅</span>
+              各店舗のシフト締切状況
             </h2>
-            <div className="space-y-2 sm:space-y-3">
-              {announcements.slice(0, 3).map((announcement) => (
-                <div key={announcement.id} className="border-l-4 border-ocean-500 bg-ocean-50 p-3 rounded-r-lg">
-                  <h3 className="font-bold text-gray-800 text-sm sm:text-base">{announcement.title}</h3>
-                  <p className="text-gray-700 text-xs sm:text-sm mt-1">{announcement.content}</p>
-                  <p className="text-xs text-gray-500 mt-1">
-                    {new Date(announcement.created_at).toLocaleString('ja-JP')}
-                  </p>
-                </div>
-              ))}
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs sm:text-sm">
+                <thead>
+                  <tr className="border-b-2 border-gray-200 text-gray-600">
+                    <th className="text-left py-2 px-2 font-medium">店舗</th>
+                    <th className="text-left py-2 px-2 font-medium">対象期間</th>
+                    <th className="text-left py-2 px-2 font-medium">締切日</th>
+                    <th className="text-left py-2 px-2 font-medium">状態</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {deadlineStatus.rows.map((row, idx) => {
+                    const periodLabel = `${row.target_month}月${row.target_period === 'first' ? '前半' : '後半'}`;
+                    if (!row.deadline) {
+                      return (
+                        <tr key={`${row.store_id}-${idx}`} className="border-b border-gray-100">
+                          <td className="py-2 px-2 font-medium text-gray-700">{row.store_name}</td>
+                          <td className="py-2 px-2 text-gray-600">{periodLabel}</td>
+                          <td className="py-2 px-2 text-gray-400">-</td>
+                          <td className="py-2 px-2">
+                            <span className="inline-block px-2 py-0.5 rounded text-xs bg-gray-100 text-gray-500">未設定</span>
+                          </td>
+                        </tr>
+                      );
+                    }
+
+                    // 締切日までの日数計算
+                    const now = new Date();
+                    const today = new Date();
+                    today.setHours(0, 0, 0, 0);
+                    const deadlineDay = new Date(row.deadline.deadline_date);
+                    deadlineDay.setHours(0, 0, 0, 0);
+                    const diffDays = Math.ceil((deadlineDay.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+
+                    // 状態バッジ
+                    let statusLabel = '';
+                    let statusClass = '';
+                    if (diffDays < 0) {
+                      // 発生し得ないが念のため
+                      statusLabel = '締切済';
+                      statusClass = 'bg-gray-300 text-gray-700';
+                    } else if (diffDays === 0) {
+                      statusLabel = '🔴 本日締切';
+                      statusClass = 'bg-red-100 text-red-800 font-bold';
+                    } else if (diffDays <= 3) {
+                      statusLabel = `🟠 あと${diffDays}日`;
+                      statusClass = 'bg-orange-100 text-orange-800 font-bold';
+                    } else if (diffDays <= 7) {
+                      statusLabel = `🟡 あと${diffDays}日`;
+                      statusClass = 'bg-yellow-100 text-yellow-800';
+                    } else {
+                      statusLabel = `🟢 あと${diffDays}日`;
+                      statusClass = 'bg-green-100 text-green-800';
+                    }
+
+                    const isChanged = row.deadline.is_changed === 1;
+                    const deadlineDateStr = format(new Date(row.deadline.deadline_date), 'M/d(E)', { locale: ja });
+
+                    return (
+                      <tr key={`${row.store_id}-${idx}`} className="border-b border-gray-100 hover:bg-gray-50">
+                        <td className="py-2 px-2 font-medium text-gray-800">{row.store_name}</td>
+                        <td className="py-2 px-2 text-gray-700">{periodLabel}</td>
+                        <td className="py-2 px-2 text-gray-800">
+                          {deadlineDateStr}
+                          {isChanged && (
+                            <span className="ml-1 inline-block px-1.5 py-0.5 rounded text-xs bg-blue-100 text-blue-700">変更</span>
+                          )}
+                        </td>
+                        <td className="py-2 px-2">
+                          <span className={`inline-block px-2 py-0.5 rounded text-xs ${statusClass}`}>
+                            {statusLabel}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
+            <p className="text-xs text-gray-500 mt-2">
+              ※ 各店舗の今期および次期のシフト希望提出締切です。締切を過ぎたものは表示されません。
+            </p>
           </div>
         )}
 

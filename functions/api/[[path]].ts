@@ -902,64 +902,97 @@ app.get('/shift-deadlines/for-employee', async (c) => {
   return c.json(results)
 })
 
-// ==================== お知らせAPI ====================
+// ==================== 全店舗締切ステータス（従業員お知らせ用） ====================
 
-// お知らせ一覧取得
-app.get('/announcements', async (c) => {
-  const { results } = await c.env.DB.prepare('SELECT * FROM announcements ORDER BY created_at DESC').all()
-  return c.json(results)
-})
+// 全店舗の締切ステータス取得
+// 全店舗 × 「現在期間 + 次期間」の締切を返す。未設定はnull。
+// 締切が過ぎたレコードは除外する。
+app.get('/shift-deadlines/all-stores-status', async (c) => {
+  const now = new Date()
+  const currentYear = now.getFullYear()
+  const currentMonth = now.getMonth() + 1
+  const currentDay = now.getDate()
+  // 今日が15日以前なら今期は前半、16日以降なら後半
+  const currentPeriod = currentDay <= 15 ? 'first' : 'second'
 
-// お知らせ詳細取得
-app.get('/announcements/:id', async (c) => {
-  const id = c.req.param('id')
-  const announcement = await c.env.DB.prepare('SELECT * FROM announcements WHERE id = ?').bind(id).first()
-  
-  if (!announcement) {
-    return c.json({ error: 'お知らせが見つかりません' }, 404)
+  // 次期間を計算
+  let nextYear = currentYear
+  let nextMonth = currentMonth
+  let nextPeriod
+  if (currentPeriod === 'first') {
+    nextPeriod = 'second'
+  } else {
+    nextPeriod = 'first'
+    nextMonth = currentMonth === 12 ? 1 : currentMonth + 1
+    nextYear = currentMonth === 12 ? currentYear + 1 : currentYear
   }
-  
-  return c.json(announcement)
-})
 
-// お知らせ追加
-app.post('/announcements', async (c) => {
-  const { title, content } = await c.req.json()
-  
-  const result = await c.env.DB.prepare(`
-    INSERT INTO announcements (title, content) VALUES (?, ?)
-  `).bind(title, content).run()
+  // 対象期間リスト
+  const targetPeriods = [
+    { year: currentYear, month: currentMonth, period: currentPeriod },
+    { year: nextYear, month: nextMonth, period: nextPeriod },
+  ]
 
-  const newAnnouncement = await c.env.DB.prepare('SELECT * FROM announcements WHERE id = ?')
-    .bind(result.meta.last_row_id).first()
-  
-  return c.json(newAnnouncement)
-})
+  // 全店舗取得（店舗ID順）
+  const storesRes = await c.env.DB.prepare(
+    'SELECT id, name FROM stores ORDER BY id ASC'
+  ).all()
+  const stores = storesRes.results || []
 
-// お知らせ更新
-app.put('/announcements/:id', async (c) => {
-  const id = c.req.param('id')
-  const { title, content } = await c.req.json()
-  
-  await c.env.DB.prepare(`
-    UPDATE announcements SET 
-      title = ?,
-      content = ?,
-      updated_at = CURRENT_TIMESTAMP
-    WHERE id = ?
-  `).bind(title, content, id).run()
+  // 全店舗×対象期間の締切を一括取得
+  const deadlinesRes = await c.env.DB.prepare(`
+    SELECT * FROM shift_deadlines
+    WHERE (target_year = ? AND target_month = ? AND target_period = ?)
+       OR (target_year = ? AND target_month = ? AND target_period = ?)
+  `).bind(
+    targetPeriods[0].year, targetPeriods[0].month, targetPeriods[0].period,
+    targetPeriods[1].year, targetPeriods[1].month, targetPeriods[1].period,
+  ).all()
+  const deadlines = deadlinesRes.results || []
 
-  const updatedAnnouncement = await c.env.DB.prepare('SELECT * FROM announcements WHERE id = ?')
-    .bind(id).first()
-  
-  return c.json(updatedAnnouncement)
-})
+  // 締切日時（23:59:59）が過ぎているものは除外
+  const nowTs = now.getTime()
+  const validDeadlines = deadlines.filter((d) => {
+    const dt = new Date(d.deadline_date)
+    dt.setHours(23, 59, 59, 999)
+    return dt.getTime() >= nowTs
+  })
 
-// お知らせ削除
-app.delete('/announcements/:id', async (c) => {
-  const id = c.req.param('id')
-  await c.env.DB.prepare('DELETE FROM announcements WHERE id = ?').bind(id).run()
-  return c.json({ success: true })
+  // 店舗×期間のマトリクスを構築
+  const rows = []
+
+  for (const store of stores) {
+    for (const tp of targetPeriods) {
+      const found = validDeadlines.find((d) =>
+        d.store_id === store.id &&
+        d.target_year === tp.year &&
+        d.target_month === tp.month &&
+        d.target_period === tp.period
+      )
+      rows.push({
+        store_id: store.id,
+        store_name: store.name,
+        target_year: tp.year,
+        target_month: tp.month,
+        target_period: tp.period,
+        deadline: found || null,
+      })
+    }
+  }
+
+  // ソート: 締切日が近い順、未設定は末尾、同日なら店舗ID順
+  rows.sort((a, b) => {
+    const aDate = a.deadline ? new Date(a.deadline.deadline_date).getTime() : Number.POSITIVE_INFINITY
+    const bDate = b.deadline ? new Date(b.deadline.deadline_date).getTime() : Number.POSITIVE_INFINITY
+    if (aDate !== bDate) return aDate - bDate
+    return a.store_id - b.store_id
+  })
+
+  return c.json({
+    generated_at: now.toISOString(),
+    periods: targetPeriods,
+    rows,
+  })
 })
 
 // ==================== 特別日API ====================

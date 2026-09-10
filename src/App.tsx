@@ -14,7 +14,6 @@ import ShiftManagement from './pages/ShiftManagement';
 import ShiftRequestManagement from './pages/ShiftRequestManagement';
 import MonthlyReport from './pages/MonthlyReport';
 import SpecialDayManagement from './pages/SpecialDayManagement';
-import AnnouncementManagement from './pages/AnnouncementManagement';
 import PasswordManagement from './pages/PasswordManagement';
 import StoreRanking from './pages/StoreRanking';
 import OtherStoreShifts from './pages/OtherStoreShifts';
@@ -283,16 +282,6 @@ function App() {
           element={
             role ? (
               <SpecialDayManagement role={role} onLogout={handleLogout} />
-            ) : (
-              <Navigate to="/admin/login" replace />
-            )
-          }
-        />
-        <Route
-          path="/admin/announcements"
-          element={
-            role ? (
-              <AnnouncementManagement role={role} onLogout={handleLogout} />
             ) : (
               <Navigate to="/admin/login" replace />
             )

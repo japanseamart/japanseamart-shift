@@ -195,22 +195,6 @@ export const adminHelpContents: Record<string, PageHelp> = {
     ],
   },
 
-  '/admin/announcements': {
-    pageTitle: 'お知らせ管理',
-    pageDescription: '従業員向けのお知らせを配信します',
-    sections: [
-      {
-        title: 'お知らせの作成',
-        icon: '📢',
-        content: [
-          'タイトルと本文を入力してお知らせを作成',
-          '従業員画面のトップに表示されます',
-          '重要なお知らせは「重要」フラグを設定',
-        ],
-      },
-    ],
-  },
-
   '/admin/ranking': {
     pageTitle: '店舗ランキング',
     pageDescription: '店舗間の人件費効率を比較します',
