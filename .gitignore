@@ -30,3 +30,6 @@ dist-ssr
 # Environment
 .env
 .env.local
+
+# Wrangler local state and temp
+.wrangler/
