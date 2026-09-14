@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { format, addMonths, eachDayOfInterval, differenceInMinutes } from 'date-fns';
 import { ja } from 'date-fns/locale';
 import { Role, Employee, Shift, Store, SpecialDay, ShiftRequest } from '../types';
@@ -111,17 +111,31 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
       setOrderedEmployees([]);
       return;
     }
-    
+
+    // デフォルト並び順: 正社員 → 社保パート → パート、同区分内は名前順
+    const employmentTypeRank = (type?: string): number => {
+      if (type === 'full_time') return 0;
+      if (type === 'part_time_insured') return 1;
+      if (type === 'part_time') return 2;
+      return 3;
+    };
+    const sortByDefault = (list: Employee[]): Employee[] =>
+      [...list].sort((a, b) => {
+        const rankDiff = employmentTypeRank(a.employment_type) - employmentTypeRank(b.employment_type);
+        if (rankDiff !== 0) return rankDiff;
+        return (a.name || '').localeCompare(b.name || '', 'ja');
+      });
+
     const periodKey = getPeriodKey();
     const savedOrder = localStorage.getItem(periodKey);
-    
+
     if (savedOrder) {
       try {
         const savedIds: number[] = JSON.parse(savedOrder);
         // 保存された順序に従って従業員を並べ替え
         const orderedList: Employee[] = [];
         const employeeMap = new Map(employees.map(e => [e.id, e]));
-        
+
         // 保存された順序の従業員を追加
         savedIds.forEach(id => {
           const emp = employeeMap.get(id);
@@ -130,16 +144,17 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
             employeeMap.delete(id);
           }
         });
-        
-        // 新しく追加された従業員（保存されていなかった）を末尾に追加
-        employeeMap.forEach(emp => orderedList.push(emp));
-        
+
+        // 新しく追加された従業員（保存されていなかった）はデフォルト順で末尾に追加
+        const newcomers = sortByDefault(Array.from(employeeMap.values()));
+        newcomers.forEach(emp => orderedList.push(emp));
+
         setOrderedEmployees(orderedList);
       } catch {
-        setOrderedEmployees(employees);
+        setOrderedEmployees(sortByDefault(employees));
       }
     } else {
-      setOrderedEmployees(employees);
+      setOrderedEmployees(sortByDefault(employees));
     }
   }, [employees, targetYear, targetMonth, targetPeriod, selectedStoreId, isAllStores]);
 
@@ -848,6 +863,100 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
       : monthlyLaborCostForecast / totalMonthlyBudget * 100 >= warningThreshold ? 'warning' : 'normal')
     : 'normal';
 
+  // シフト編集モーダル用: リアルタイム金額プレビュー
+  const shiftCostPreview = useMemo(() => {
+    if (!editingShift) return null;
+    const employee = employees.find(e => e.id === editingShift.employee_id);
+    if (!employee) return null;
+
+    // 正社員: 月給制のため人件費は¥0
+    if (employee.employment_type === 'full_time') {
+      return {
+        isFullTime: true,
+        cost: 0,
+        workHours: 0,
+        hourlyRate: 0,
+        baseWage: employee.hourly_wage || 0,
+        surcharges: [] as { label: string; amount: number }[],
+        newPeriodTotal: totalLaborCost,
+        newBudgetPercent: budgetUsagePercent,
+        newStatus: periodStatus,
+        deltaCost: 0,
+      };
+    }
+
+    // 労働時間計算
+    let workMinutes = 0;
+    let workHours = 0;
+    try {
+      const startTime = new Date(`2000-01-01T${editingShift.start_time}`);
+      const endTime = new Date(`2000-01-01T${editingShift.end_time}`);
+      workMinutes = differenceInMinutes(endTime, startTime) - (editingShift.break_minutes || 0);
+      workHours = workMinutes / 60;
+    } catch {
+      workMinutes = 0;
+      workHours = 0;
+    }
+
+    // 割増計算（calculateLaborCost と同ロジック）
+    const baseWage = employee.hourly_wage || 0;
+    let hourlyRate = baseWage;
+    const surcharges: { label: string; amount: number }[] = [];
+
+    if (selectedStore?.overtime_rate_enabled) {
+      const specialDay = specialDays.find(sd => sd.date === editingShift.date);
+      const dayOfWeek = new Date(editingShift.date).getDay();
+      const applicable: { label: string; amount: number }[] = [];
+
+      if (specialDay?.type === 1 && selectedStore.holiday_rate > 0) {
+        applicable.push({ label: '祝日', amount: selectedStore.holiday_rate });
+      }
+      if (dayOfWeek === 0 && selectedStore.sunday_rate > 0) {
+        applicable.push({ label: '日曜', amount: selectedStore.sunday_rate });
+      }
+      if (dayOfWeek === 6 && selectedStore.saturday_rate > 0) {
+        applicable.push({ label: '土曜', amount: selectedStore.saturday_rate });
+      }
+      if (applicable.length > 0) {
+        // 最大割増を1件だけ適用（calculateLaborCost と一致）
+        const top = applicable.reduce((a, b) => (a.amount >= b.amount ? a : b));
+        hourlyRate += top.amount;
+        surcharges.push(top);
+      }
+    }
+
+    const cost = workMinutes > 0 ? Math.round(workHours * hourlyRate) : 0;
+
+    // 保存後の期間合計を予測
+    // - 編集の場合: 元シフトのlabor_costを差し引いてから今の金額を足す
+    // - 新規追加の場合: 今の金額をそのまま足す
+    let deltaCost = cost;
+    if (editingShift.id) {
+      const original = shifts.find(s => s.id === editingShift.id);
+      if (original) {
+        deltaCost = cost - (original.labor_cost || 0);
+      }
+    }
+    const newPeriodTotal = totalLaborCost + deltaCost;
+    const newBudgetPercent = periodBudget > 0 ? (newPeriodTotal / periodBudget) * 100 : 0;
+    const newStatus: 'danger' | 'warning' | 'normal' =
+      newBudgetPercent >= dangerThreshold ? 'danger'
+      : newBudgetPercent >= warningThreshold ? 'warning' : 'normal';
+
+    return {
+      isFullTime: false,
+      cost,
+      workHours,
+      hourlyRate,
+      baseWage,
+      surcharges,
+      newPeriodTotal,
+      newBudgetPercent,
+      newStatus,
+      deltaCost,
+    };
+  }, [editingShift, employees, selectedStore, specialDays, shifts, totalLaborCost, periodBudget, warningThreshold, dangerThreshold, budgetUsagePercent, periodStatus]);
+
   return (
     <AdminLayout role={role} storeId={storeId} onLogout={onLogout}>
       <div className={`space-y-6 ${showShiftForm ? 'pb-48 md:pb-32' : ''}`}>
@@ -1227,6 +1336,92 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
                   )}
                 </div>
               </div>
+
+              {/* 💰 リアルタイム金額プレビュー */}
+              {shiftCostPreview && (
+                <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {/* このシフト単体の金額 */}
+                  <div className={`rounded-lg p-3 border-2 ${
+                    shiftCostPreview.isFullTime
+                      ? 'bg-gray-50 border-gray-200'
+                      : 'bg-white border-ocean-200'
+                  }`}>
+                    <div className="text-xs text-gray-600 font-medium mb-1">💰 このシフトの人件費</div>
+                    {shiftCostPreview.isFullTime ? (
+                      <div className="text-lg font-bold text-gray-500">
+                        ¥0<span className="text-xs text-gray-400 ml-2">（正社員のため月給制）</span>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="text-lg font-bold text-ocean-900">
+                          ¥{shiftCostPreview.cost.toLocaleString()}
+                        </div>
+                        <div className="text-[11px] text-gray-500 mt-0.5">
+                          {shiftCostPreview.surcharges.length > 0 ? (
+                            <>
+                              基本 ¥{shiftCostPreview.baseWage.toLocaleString()}
+                              {shiftCostPreview.surcharges.map((s, i) => (
+                                <span key={i}> + {s.label} ¥{s.amount.toLocaleString()}</span>
+                              ))}
+                              <span> = ¥{shiftCostPreview.hourlyRate.toLocaleString()} × {shiftCostPreview.workHours.toFixed(2)}h</span>
+                            </>
+                          ) : (
+                            <>
+                              ¥{shiftCostPreview.hourlyRate.toLocaleString()} × {shiftCostPreview.workHours.toFixed(2)}h
+                            </>
+                          )}
+                        </div>
+                      </>
+                    )}
+                  </div>
+
+                  {/* 保存後の期間合計・予算使用率 */}
+                  <div className={`rounded-lg p-3 border-2 ${
+                    shiftCostPreview.newStatus === 'danger' ? 'bg-red-50 border-red-300' :
+                    shiftCostPreview.newStatus === 'warning' ? 'bg-yellow-50 border-yellow-300' :
+                    'bg-green-50 border-green-200'
+                  }`}>
+                    <div className="text-xs text-gray-600 font-medium mb-1">
+                      📊 保存後の{targetPeriod === 'first' ? '前半' : '後半'}人件費予測
+                      {shiftCostPreview.newStatus === 'danger' && (
+                        <span className="ml-2 text-red-600 font-bold">⚠️ 予算超過</span>
+                      )}
+                      {shiftCostPreview.newStatus === 'warning' && (
+                        <span className="ml-2 text-yellow-700 font-bold">⚠️ 予算警告</span>
+                      )}
+                    </div>
+                    <div className={`text-lg font-bold ${
+                      shiftCostPreview.newStatus === 'danger' ? 'text-red-700' :
+                      shiftCostPreview.newStatus === 'warning' ? 'text-yellow-800' :
+                      'text-green-800'
+                    }`}>
+                      ¥{shiftCostPreview.newPeriodTotal.toLocaleString()}
+                      {shiftCostPreview.deltaCost !== 0 && (
+                        <span className="text-xs font-medium ml-2 text-gray-500">
+                          （{shiftCostPreview.deltaCost > 0 ? '+' : ''}¥{shiftCostPreview.deltaCost.toLocaleString()}）
+                        </span>
+                      )}
+                    </div>
+                    {periodBudget > 0 ? (
+                      <div className="text-[11px] text-gray-600 mt-0.5">
+                        半期予算 ¥{periodBudget.toLocaleString()} の
+                        <span className={`font-bold ml-1 ${
+                          shiftCostPreview.newStatus === 'danger' ? 'text-red-600' :
+                          shiftCostPreview.newStatus === 'warning' ? 'text-yellow-700' :
+                          'text-green-700'
+                        }`}>
+                          {Math.round(shiftCostPreview.newBudgetPercent)}%
+                        </span>
+                        {shiftCostPreview.newStatus === 'danger' && (
+                          <div className="text-red-600 font-bold mt-0.5">🔴 このシフトを保存すると予算超過します</div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="text-[11px] text-gray-500 mt-0.5">予算未設定</div>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}
