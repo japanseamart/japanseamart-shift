@@ -863,16 +863,19 @@ export default function EmployeeShiftRequest() {
                 const existingRequest = requests.get(dateStr);
                 const hasSelection = dayPatterns.length > 0;
                 const dayOfWeek = day.getDay();
+                const isHoliday = specialDay?.type === 1;
 
                 return (
                   <div key={dateStr} className={`card ${
-                    dayOfWeek === 0 ? 'border-l-4 border-red-400' :
-                    dayOfWeek === 6 ? 'border-l-4 border-blue-400' : ''
+                    isHoliday ? 'border-l-4 border-red-500 bg-red-50/30' :
+                    dayOfWeek === 0 ? 'border-l-4 border-red-400 bg-red-50/20' :
+                    dayOfWeek === 6 ? 'border-l-4 border-blue-400 bg-blue-50/20' : ''
                   }`}>
                     {/* 日付ヘッダー */}
                     <div className="flex items-center justify-between mb-3 pb-3 border-b border-gray-200">
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <h4 className={`text-lg sm:text-xl font-bold ${
+                          isHoliday ? 'text-red-700' :
                           dayOfWeek === 0 ? 'text-red-600' :
                           dayOfWeek === 6 ? 'text-blue-600' : 'text-gray-800'
                         }`}>
@@ -880,11 +883,11 @@ export default function EmployeeShiftRequest() {
                         </h4>
                         {specialDay && (
                           <span className={`text-xs px-2 py-1 rounded font-medium ${
-                            specialDay.type === 1 ? 'bg-red-100 text-red-700' :
+                            specialDay.type === 1 ? 'bg-red-100 text-red-700 border border-red-300' :
                             specialDay.type === 2 ? 'bg-yellow-100 text-yellow-700' :
                             'bg-green-100 text-green-700'
                           }`}>
-                            {specialDay.name}
+                            {specialDay.type === 1 && '🎌 '}{specialDay.name}
                           </span>
                         )}
                       </div>

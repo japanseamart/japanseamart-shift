@@ -1807,13 +1807,16 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
                   <tr>
                     <th className="sticky left-0 z-30 bg-ocean-50 px-3 py-2 text-left font-medium text-gray-700 min-w-[100px] border-b border-r">従業員</th>
                     {periodDates.map(date => {
+                      const specialDay = getSpecialDayInfo(date);
+                      const isHoliday = specialDay?.type === 1;
                       const dayOfWeek = date.getDay();
                       return (
                         <th key={date.toISOString()} className={`px-2 py-2 text-center font-medium min-w-[60px] border-b ${
-                          dayOfWeek === 0 ? 'bg-red-100 text-red-700' : dayOfWeek === 6 ? 'bg-blue-100 text-blue-700' : 'bg-ocean-50 text-gray-700'
-                        }`}>
+                          isHoliday ? 'bg-red-200 text-red-800' : dayOfWeek === 0 ? 'bg-red-100 text-red-700' : dayOfWeek === 6 ? 'bg-blue-100 text-blue-700' : 'bg-ocean-50 text-gray-700'
+                        }`} title={isHoliday ? specialDay?.name : undefined}>
                           <div className="font-bold">{format(date, 'd', { locale: ja })}</div>
                           <div className="text-[10px]">{format(date, 'E', { locale: ja })}</div>
+                          {isHoliday && <div className="text-[9px] font-bold text-red-800 truncate" title={specialDay?.name}>🎌{specialDay?.name}</div>}
                         </th>
                       );
                     })}
@@ -1840,8 +1843,12 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
                         const request = getShiftRequestForEmployeeAndDate(employee.id, dateStr);
                         const hasShift = getShiftForEmployeeAndDate(employee.id, dateStr);
                         const isOff = request && isOffRequest(request);
+                        const specialDay = getSpecialDayInfo(date);
+                        const isHoliday = specialDay?.type === 1;
+                        const dayOfWeek = date.getDay();
+                        const cellBg = isHoliday ? 'bg-red-50' : dayOfWeek === 0 ? 'bg-red-50/60' : dayOfWeek === 6 ? 'bg-blue-50/60' : '';
                         return (
-                          <td key={date.toISOString()} className="px-2 py-2 text-center">
+                          <td key={date.toISOString()} className={`px-2 py-2 text-center ${cellBg}`}>
                             {request ? (
                               <div 
                                 onClick={() => handleAddShiftFromRequest(employee.id, dateStr, request)}
@@ -1878,13 +1885,16 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
               <tr className="bg-gray-100">
                 <th className="border border-gray-400 px-1 py-1 text-left text-xs">従業員</th>
                 {periodDates.map(date => {
+                  const specialDay = getSpecialDayInfo(date);
+                  const isHoliday = specialDay?.type === 1;
                   const dayOfWeek = date.getDay();
                   return (
                     <th key={date.toISOString()} className={`border border-gray-400 px-1 py-1 text-center text-xs ${
-                      dayOfWeek === 0 ? 'bg-red-100' : dayOfWeek === 6 ? 'bg-blue-100' : ''
+                      isHoliday ? 'bg-red-200' : dayOfWeek === 0 ? 'bg-red-100' : dayOfWeek === 6 ? 'bg-blue-100' : ''
                     }`}>
                       <div>{format(date, 'd')}</div>
                       <div className="text-[8px]">{format(date, 'E', { locale: ja })}</div>
+                      {isHoliday && <div className="text-[7px] font-bold text-red-800 truncate">祝</div>}
                     </th>
                   );
                 })}
@@ -1899,10 +1909,12 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
                     const request = getShiftRequestForEmployeeAndDate(employee.id, dateStr);
                     const hasShift = getShiftForEmployeeAndDate(employee.id, dateStr);
                     const isOff = request && isOffRequest(request);
+                    const specialDay = getSpecialDayInfo(date);
+                    const isHoliday = specialDay?.type === 1;
                     const dayOfWeek = date.getDay();
                     return (
                       <td key={date.toISOString()} className={`border border-gray-400 px-1 py-1 text-center text-[7px] ${
-                        dayOfWeek === 0 ? 'bg-red-50' : dayOfWeek === 6 ? 'bg-blue-50' : ''
+                        isHoliday ? 'bg-red-100' : dayOfWeek === 0 ? 'bg-red-50' : dayOfWeek === 6 ? 'bg-blue-50' : ''
                       }`}>
                         {request ? (
                           <span className={isOff ? 'text-red-600 font-bold' : hasShift ? 'text-green-600' : ''}>
@@ -1988,15 +2000,17 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
                   </th>
                   {periodDates.map(date => {
                     const specialDay = getSpecialDayInfo(date);
+                    const isHoliday = specialDay?.type === 1;
                     const dayOfWeek = date.getDay();
                     const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
                     return (
                       <th key={date.toISOString()}
                         className={`px-2 py-3 text-center text-xs font-medium uppercase border-r border-b min-w-[80px] ${
-                          specialDay?.type === 1 ? 'bg-red-100 text-red-700' : dayOfWeek === 0 ? 'bg-red-50 text-red-600' : isWeekend ? 'bg-blue-50 text-blue-700' : 'bg-gray-50 text-gray-500'
-                        }`}>
+                          isHoliday ? 'bg-red-100 text-red-700' : dayOfWeek === 0 ? 'bg-red-50 text-red-600' : isWeekend ? 'bg-blue-50 text-blue-700' : 'bg-gray-50 text-gray-500'
+                        }`} title={isHoliday ? specialDay?.name : undefined}>
                         <div className="font-bold">{format(date, 'd', { locale: ja })}</div>
                         <div className="text-[10px] mt-1">{format(date, 'E', { locale: ja })}</div>
+                        {isHoliday && <div className="text-[9px] font-bold text-red-800 truncate normal-case" title={specialDay?.name}>🎌{specialDay?.name}</div>}
                       </th>
                     );
                   })}
@@ -2075,11 +2089,16 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
                     {periodDates.map(date => {
                       const shift = getShiftForEmployeeAndDate(employee.id, format(date, 'yyyy-MM-dd'));
                       if (!shift) return null;
+                      const specialDay = getSpecialDayInfo(date);
+                      const isHoliday = specialDay?.type === 1;
+                      const dayOfWeek = date.getDay();
+                      const borderColor = isHoliday ? 'border-red-300 bg-red-50' : dayOfWeek === 0 ? 'border-red-200 bg-red-50/60' : dayOfWeek === 6 ? 'border-blue-200 bg-blue-50/60' : 'border-gray-200';
+                      const dateColor = isHoliday ? 'text-red-700' : dayOfWeek === 0 ? 'text-red-600' : dayOfWeek === 6 ? 'text-blue-600' : '';
                       return (
                         <div key={date.toISOString()} onClick={() => handleEditShift(shift)}
-                          className={`p-3 rounded-lg border-2 border-gray-200 flex justify-between items-center ${isAllStores ? '' : 'hover:border-ocean-400 cursor-pointer'}`}>
+                          className={`p-3 rounded-lg border-2 flex justify-between items-center ${borderColor} ${isAllStores ? '' : 'hover:border-ocean-400 cursor-pointer'}`}>
                           <div>
-                            <div className="font-bold">{format(date, 'M/d(E)', { locale: ja })}</div>
+                            <div className={`font-bold ${dateColor}`}>{format(date, 'M/d(E)', { locale: ja })}{isHoliday && <span className="ml-1 text-xs">🎌{specialDay?.name}</span>}</div>
                             <div className="text-ocean-700">
                               {shift.start_time.slice(0, 5)} - {shift.end_time.slice(0, 5)}
                               {shift.break_minutes > 0 && <span className="text-gray-500 text-xs ml-2">休{shift.break_minutes}分</span>}
@@ -2177,14 +2196,17 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
                   <tr className="bg-gray-50">
                     <th className="sticky left-0 z-10 bg-gray-50 px-2 py-2 text-left font-medium text-gray-500 min-w-[60px]">時間</th>
                     {periodDates.map(date => {
+                      const specialDay = getSpecialDayInfo(date);
+                      const isHoliday = specialDay?.type === 1;
                       const dayOfWeek = date.getDay();
                       return (
                         <th key={date.toISOString()}
                           className={`px-1 py-2 text-center font-medium min-w-[40px] ${
-                            dayOfWeek === 0 ? 'bg-red-50 text-red-600' : dayOfWeek === 6 ? 'bg-blue-50 text-blue-600' : 'text-gray-500'
-                          }`}>
+                            isHoliday ? 'bg-red-100 text-red-700' : dayOfWeek === 0 ? 'bg-red-50 text-red-600' : dayOfWeek === 6 ? 'bg-blue-50 text-blue-600' : 'text-gray-500'
+                          }`} title={isHoliday ? specialDay?.name : undefined}>
                           <div>{format(date, 'd')}</div>
                           <div className="text-[9px]">{format(date, 'E', { locale: ja })}</div>
+                          {isHoliday && <div className="text-[8px] font-bold text-red-800">祝</div>}
                         </th>
                       );
                     })}
@@ -2585,8 +2607,32 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
                 // 対象日の合計人件費（管理者のみ表示、印刷時は非表示）
                 const dayCost = canSeeCost ? calcDayCost(targetDate) : 0;
 
+                // 対象日の祝日情報
+                const targetDateObj = new Date(targetDate);
+                const targetSpecialDay = getSpecialDayInfo(targetDateObj);
+                const targetIsHoliday = targetSpecialDay?.type === 1;
+                const targetDow = targetDateObj.getDay();
+
                 return (
                   <div className="overflow-x-auto">
+                    {/* 対象日のバッジ（祝日 / 日曜 / 土曜） */}
+                    <div className="mb-2 flex flex-wrap items-center gap-2">
+                      {targetIsHoliday && (
+                        <span className="inline-flex items-center gap-1 text-sm font-bold bg-red-100 text-red-800 border border-red-300 px-3 py-1 rounded-full">
+                          🎌 {targetSpecialDay?.name}
+                        </span>
+                      )}
+                      {!targetIsHoliday && targetDow === 0 && (
+                        <span className="inline-flex items-center gap-1 text-sm font-bold bg-red-50 text-red-700 border border-red-200 px-3 py-1 rounded-full">
+                          日曜日
+                        </span>
+                      )}
+                      {!targetIsHoliday && targetDow === 6 && (
+                        <span className="inline-flex items-center gap-1 text-sm font-bold bg-blue-50 text-blue-700 border border-blue-200 px-3 py-1 rounded-full">
+                          土曜日
+                        </span>
+                      )}
+                    </div>
                     {/* 対象日の合計金額（管理者のみ、印刷時非表示） */}
                     {canSeeCost && (
                       <div className="gantt-day-cost no-print mb-2 flex items-center justify-end gap-2 text-sm">
@@ -2774,6 +2820,8 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
                     {periodDates.map(date => {
                       const dateStr = format(date, 'yyyy-MM-dd');
                       const dow = date.getDay();
+                      const specialDay = getSpecialDayInfo(date);
+                      const isHoliday = specialDay?.type === 1;
                       // その日に出勤する従業員だけに絞る（全員表示ONの時は全員）
                       const employeesToShow = ganttShowAll
                         ? orderedEmployees
@@ -2787,6 +2835,7 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
                         <div key={dateStr} className="gantt-day-block border rounded-lg overflow-hidden">
                           {/* 日付ヘッダー */}
                           <div className={`px-3 py-2 font-bold text-sm border-b flex items-center justify-between ${
+                            isHoliday ? 'bg-red-100 text-red-800 border-red-300' :
                             dow === 0 ? 'bg-red-50 text-red-700 border-red-200' :
                             dow === 6 ? 'bg-blue-50 text-blue-700 border-blue-200' :
                             'bg-gray-100 text-gray-800 border-gray-200'
@@ -2794,6 +2843,11 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
                             <div className="flex items-center gap-3">
                               <span>
                                 {format(date, 'yyyy年M月d日(E)', { locale: ja })}
+                                {isHoliday && (
+                                  <span className="ml-2 text-xs font-bold bg-red-200 text-red-800 px-2 py-0.5 rounded-full">
+                                    🎌{specialDay?.name}
+                                  </span>
+                                )}
                                 {employeesToShow.length === 0 && (
                                   <span className="ml-3 text-xs font-normal text-gray-500">（出勤者なし）</span>
                                 )}
