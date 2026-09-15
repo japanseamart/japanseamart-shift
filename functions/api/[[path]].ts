@@ -24,6 +24,34 @@ app.use('*', cors({
   allowHeaders: ['Content-Type', 'X-Session-ID'],
 }))
 
+// ==================== 締切自動計算ヘルパー ====================
+// 仕様: シフト開始日の6日前 23:59 を締切とする (全店統一)
+// - 前半(1-15日): 開始日=1日 → 締切=前月26日
+// - 後半(16日以降): 開始日=16日 → 締切=同月10日
+function computeAutoDeadline(targetYear: number, targetMonth: number, targetPeriod: 'first' | 'second'): string {
+  if (targetPeriod === 'first') {
+    // 前月26日
+    const prevMonth = targetMonth === 1 ? 12 : targetMonth - 1
+    const prevYear = targetMonth === 1 ? targetYear - 1 : targetYear
+    return `${prevYear}-${String(prevMonth).padStart(2, '0')}-26`
+  } else {
+    // 同月10日
+    return `${targetYear}-${String(targetMonth).padStart(2, '0')}-10`
+  }
+}
+
+// 既存の締切レコードを自動計算値で上書き(DBは残しつつ、フロントには常に計算値を返す)
+function overrideDeadlineWithAuto(row: any): any {
+  if (!row) return row
+  const autoDate = computeAutoDeadline(row.target_year, row.target_month, row.target_period)
+  return {
+    ...row,
+    deadline_date: autoDate,
+    notification_message: row.notification_message || '【全店自動設定】シフト開始日の6日前 23:59 が締切です',
+    is_auto: true,
+  }
+}
+
 // ==================== セッション管理ヘルパー ====================
 
 async function getSession(c: any, sessionId: string | undefined): Promise<SessionData | null> {
@@ -707,6 +735,7 @@ app.delete('/shift-requests/:id', async (c) => {
 // ==================== その他のAPI ====================
 
 // シフト締切一覧取得（新スキーマ: 年/月/期間別）
+// 【自動締切化】: DB値は残しつつ、返却時に必ず「開始日6日前」に上書き
 app.get('/shift-deadlines', async (c) => {
   const storeId = c.req.query('store_id')
   const targetYear = c.req.query('target_year')
@@ -739,134 +768,53 @@ app.get('/shift-deadlines', async (c) => {
   query += ' ORDER BY target_year DESC, target_month DESC, target_period'
   
   const { results } = await c.env.DB.prepare(query).bind(...params).all()
-  return c.json(results)
+  // 全レコードを自動計算値で上書き
+  const overridden = (results || []).map(overrideDeadlineWithAuto)
+  return c.json(overridden)
 })
 
-// シフト締切追加（新スキーマ）
+// 【自動締切化により廃止】シフト締切追加・更新・削除
+// 全店統一の自動計算 (開始日6日前 23:59) に変更されたため、
+// 個別設定はサポートしません。互換のためエラーを返します。
 app.post('/shift-deadlines', async (c) => {
-  const { store_id, target_year, target_month, target_period, deadline_date, notification_message } = await c.req.json()
-  
-  const result = await c.env.DB.prepare(`
-    INSERT INTO shift_deadlines (store_id, target_year, target_month, target_period, deadline_date, notification_message, is_changed, change_count)
-    VALUES (?, ?, ?, ?, ?, ?, 0, 0)
-  `).bind(store_id, target_year, target_month, target_period, deadline_date, notification_message || null).run()
-
-  const newDeadline = await c.env.DB.prepare('SELECT * FROM shift_deadlines WHERE id = ?')
-    .bind(result.meta.last_row_id).first()
-  
-  return c.json(newDeadline)
+  return c.json({
+    error: '締切は全店統一で自動設定されるようになりました',
+    message: 'シフト開始日の6日前 23:59 が全店共通の締切です。個別設定は廃止されました。',
+  }, 410)
 })
 
-// シフト締切更新（変更フラグと回数もセット）
 app.put('/shift-deadlines/:id', async (c) => {
-  const id = c.req.param('id')
-  const { deadline_date, notification_message, reset_changed } = await c.req.json()
-  
-  // reset_changedがtrueの場合、is_changedを0にリセット（従業員が確認した後）
-  if (reset_changed) {
-    await c.env.DB.prepare(`
-      UPDATE shift_deadlines SET 
-        is_changed = 0,
-        updated_at = CURRENT_TIMESTAMP
-      WHERE id = ?
-    `).bind(id).run()
-  } else {
-    // 通常の更新：変更フラグを立てて変更回数を増やす
-    await c.env.DB.prepare(`
-      UPDATE shift_deadlines SET 
-        deadline_date = ?,
-        notification_message = ?,
-        is_changed = 1,
-        change_count = change_count + 1,
-        updated_at = CURRENT_TIMESTAMP
-      WHERE id = ?
-    `).bind(deadline_date, notification_message || null, id).run()
-  }
-
-  const updatedDeadline = await c.env.DB.prepare('SELECT * FROM shift_deadlines WHERE id = ?')
-    .bind(id).first()
-  
-  return c.json(updatedDeadline)
+  return c.json({
+    error: '締切は全店統一で自動設定されるようになりました',
+    message: 'シフト開始日の6日前 23:59 が全店共通の締切です。個別設定は廃止されました。',
+  }, 410)
 })
 
-// シフト締切削除
 app.delete('/shift-deadlines/:id', async (c) => {
-  const id = c.req.param('id')
-  await c.env.DB.prepare('DELETE FROM shift_deadlines WHERE id = ?').bind(id).run()
-  return c.json({ success: true })
+  return c.json({
+    error: '締切は全店統一で自動設定されるようになりました',
+    message: '個別設定は廃止されました。',
+  }, 410)
 })
 
-// シフト締切自動設定（未設定の店舗に対してデフォルト締切を設定）
-// 前半の締切: 前月の20日、後半の締切: 該当月の5日
+// 【自動締切化により意味変化】: 既に全店統一の自動計算なので、
+// このエンドポイントは自動計算値をそのまま返します(既存コード互換のため残す)
 app.post('/shift-deadlines/auto-setup', async (c) => {
   try {
     const { target_year, target_month } = await c.req.json()
-    
     if (!target_year || !target_month) {
       return c.json({ error: 'target_year and target_month are required' }, 400)
     }
-    
-    // 全店舗を取得（本部ID:8を除く）
-    const { results: stores } = await c.env.DB.prepare(
-      'SELECT id, name FROM stores WHERE id != 8'
-    ).all()
-    
-    // 既存の締切を取得
-    const { results: existingDeadlines } = await c.env.DB.prepare(`
-      SELECT store_id, target_period FROM shift_deadlines 
-      WHERE target_year = ? AND target_month = ?
-    `).bind(target_year, target_month).all()
-    
-    // 既存の締切をマップ化
-    const existingMap = new Set(
-      existingDeadlines.map((d: any) => `${d.store_id}-${d.target_period}`)
-    )
-    
-    // 前半の締切日: 前月の20日
-    const prevMonth = target_month === 1 ? 12 : target_month - 1
-    const prevYear = target_month === 1 ? target_year - 1 : target_year
-    const firstHalfDeadline = `${prevYear}-${String(prevMonth).padStart(2, '0')}-20`
-    
-    // 後半の締切日: 該当月の5日
-    const secondHalfDeadline = `${target_year}-${String(target_month).padStart(2, '0')}-05`
-    
-    const created: any[] = []
-    const skipped: any[] = []
-    
-    for (const store of stores as any[]) {
-      // 前半チェック
-      if (!existingMap.has(`${store.id}-first`)) {
-        await c.env.DB.prepare(`
-          INSERT INTO shift_deadlines (store_id, target_year, target_month, target_period, deadline_date, notification_message, is_changed, change_count)
-          VALUES (?, ?, ?, 'first', ?, '【自動設定】シフト希望の提出をお願いします', 0, 0)
-        `).bind(store.id, target_year, target_month, firstHalfDeadline).run()
-        created.push({ store_id: store.id, store_name: store.name, period: 'first', deadline: firstHalfDeadline })
-      } else {
-        skipped.push({ store_id: store.id, store_name: store.name, period: 'first', reason: '既に設定済み' })
-      }
-      
-      // 後半チェック
-      if (!existingMap.has(`${store.id}-second`)) {
-        await c.env.DB.prepare(`
-          INSERT INTO shift_deadlines (store_id, target_year, target_month, target_period, deadline_date, notification_message, is_changed, change_count)
-          VALUES (?, ?, ?, 'second', ?, '【自動設定】シフト希望の提出をお願いします', 0, 0)
-        `).bind(store.id, target_year, target_month, secondHalfDeadline).run()
-        created.push({ store_id: store.id, store_name: store.name, period: 'second', deadline: secondHalfDeadline })
-      } else {
-        skipped.push({ store_id: store.id, store_name: store.name, period: 'second', reason: '既に設定済み' })
-      }
-    }
-    
-    return c.json({ 
-      success: true, 
+    const firstHalfDeadline = computeAutoDeadline(target_year, target_month, 'first')
+    const secondHalfDeadline = computeAutoDeadline(target_year, target_month, 'second')
+    return c.json({
+      success: true,
+      auto: true,
+      message: '締切は全店統一で自動計算されます(シフト開始日の6日前 23:59)',
       target_year,
       target_month,
       first_half_deadline: firstHalfDeadline,
       second_half_deadline: secondHalfDeadline,
-      created_count: created.length,
-      skipped_count: skipped.length,
-      created,
-      skipped
     })
   } catch (error) {
     console.error('自動設定エラー:', error)
@@ -874,64 +822,84 @@ app.post('/shift-deadlines/auto-setup', async (c) => {
   }
 })
 
-// 従業員用: 自店舗の締切情報を取得（告知用）
+// 従業員用: 締切情報を取得（告知用・全店統一の自動計算）
+// 【自動締切化】: DB非依存で、締切前の2期間を動的計算して返す
+// - 「今から見て次に来る締切」を含む2期間分
 app.get('/shift-deadlines/for-employee', async (c) => {
-  const storeId = c.req.query('store_id')
+  const storeId = c.req.query('store_id') // 互換のため受け取るが使用しない
   
-  if (!storeId) {
-    return c.json({ error: 'store_id is required' }, 400)
-  }
-  
-  // 現在の日付から対象となる締切を取得（今月と来月）
   const now = new Date()
+  const nowTs = now.getTime()
+  
+  // 直近から順に候補期間を生成
+  // 起点: 今月前半 → 今月後半 → 来月前半 → 来月後半 → 再来月前半 …
+  const candidates: Array<{ year: number; month: number; period: 'first' | 'second' }> = []
   const currentYear = now.getFullYear()
   const currentMonth = now.getMonth() + 1
-  const nextMonth = currentMonth === 12 ? 1 : currentMonth + 1
-  const nextYear = currentMonth === 12 ? currentYear + 1 : currentYear
+  for (let offset = 0; offset < 6; offset++) {
+    let y = currentYear
+    let m = currentMonth + offset
+    while (m > 12) { m -= 12; y += 1 }
+    candidates.push({ year: y, month: m, period: 'first' })
+    candidates.push({ year: y, month: m, period: 'second' })
+  }
   
-  const { results } = await c.env.DB.prepare(`
-    SELECT * FROM shift_deadlines 
-    WHERE store_id = ?
-    AND (
-      (target_year = ? AND target_month >= ?)
-      OR (target_year = ? AND target_month <= ?)
-    )
-    ORDER BY target_year ASC, target_month ASC, target_period
-  `).bind(storeId, currentYear, currentMonth, nextYear, nextMonth).all()
+  // 締切がまだ来ていないものだけ抽出し、最初の2つを返す
+  const upcoming = []
+  for (const cand of candidates) {
+    const deadlineDateStr = computeAutoDeadline(cand.year, cand.month, cand.period)
+    const dt = new Date(deadlineDateStr)
+    dt.setHours(23, 59, 59, 999)
+    if (dt.getTime() >= nowTs) {
+      upcoming.push({
+        id: 0, // ダミー
+        store_id: storeId ? parseInt(storeId) : 0,
+        target_year: cand.year,
+        target_month: cand.month,
+        target_period: cand.period,
+        deadline_date: deadlineDateStr,
+        notification_message: '【全店自動設定】シフト開始日の6日前 23:59 が締切です',
+        is_changed: 0,
+        change_count: 0,
+        is_auto: true,
+      })
+      if (upcoming.length >= 2) break
+    }
+  }
   
-  return c.json(results)
+  return c.json(upcoming)
 })
 
 // ==================== 全店舗締切ステータス（従業員お知らせ用） ====================
 
 // 全店舗の締切ステータス取得
-// 全店舗 × 「現在期間 + 次期間」の締切を返す。未設定はnull。
-// 締切が過ぎたレコードは除外する。
+// 【自動締切化】: 全店統一なので、全店分に同じ自動計算値を返す
+// 「締切前の直近2期間」を返す(Q8-3仕様)
 app.get('/shift-deadlines/all-stores-status', async (c) => {
   const now = new Date()
+  const nowTs = now.getTime()
+
+  // 締切前の直近2期間を計算
   const currentYear = now.getFullYear()
   const currentMonth = now.getMonth() + 1
-  const currentDay = now.getDate()
-  // 今日が15日以前なら今期は前半、16日以降なら後半
-  const currentPeriod = currentDay <= 15 ? 'first' : 'second'
-
-  // 次期間を計算
-  let nextYear = currentYear
-  let nextMonth = currentMonth
-  let nextPeriod
-  if (currentPeriod === 'first') {
-    nextPeriod = 'second'
-  } else {
-    nextPeriod = 'first'
-    nextMonth = currentMonth === 12 ? 1 : currentMonth + 1
-    nextYear = currentMonth === 12 ? currentYear + 1 : currentYear
+  const candidates: Array<{ year: number; month: number; period: 'first' | 'second' }> = []
+  for (let offset = 0; offset < 6; offset++) {
+    let y = currentYear
+    let m = currentMonth + offset
+    while (m > 12) { m -= 12; y += 1 }
+    candidates.push({ year: y, month: m, period: 'first' })
+    candidates.push({ year: y, month: m, period: 'second' })
   }
-
-  // 対象期間リスト
-  const targetPeriods = [
-    { year: currentYear, month: currentMonth, period: currentPeriod },
-    { year: nextYear, month: nextMonth, period: nextPeriod },
-  ]
+  const upcomingPeriods: Array<{ year: number; month: number; period: 'first' | 'second'; deadline_date: string }> = []
+  for (const cand of candidates) {
+    const deadlineDateStr = computeAutoDeadline(cand.year, cand.month, cand.period)
+    const dt = new Date(deadlineDateStr)
+    dt.setHours(23, 59, 59, 999)
+    if (dt.getTime() >= nowTs) {
+      upcomingPeriods.push({ ...cand, deadline_date: deadlineDateStr })
+      if (upcomingPeriods.length >= 2) break
+    }
+  }
 
   // 全店舗取得（店舗ID順）
   const storesRes = await c.env.DB.prepare(
@@ -939,58 +907,37 @@ app.get('/shift-deadlines/all-stores-status', async (c) => {
   ).all()
   const stores = storesRes.results || []
 
-  // 全店舗×対象期間の締切を一括取得
-  const deadlinesRes = await c.env.DB.prepare(`
-    SELECT * FROM shift_deadlines
-    WHERE (target_year = ? AND target_month = ? AND target_period = ?)
-       OR (target_year = ? AND target_month = ? AND target_period = ?)
-  `).bind(
-    targetPeriods[0].year, targetPeriods[0].month, targetPeriods[0].period,
-    targetPeriods[1].year, targetPeriods[1].month, targetPeriods[1].period,
-  ).all()
-  const deadlines = deadlinesRes.results || []
-
-  // 締切日時（23:59:59）が過ぎているものは除外
-  const nowTs = now.getTime()
-  const validDeadlines = deadlines.filter((d) => {
-    const dt = new Date(d.deadline_date)
-    dt.setHours(23, 59, 59, 999)
-    return dt.getTime() >= nowTs
-  })
-
-  // 店舗×期間のマトリクスを構築
+  // 全店統一なので、全店分同じ締切を割り当てる
   const rows = []
-
   for (const store of stores) {
-    for (const tp of targetPeriods) {
-      const found = validDeadlines.find((d) =>
-        d.store_id === store.id &&
-        d.target_year === tp.year &&
-        d.target_month === tp.month &&
-        d.target_period === tp.period
-      )
+    for (const tp of upcomingPeriods) {
       rows.push({
         store_id: store.id,
         store_name: store.name,
         target_year: tp.year,
         target_month: tp.month,
         target_period: tp.period,
-        deadline: found || null,
+        deadline: {
+          id: 0,
+          store_id: store.id,
+          target_year: tp.year,
+          target_month: tp.month,
+          target_period: tp.period,
+          deadline_date: tp.deadline_date,
+          notification_message: '【全店自動設定】シフト開始日の6日前 23:59 が締切です',
+          is_changed: 0,
+          change_count: 0,
+          is_auto: true,
+        },
       })
     }
   }
 
-  // ソート: 締切日が近い順、未設定は末尾、同日なら店舗ID順
-  rows.sort((a, b) => {
-    const aDate = a.deadline ? new Date(a.deadline.deadline_date).getTime() : Number.POSITIVE_INFINITY
-    const bDate = b.deadline ? new Date(b.deadline.deadline_date).getTime() : Number.POSITIVE_INFINITY
-    if (aDate !== bDate) return aDate - bDate
-    return a.store_id - b.store_id
-  })
-
   return c.json({
     generated_at: now.toISOString(),
-    periods: targetPeriods,
+    auto: true,
+    unified: true,
+    periods: upcomingPeriods.map(p => ({ year: p.year, month: p.month, period: p.period })),
     rows,
   })
 })

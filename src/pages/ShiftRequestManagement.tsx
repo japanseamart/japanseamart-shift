@@ -46,11 +46,8 @@ export default function ShiftRequestManagement({ role, storeId, onLogout }: Shif
   const [loading, setLoading] = useState(false);
   const [specialDays, setSpecialDays] = useState<SpecialDay[]>([]);
   
-  // 締切関連
+  // 締切関連（全店統一・自動計算のため表示のみ）
   const [deadline, setDeadline] = useState<ShiftDeadline | null>(null);
-  const [isEditingDeadline, setIsEditingDeadline] = useState(false);
-  const [deadlineInput, setDeadlineInput] = useState('');
-  const [notificationMessage, setNotificationMessage] = useState('');
   
   const [allEmployees, setAllEmployees] = useState<Employee[]>([]);
 
@@ -184,77 +181,8 @@ export default function ShiftRequestManagement({ role, storeId, onLogout }: Shif
     }
   };
 
-  const handleOpenDeadlineEdit = () => {
-    if (deadline) {
-      setDeadlineInput(deadline.deadline_date);
-      setNotificationMessage(deadline.notification_message || '');
-    } else {
-      // デフォルト: 対象期間の5日前
-      const defaultDate = new Date(periodStart);
-      defaultDate.setDate(defaultDate.getDate() - 5);
-      setDeadlineInput(format(defaultDate, 'yyyy-MM-dd'));
-      setNotificationMessage('');
-    }
-    setIsEditingDeadline(true);
-  };
-
-  const handleSaveDeadline = async () => {
-    if (!selectedStoreId || !deadlineInput) return;
-
-    try {
-      if (deadline) {
-        // 更新
-        await fetch(getApiUrl(`/api/shift-deadlines/${deadline.id}`), {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
-          body: JSON.stringify({ 
-            deadline_date: deadlineInput,
-            notification_message: notificationMessage || null
-          })
-        });
-      } else {
-        // 新規作成
-        await fetch(getApiUrl('/api/shift-deadlines'), {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
-          body: JSON.stringify({
-            store_id: selectedStoreId,
-            target_year: targetYear,
-            target_month: targetMonth,
-            target_period: targetPeriod,
-            deadline_date: deadlineInput,
-            notification_message: notificationMessage || null
-          })
-        });
-      }
-
-      setIsEditingDeadline(false);
-      fetchDeadline();
-      alert(deadline ? '締切を変更しました。従業員に再告知されます。' : '締切を設定しました。従業員に告知されます。');
-    } catch (error) {
-      console.error('締切設定エラー:', error);
-      alert('締切の設定に失敗しました');
-    }
-  };
-
-  const handleDeleteDeadline = async () => {
-    if (!deadline) return;
-    if (!confirm('この締切を削除しますか？')) return;
-
-    try {
-      await fetch(getApiUrl(`/api/shift-deadlines/${deadline.id}`), {
-        method: 'DELETE',
-        credentials: 'include'
-      });
-      setDeadline(null);
-      alert('締切を削除しました');
-    } catch (error) {
-      console.error('締切削除エラー:', error);
-      alert('締切の削除に失敗しました');
-    }
-  };
+  // 【全店統一・自動計算】締切の変更・削除機能は廃止済み
+  // 締切はシフト開始日の6日前 23:59 に自動設定される
 
   // 期間ナビゲーション
   const handlePrevPeriod = () => {
@@ -382,103 +310,53 @@ export default function ShiftRequestManagement({ role, storeId, onLogout }: Shif
           </div>
         </div>
 
-        {/* 締切設定カード */}
+        {/* 【全店統一・自動】提出締切表示カード */}
         {selectedStoreId !== null && (
-          <div className={`card ${
+          <div className={`card border-2 ${
             deadline ? (
               daysUntilDeadline !== null && daysUntilDeadline < 0 ? 'bg-gray-100 border-gray-300' :
-              daysUntilDeadline !== null && daysUntilDeadline <= 3 ? 'bg-red-50 border-red-300' :
-              daysUntilDeadline !== null && daysUntilDeadline <= 7 ? 'bg-yellow-50 border-yellow-300' :
+              daysUntilDeadline !== null && daysUntilDeadline <= 2 ? 'bg-red-50 border-red-300' :
+              daysUntilDeadline !== null && daysUntilDeadline <= 6 ? 'bg-yellow-50 border-yellow-300' :
               'bg-green-50 border-green-300'
-            ) : 'bg-orange-50 border-orange-300'
-          } border-2`}>
-            <div className="flex items-center justify-between">
-              <div>
+            ) : 'bg-gray-50 border-gray-300'
+          }`}>
+            <div>
+              <div className="flex items-center gap-2 mb-2">
                 <h3 className="text-lg font-bold text-gray-800">
                   📅 {targetMonth}月{targetPeriod === 'first' ? '前半' : '後半'}の提出締切
                 </h3>
-                {!isEditingDeadline ? (
-                  <div className="mt-2">
-                    {deadline ? (
-                      <div className="space-y-1">
-                        <div className="text-xl font-bold">
-                          {format(new Date(deadline.deadline_date), 'yyyy年M月d日(E)', { locale: ja })}
-                          {daysUntilDeadline !== null && (
-                            <span className={`ml-3 text-sm ${
-                              daysUntilDeadline < 0 ? 'text-gray-500' :
-                              daysUntilDeadline === 0 ? 'text-red-600 font-bold' :
-                              daysUntilDeadline <= 3 ? 'text-red-600' :
-                              daysUntilDeadline <= 7 ? 'text-yellow-600' :
-                              'text-green-600'
-                            }`}>
-                              {daysUntilDeadline < 0 ? '（締切終了）' :
-                               daysUntilDeadline === 0 ? '⚠️ 本日締切！' :
-                               `あと${daysUntilDeadline}日`}
-                            </span>
-                          )}
-                        </div>
-                        {deadline.notification_message && (
-                          <div className="text-sm text-gray-600 bg-white/50 px-3 py-2 rounded">
-                            💬 {deadline.notification_message}
-                          </div>
-                        )}
-                        {deadline.change_count > 0 && (
-                          <div className="text-xs text-orange-600">
-                            ⚠️ {deadline.change_count}回変更されました（最終更新: {format(new Date(deadline.updated_at), 'M/d H:mm')}）
-                          </div>
-                        )}
-                      </div>
-                    ) : (
-                      <div className="text-orange-700">未設定 - 締切を設定してください</div>
+                <span className="text-[10px] px-2 py-0.5 bg-ocean-100 text-ocean-700 rounded-full font-bold">
+                  全店統一・自動
+                </span>
+              </div>
+              {deadline ? (
+                <div className="space-y-1">
+                  <div className="text-xl font-bold">
+                    {format(new Date(deadline.deadline_date), 'yyyy年M月d日(E)', { locale: ja })}
+                    <span className="text-sm text-gray-500 ml-2">23:59</span>
+                    {daysUntilDeadline !== null && (
+                      <span className={`ml-3 text-sm ${
+                        daysUntilDeadline < 0 ? 'text-gray-500' :
+                        daysUntilDeadline === 0 ? 'text-red-600 font-bold' :
+                        daysUntilDeadline <= 2 ? 'text-red-600' :
+                        daysUntilDeadline <= 6 ? 'text-yellow-700' :
+                        'text-green-700'
+                      }`}>
+                        {daysUntilDeadline < 0 ? '（締切終了）' :
+                         daysUntilDeadline === 0 ? '⚠️ 本日締切！' :
+                         `あと${daysUntilDeadline}日`}
+                      </span>
                     )}
                   </div>
-                ) : (
-                  <div className="mt-3 space-y-3">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">締切日</label>
-                      <input
-                        type="date"
-                        value={deadlineInput}
-                        onChange={(e) => setDeadlineInput(e.target.value)}
-                        className="input-field w-48"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">告知メッセージ（オプション）</label>
-                      <input
-                        type="text"
-                        value={notificationMessage}
-                        onChange={(e) => setNotificationMessage(e.target.value)}
-                        placeholder="例: 早めの提出をお願いします"
-                        className="input-field w-full"
-                      />
-                    </div>
-                  </div>
-                )}
-              </div>
-              <div className="flex flex-col gap-2">
-                {!isEditingDeadline ? (
-                  <>
-                    <button onClick={handleOpenDeadlineEdit} className="btn-primary whitespace-nowrap">
-                      {deadline ? '変更' : '設定'}
-                    </button>
-                    {deadline && (
-                      <button onClick={handleDeleteDeadline} className="btn-secondary text-red-600 whitespace-nowrap text-sm">
-                        削除
-                      </button>
-                    )}
-                  </>
-                ) : (
-                  <>
-                    <button onClick={handleSaveDeadline} className="btn-primary whitespace-nowrap">
-                      💾 保存
-                    </button>
-                    <button onClick={() => setIsEditingDeadline(false)} className="btn-secondary whitespace-nowrap">
-                      キャンセル
-                    </button>
-                  </>
-                )}
-              </div>
+                  <p className="text-xs text-gray-600 mt-2">
+                    ℹ️ 締切はシフト開始日の6日前 23:59 に全店統一で自動設定されます（個別変更は不可）
+                  </p>
+                </div>
+              ) : (
+                <div className="text-gray-600 text-sm">
+                  この期間の締切情報を取得中…
+                </div>
+              )}
             </div>
           </div>
         )}

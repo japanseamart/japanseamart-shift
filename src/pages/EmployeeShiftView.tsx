@@ -185,97 +185,101 @@ export default function EmployeeShiftView() {
       </header>
 
       <div className="max-w-7xl mx-auto px-4 py-4 sm:py-8 space-y-4 sm:space-y-6">
-        {/* 全店舗シフト締切ステータス */}
-        {deadlineStatus && deadlineStatus.rows.length > 0 && (
-          <div className="card">
-            <h2 className="text-base sm:text-lg font-bold text-gray-800 mb-3 sm:mb-4 flex items-center">
-              <span className="mr-2">📅</span>
-              各店舗のシフト締切状況
-            </h2>
-            <div className="overflow-x-auto">
-              <table className="w-full text-xs sm:text-sm">
-                <thead>
-                  <tr className="border-b-2 border-gray-200 text-gray-600">
-                    <th className="text-left py-2 px-2 font-medium">店舗</th>
-                    <th className="text-left py-2 px-2 font-medium">対象期間</th>
-                    <th className="text-left py-2 px-2 font-medium">締切日</th>
-                    <th className="text-left py-2 px-2 font-medium">状態</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {deadlineStatus.rows.map((row, idx) => {
-                    const periodLabel = `${row.target_month}月${row.target_period === 'first' ? '前半' : '後半'}`;
-                    if (!row.deadline) {
-                      return (
-                        <tr key={`${row.store_id}-${idx}`} className="border-b border-gray-100">
-                          <td className="py-2 px-2 font-medium text-gray-700">{row.store_name}</td>
-                          <td className="py-2 px-2 text-gray-600">{periodLabel}</td>
-                          <td className="py-2 px-2 text-gray-400">-</td>
-                          <td className="py-2 px-2">
-                            <span className="inline-block px-2 py-0.5 rounded text-xs bg-gray-100 text-gray-500">未設定</span>
-                          </td>
-                        </tr>
-                      );
-                    }
-
-                    // 締切日までの日数計算
-                    const now = new Date();
-                    const today = new Date();
-                    today.setHours(0, 0, 0, 0);
-                    const deadlineDay = new Date(row.deadline.deadline_date);
-                    deadlineDay.setHours(0, 0, 0, 0);
-                    const diffDays = Math.ceil((deadlineDay.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-
-                    // 状態バッジ
-                    let statusLabel = '';
-                    let statusClass = '';
-                    if (diffDays < 0) {
-                      // 発生し得ないが念のため
-                      statusLabel = '締切済';
-                      statusClass = 'bg-gray-300 text-gray-700';
-                    } else if (diffDays === 0) {
-                      statusLabel = '🔴 本日締切';
-                      statusClass = 'bg-red-100 text-red-800 font-bold';
-                    } else if (diffDays <= 3) {
-                      statusLabel = `🟠 あと${diffDays}日`;
-                      statusClass = 'bg-orange-100 text-orange-800 font-bold';
-                    } else if (diffDays <= 7) {
-                      statusLabel = `🟡 あと${diffDays}日`;
-                      statusClass = 'bg-yellow-100 text-yellow-800';
-                    } else {
-                      statusLabel = `🟢 あと${diffDays}日`;
-                      statusClass = 'bg-green-100 text-green-800';
-                    }
-
-                    const isChanged = row.deadline.is_changed === 1;
-                    const deadlineDateStr = format(new Date(row.deadline.deadline_date), 'M/d(E)', { locale: ja });
-
-                    return (
-                      <tr key={`${row.store_id}-${idx}`} className="border-b border-gray-100 hover:bg-gray-50">
-                        <td className="py-2 px-2 font-medium text-gray-800">{row.store_name}</td>
-                        <td className="py-2 px-2 text-gray-700">{periodLabel}</td>
-                        <td className="py-2 px-2 text-gray-800">
-                          {deadlineDateStr}
-                          {isChanged && (
-                            <span className="ml-1 inline-block px-1.5 py-0.5 rounded text-xs bg-blue-100 text-blue-700">変更</span>
+        {/* 【全店統一】シフト締切バナー: 直近2期間 */}
+        {deadlineStatus && deadlineStatus.rows.length > 0 && (() => {
+          // 全店統一なので、期間ごとに1つに集約(先頭店舗のrowで代表)
+          const seenPeriods = new Set<string>();
+          const uniquePeriods: typeof deadlineStatus.rows = [];
+          for (const row of deadlineStatus.rows) {
+            const key = `${row.target_year}-${row.target_month}-${row.target_period}`;
+            if (seenPeriods.has(key)) continue;
+            if (!row.deadline) continue;
+            seenPeriods.add(key);
+            uniquePeriods.push(row);
+            if (uniquePeriods.length >= 2) break;
+          }
+          if (uniquePeriods.length === 0) return null;
+          
+          return (
+            <div className="card">
+              <div className="flex items-center gap-2 mb-3">
+                <span className="text-lg">📅</span>
+                <h2 className="text-base sm:text-lg font-bold text-gray-800">
+                  シフト希望 提出締切
+                </h2>
+                <span className="text-[10px] sm:text-xs px-2 py-0.5 bg-ocean-100 text-ocean-700 rounded-full font-bold">
+                  全店共通
+                </span>
+              </div>
+              <div className={`grid gap-3 ${uniquePeriods.length >= 2 ? 'sm:grid-cols-2' : 'grid-cols-1'}`}>
+                {uniquePeriods.map((row, idx) => {
+                  const deadline = row.deadline!;
+                  const today = new Date();
+                  today.setHours(0, 0, 0, 0);
+                  const deadlineDay = new Date(deadline.deadline_date);
+                  deadlineDay.setHours(0, 0, 0, 0);
+                  const daysUntil = Math.ceil((deadlineDay.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+                  
+                  const colorTheme = daysUntil <= 2
+                    ? { bg: 'from-red-500 to-red-600', text: 'text-white', badge: 'bg-red-800/70', icon: '🚨' }
+                    : daysUntil <= 6
+                    ? { bg: 'from-amber-400 to-orange-500', text: 'text-white', badge: 'bg-orange-700/70', icon: '⏰' }
+                    : { bg: 'from-ocean-500 to-blue-600', text: 'text-white', badge: 'bg-blue-800/70', icon: '📅' };
+                  
+                  const y = row.target_year;
+                  const m = row.target_month;
+                  const periodRange = row.target_period === 'first'
+                    ? `${m}/1 - ${m}/15`
+                    : `${m}/16 - ${m}/${new Date(y, m, 0).getDate()}`;
+                  
+                  return (
+                    <div
+                      key={`${y}-${m}-${row.target_period}`}
+                      className={`rounded-xl bg-gradient-to-br ${colorTheme.bg} ${colorTheme.text} p-4 shadow-md`}
+                    >
+                      <div className="flex items-start justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                          <span className="text-2xl">{colorTheme.icon}</span>
+                          <div>
+                            <p className="text-xs opacity-90 font-medium">
+                              {idx === 0 ? '直近の締切' : '次回の締切'}
+                            </p>
+                            <p className="font-bold text-sm sm:text-base">
+                              {y}年{m}月{row.target_period === 'first' ? '前半' : '後半'}分
+                            </p>
+                          </div>
+                        </div>
+                        <span className={`${colorTheme.badge} px-2 py-1 rounded text-[10px] font-bold`}>
+                          {periodRange}
+                        </span>
+                      </div>
+                      <div className="mt-2 flex items-baseline gap-3">
+                        <div>
+                          <p className="text-lg sm:text-xl font-bold leading-tight">
+                            {format(new Date(deadline.deadline_date), 'M月d日(E)', { locale: ja })}
+                          </p>
+                          <p className="text-xs opacity-90">23:59まで</p>
+                        </div>
+                        <div className="ml-auto text-right">
+                          {daysUntil === 0 ? (
+                            <p className="text-2xl font-bold">本日</p>
+                          ) : daysUntil > 0 ? (
+                            <p className="text-2xl sm:text-3xl font-bold leading-none">あと{daysUntil}日</p>
+                          ) : (
+                            <p className="text-sm font-bold">締切超過</p>
                           )}
-                        </td>
-                        <td className="py-2 px-2">
-                          <span className={`inline-block px-2 py-0.5 rounded text-xs ${statusClass}`}>
-                            {statusLabel}
-                          </span>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              <p className="text-[11px] text-gray-500 mt-2 text-center">
+                ℹ️ シフト開始日の6日前 23:59 が全店共通の締切です
+              </p>
             </div>
-            <p className="text-xs text-gray-500 mt-2">
-              ※ 各店舗の今期および次期のシフト希望提出締切です。締切を過ぎたものは表示されません。
-            </p>
-          </div>
-        )}
+          );
+        })()}
 
         {/* 店舗選択と週選択 */}
         <div className="card">

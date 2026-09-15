@@ -56,7 +56,6 @@ export default function EmployeeShiftRequest() {
   // 締切関連（複数の締切を保持）
   const [deadlines, setDeadlines] = useState<ShiftDeadline[]>([]);
   const [currentDeadline, setCurrentDeadline] = useState<ShiftDeadline | null>(null);
-  const [dismissedDeadlineIds, setDismissedDeadlineIds] = useState<Set<number>>(new Set());
   
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
@@ -494,17 +493,8 @@ export default function EmployeeShiftRequest() {
     return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
   };
 
-  // 未確認の締切告知をフィルタ（変更された or 新規設定された）
-  const urgentDeadlines = deadlines.filter(d => {
-    if (dismissedDeadlineIds.has(d.id)) return false;
-    const daysUntil = getDaysUntilDeadline(d);
-    // 締切が過ぎていなくて、7日以内、または変更されたもの
-    return daysUntil >= 0 && (daysUntil <= 7 || d.is_changed);
-  });
-
-  const dismissDeadlineNotification = (id: number) => {
-    setDismissedDeadlineIds(new Set(dismissedDeadlineIds.add(id)));
-  };
+  // 【全店統一】締切バナーで直近2期間を常時表示するため、
+  // 個別のurgentDeadlines/dismissロジックは廃止
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-ocean-50 to-blue-50 pb-24">
@@ -529,38 +519,85 @@ export default function EmployeeShiftRequest() {
         </div>
       </header>
 
-      {/* 締切告知バナー（緊急通知） */}
-      {urgentDeadlines.length > 0 && (
-        <div className="bg-gradient-to-r from-red-500 to-orange-500 text-white">
-          {urgentDeadlines.map(deadline => {
-            const daysUntil = getDaysUntilDeadline(deadline);
-            return (
-              <div key={deadline.id} className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <span className="text-2xl">{daysUntil <= 3 ? '🚨' : '📢'}</span>
-                  <div>
-                    <p className="font-bold">
-                      {deadline.target_month}月{deadline.target_period === 'first' ? '前半' : '後半'}の締切
-                      {deadline.is_changed ? '（変更されました！）' : ''}
-                    </p>
-                    <p className="text-sm opacity-90">
-                      {format(new Date(deadline.deadline_date), 'M月d日(E)', { locale: ja })}まで
-                      {daysUntil === 0 ? ' - 本日締切！' : daysUntil > 0 ? ` - あと${daysUntil}日` : ''}
-                    </p>
-                    {deadline.notification_message && (
-                      <p className="text-xs opacity-80 mt-1">💬 {deadline.notification_message}</p>
-                    )}
+      {/* 【全店統一】締切バナー: 直近2期間を大きく表示 */}
+      {deadlines.length > 0 && (
+        <div className="bg-gradient-to-b from-slate-50 to-white border-b-2 border-slate-200 shadow-sm">
+          <div className="max-w-6xl mx-auto px-4 py-4">
+            <div className="flex items-center gap-2 mb-3">
+              <span className="text-lg">📅</span>
+              <h2 className="text-base sm:text-lg font-bold text-gray-800">
+                シフト希望 提出締切
+              </h2>
+              <span className="ml-1 text-[10px] sm:text-xs px-2 py-0.5 bg-ocean-100 text-ocean-700 rounded-full font-bold">
+                全店共通
+              </span>
+            </div>
+            <div className={`grid gap-3 ${deadlines.length >= 2 ? 'sm:grid-cols-2' : 'grid-cols-1'}`}>
+              {deadlines.slice(0, 2).map((deadline, idx) => {
+                const daysUntil = getDaysUntilDeadline(deadline);
+                // カウントダウン色分け: 7日以上=青, 3-6日=黄, 2日以下=赤
+                const colorTheme = daysUntil <= 2
+                  ? { bg: 'from-red-500 to-red-600', text: 'text-white', badge: 'bg-red-800/70', icon: '🚨' }
+                  : daysUntil <= 6
+                  ? { bg: 'from-amber-400 to-orange-500', text: 'text-white', badge: 'bg-orange-700/70', icon: '⏰' }
+                  : { bg: 'from-ocean-500 to-blue-600', text: 'text-white', badge: 'bg-blue-800/70', icon: '📅' };
+                
+                // 対象期間の開始日〜終了日
+                const y = deadline.target_year;
+                const m = deadline.target_month;
+                const periodRange = deadline.target_period === 'first'
+                  ? `${m}/1 - ${m}/15`
+                  : `${m}/16 - ${m}/${new Date(y, m, 0).getDate()}`;
+                
+                return (
+                  <div
+                    key={`${deadline.target_year}-${deadline.target_month}-${deadline.target_period}`}
+                    className={`rounded-xl bg-gradient-to-br ${colorTheme.bg} ${colorTheme.text} p-4 shadow-md`}
+                  >
+                    <div className="flex items-start justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <span className="text-2xl">{colorTheme.icon}</span>
+                        <div>
+                          <p className="text-xs opacity-90 font-medium">
+                            {idx === 0 ? '直近の締切' : '次回の締切'}
+                          </p>
+                          <p className="font-bold text-sm sm:text-base">
+                            {deadline.target_year}年{deadline.target_month}月
+                            {deadline.target_period === 'first' ? '前半' : '後半'}分
+                          </p>
+                        </div>
+                      </div>
+                      <span className={`${colorTheme.badge} px-2 py-1 rounded text-[10px] font-bold`}>
+                        {periodRange}
+                      </span>
+                    </div>
+                    <div className="mt-2 flex items-baseline gap-3">
+                      <div>
+                        <p className="text-lg sm:text-xl font-bold leading-tight">
+                          {format(new Date(deadline.deadline_date), 'M月d日(E)', { locale: ja })}
+                        </p>
+                        <p className="text-xs opacity-90">23:59まで</p>
+                      </div>
+                      <div className="ml-auto text-right">
+                        {daysUntil === 0 ? (
+                          <p className="text-2xl font-bold">本日</p>
+                        ) : daysUntil > 0 ? (
+                          <>
+                            <p className="text-2xl sm:text-3xl font-bold leading-none">あと{daysUntil}日</p>
+                          </>
+                        ) : (
+                          <p className="text-sm font-bold">締切超過</p>
+                        )}
+                      </div>
+                    </div>
                   </div>
-                </div>
-                <button 
-                  onClick={() => dismissDeadlineNotification(deadline.id)}
-                  className="bg-white/20 hover:bg-white/30 px-3 py-1 rounded text-sm"
-                >
-                  ✕
-                </button>
-              </div>
-            );
-          })}
+                );
+              })}
+            </div>
+            <p className="text-[11px] text-gray-500 mt-2 text-center">
+              ℹ️ シフト開始日の6日前 23:59 が全店共通の締切です
+            </p>
+          </div>
         </div>
       )}
 
