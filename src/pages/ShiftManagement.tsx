@@ -64,6 +64,9 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
   const [ganttSelectedDate, setGanttSelectedDate] = useState<string>(''); // 1日ガントの対象日
   const [ganttShowAll, setGanttShowAll] = useState<boolean>(false); // false=出勤者のみ, true=全員表示
   const [openedFromGantt, setOpenedFromGantt] = useState<boolean>(false); // ガントから編集モーダルを開いたか（金額プレビュー抑制用）
+  // 正社員 公休日数表示（シフト未入力日=公休）
+  const [showHolidays, setShowHolidays] = useState<boolean>(true); // 名前横に [公休N] を表示するか
+  const [holidayRange, setHolidayRange] = useState<'period' | 'month'>('period'); // 集計範囲: 期間内 or 月全体
   // const [requestsViewMode, setRequestsViewMode] = useState<'card' | 'table'>('card');
   
   // 従業員並び順（期間ごとにlocalStorageで保持）
@@ -609,6 +612,38 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
     });
     setOpenedFromGantt(true); // ガント経由 → 金額プレビュー非表示
     setShowShiftForm(true);
+  };
+
+  // 正社員の公休日数を計算（シフトが入っていない日数）
+  // holidayRange = 'period' → 現在の期間内, 'month' → 対象月全体
+  const calcHolidaysCount = (employee: Employee): number => {
+    if (employee.employment_type !== 'full_time') return 0;
+    const dates: Date[] = holidayRange === 'period'
+      ? periodDates
+      : eachDayOfInterval({
+          start: new Date(targetYear, targetMonth - 1, 1),
+          end: new Date(targetYear, targetMonth, 0)
+        });
+    let count = 0;
+    for (const date of dates) {
+      const dateStr = format(date, 'yyyy-MM-dd');
+      const hasShift = shifts.some(s => s.employee_id === employee.id && s.date === dateStr);
+      if (!hasShift) count += 1;
+    }
+    return count;
+  };
+
+  // 名前横に付与する [公休N] バッジ（0日・非正社員・OFF時は非表示）
+  const renderHolidayBadge = (employee: Employee) => {
+    if (!showHolidays) return null;
+    if (employee.employment_type !== 'full_time') return null;
+    const count = calcHolidaysCount(employee);
+    if (count === 0) return null; // Q4: 公休0日は非表示
+    return (
+      <span className="ml-1 text-[10px] font-medium text-purple-700 bg-purple-100 border border-purple-200 rounded px-1 py-0.5 whitespace-nowrap align-middle">
+        [公休{count}]
+      </span>
+    );
   };
 
   const handleSaveShift = async () => {
@@ -1309,6 +1344,52 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
               </button>
             ))}
           </div>
+
+          {/* 公休表示トグル（正社員のみ）*/}
+          <div className="mt-3 flex flex-wrap gap-2 items-center no-print">
+            <button
+              onClick={() => setShowHolidays(!showHolidays)}
+              className={`px-3 py-1.5 text-sm rounded-lg border transition-all ${
+                showHolidays
+                  ? 'bg-purple-100 text-purple-700 border-purple-300 hover:bg-purple-200'
+                  : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
+              }`}
+              title="正社員の名前横にシフト未入力日数（公休）を表示します"
+            >
+              🏠 公休表示 {showHolidays ? 'ON' : 'OFF'}
+            </button>
+            {showHolidays && (
+              <div className="inline-flex rounded-lg border border-gray-300 overflow-hidden">
+                <button
+                  onClick={() => setHolidayRange('period')}
+                  className={`px-3 py-1.5 text-sm ${
+                    holidayRange === 'period'
+                      ? 'bg-ocean-600 text-white'
+                      : 'bg-white text-gray-700 hover:bg-gray-50'
+                  }`}
+                  title="現在の期間（前半/後半）内で集計"
+                >
+                  📅 期間内
+                </button>
+                <button
+                  onClick={() => setHolidayRange('month')}
+                  className={`px-3 py-1.5 text-sm border-l border-gray-300 ${
+                    holidayRange === 'month'
+                      ? 'bg-ocean-600 text-white'
+                      : 'bg-white text-gray-700 hover:bg-gray-50'
+                  }`}
+                  title="対象月全体で集計"
+                >
+                  🗓️ 月全体
+                </button>
+              </div>
+            )}
+            {showHolidays && (
+              <span className="text-xs text-gray-500">
+                ※ 正社員の名前横にシフト未入力日数を表示
+              </span>
+            )}
+          </div>
         </div>
 
         {/* シフト編集フォーム - 画面下部に固定表示 */}
@@ -1511,6 +1592,7 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
                         <div className="flex items-center gap-1">
                           <span className="text-gray-400">⠿</span>
                           {employee.name}
+                          {renderHolidayBadge(employee)}
                         </div>
                       </td>
                       {periodDates.map(date => {
@@ -1571,7 +1653,7 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
             <tbody>
               {orderedEmployees.map(employee => (
                 <tr key={employee.id}>
-                  <td className="border border-gray-400 px-1 py-1 text-xs font-medium">{employee.name}</td>
+                  <td className="border border-gray-400 px-1 py-1 text-xs font-medium">{employee.name}{renderHolidayBadge(employee)}</td>
                   {periodDates.map(date => {
                     const dateStr = format(date, 'yyyy-MM-dd');
                     const request = getShiftRequestForEmployeeAndDate(employee.id, dateStr);
@@ -1636,6 +1718,7 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
                     >
                       <div className="font-medium text-gray-800 text-sm truncate" title={employee.name}>
                         {employee.name}
+                        {renderHolidayBadge(employee)}
                       </div>
                       {isAllStores && employeeStore && (
                         <div className="text-xs text-ocean-600 truncate">[{employeeStore.name}]</div>
@@ -1685,7 +1768,7 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
                   return (
                   <tr key={employee.id} className="hover:bg-gray-50">
                     <td className="sticky left-0 z-10 bg-white px-4 py-3 border-r">
-                      <div className="font-medium text-gray-900">{employee.name}</div>
+                      <div className="font-medium text-gray-900">{employee.name}{renderHolidayBadge(employee)}</div>
                       <div className="text-xs text-gray-500">
                         {isAllStores && employeeStore && <span className="text-ocean-600 mr-1">[{employeeStore.name}]</span>}
                         {employee.employment_type === 'part_time' && 'パート'}
@@ -1738,7 +1821,7 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
                 <div key={employee.id} className="card border-2 border-gray-200">
                   <div className="bg-ocean-500 text-white px-4 py-3 -m-6 mb-4 rounded-t-lg flex justify-between items-center">
                     <div>
-                      <h3 className="text-lg font-bold">👤 {employee.name}</h3>
+                      <h3 className="text-lg font-bold">👤 {employee.name}{renderHolidayBadge(employee)}</h3>
                       {isAllStores && employeeStore && <p className="text-sm opacity-90">[{employeeStore.name}]</p>}
                       <p className="text-sm opacity-90">時給 ¥{employee.hourly_wage?.toLocaleString()}</p>
                     </div>
@@ -1817,6 +1900,7 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
                             <div>
                               <div className="font-bold">
                                 {emp.name}
+                                {renderHolidayBadge(emp)}
                                 {isAllStores && empStore && <span className="text-sm font-normal text-ocean-600 ml-2">[{empStore.name}]</span>}
                               </div>
                               <div className="text-ocean-700">
@@ -2203,7 +2287,7 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
                         return (
                           <div key={employee.id} className="flex border-b border-gray-200 hover:bg-gray-50">
                             <div className="w-32 shrink-0 border-r-2 border-gray-300 px-2 py-2 text-sm bg-white">
-                              <div className="font-medium text-gray-800 truncate">{employee.name}</div>
+                              <div className="font-medium text-gray-800 truncate">{employee.name}{renderHolidayBadge(employee)}</div>
                               <div className="text-[10px] text-gray-500">
                                 {employee.employment_type === 'full_time' && '正社員'}
                                 {employee.employment_type === 'part_time_insured' && '社保パート'}
@@ -2334,7 +2418,7 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
                                   return (
                                     <div key={employee.id} className="flex border-b border-gray-100 hover:bg-gray-50">
                                       <div className="w-32 shrink-0 border-r-2 border-gray-300 px-2 py-1.5 text-xs bg-white">
-                                        <div className="font-medium text-gray-800 truncate">{employee.name}</div>
+                                        <div className="font-medium text-gray-800 truncate">{employee.name}{renderHolidayBadge(employee)}</div>
                                         <div className="text-[9px] text-gray-500">
                                           {employee.employment_type === 'full_time' && '正社員'}
                                           {employee.employment_type === 'part_time_insured' && '社保パート'}
