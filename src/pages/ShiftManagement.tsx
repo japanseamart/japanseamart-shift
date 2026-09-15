@@ -578,6 +578,7 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
       end_time: selectedStore?.morning_end || '17:00',
       break_minutes: 60
     });
+    setOpenedFromGantt(false); // 通常追加
     setShowShiftForm(true);
   };
 
@@ -609,6 +610,21 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
       start_time: shift.start_time,
       end_time: shift.end_time,
       break_minutes: shift.break_minutes
+    });
+    setOpenedFromGantt(true); // ガント経由 → 金額プレビュー非表示
+    setShowShiftForm(true);
+  };
+
+  // ガントビューからの新規シフト追加: 従業員未選択・時間デフォルトで開く
+  const handleAddShiftFromGantt = (date: string) => {
+    if (isAllStores) return;
+    setBreakManuallySet(false); // 新規追加時は自動計算を有効に
+    setEditingShift({
+      employee_id: 0, // 未選択（モーダル内ドロップダウンで選択）
+      date,
+      start_time: selectedStore?.morning_start || '09:00',
+      end_time: selectedStore?.morning_end || '17:00',
+      break_minutes: 60
     });
     setOpenedFromGantt(true); // ガント経由 → 金額プレビュー非表示
     setShowShiftForm(true);
@@ -648,10 +664,18 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
 
   const handleSaveShift = async () => {
     if (!editingShift || !selectedStoreId) return;
+    if (!editingShift.employee_id || editingShift.employee_id === 0) {
+      alert('従業員を選択してください');
+      return;
+    }
     setSaving(true);
     try {
       const employee = employees.find(e => e.id === editingShift.employee_id);
-      if (!employee) return;
+      if (!employee) {
+        alert('選択された従業員が見つかりません');
+        setSaving(false);
+        return;
+      }
       const laborCost = calculateLaborCost(editingShift, employee);
       const shiftData = { ...editingShift, store_id: selectedStoreId, labor_cost: laborCost };
 
@@ -1415,7 +1439,29 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
               <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
                 <div>
                   <label className="block text-xs font-medium text-gray-700 mb-1">従業員</label>
-                  <div className="input-field bg-white text-sm py-2">{employees.find(e => e.id === editingShift.employee_id)?.name}</div>
+                  {editingShift.id ? (
+                    // 編集時: 従業員は変更不可（表示のみ）
+                    <div className="input-field bg-white text-sm py-2">
+                      {employees.find(e => e.id === editingShift.employee_id)?.name}
+                    </div>
+                  ) : (
+                    // 新規作成時: ドロップダウンで従業員を選択可能
+                    <select
+                      value={editingShift.employee_id || 0}
+                      onChange={(e) => setEditingShift({ ...editingShift, employee_id: Number(e.target.value) })}
+                      className="input-field text-sm py-2"
+                    >
+                      <option value={0}>-- 従業員を選択 --</option>
+                      {orderedEmployees.map(emp => (
+                        <option key={emp.id} value={emp.id}>
+                          {emp.name}
+                          {emp.employment_type === 'full_time' ? '（正社員）' : ''}
+                          {emp.employment_type === 'part_time_insured' ? '（社保パート）' : ''}
+                          {emp.employment_type === 'part_time' ? '（パート）' : ''}
+                        </option>
+                      ))}
+                    </select>
+                  )}
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-gray-700 mb-1">日付</label>
@@ -2200,6 +2246,16 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
                         >
                           翌日 ▶
                         </button>
+                        {/* ＋ 新規シフト追加ボタン（全店モード時は非表示） */}
+                        {!isAllStores && ganttSelectedDate && (
+                          <button
+                            onClick={() => handleAddShiftFromGantt(ganttSelectedDate)}
+                            className="px-3 py-1.5 text-sm font-bold rounded-lg border bg-green-500 hover:bg-green-600 text-white border-green-600 shadow-sm"
+                            title={`${format(new Date(ganttSelectedDate), 'M/d(E)', { locale: ja })}に新規シフトを追加`}
+                          >
+                            ＋ 追加
+                          </button>
+                        )}
                       </div>
                     );
                   })()}
@@ -2375,14 +2431,25 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
                       return (
                         <div key={dateStr} className="gantt-day-block border rounded-lg overflow-hidden">
                           {/* 日付ヘッダー */}
-                          <div className={`px-3 py-2 font-bold text-sm border-b ${
+                          <div className={`px-3 py-2 font-bold text-sm border-b flex items-center justify-between ${
                             dow === 0 ? 'bg-red-50 text-red-700 border-red-200' :
                             dow === 6 ? 'bg-blue-50 text-blue-700 border-blue-200' :
                             'bg-gray-100 text-gray-800 border-gray-200'
                           }`}>
-                            {format(date, 'yyyy年M月d日(E)', { locale: ja })}
-                            {employeesToShow.length === 0 && (
-                              <span className="ml-3 text-xs font-normal text-gray-500">（出勤者なし）</span>
+                            <div>
+                              {format(date, 'yyyy年M月d日(E)', { locale: ja })}
+                              {employeesToShow.length === 0 && (
+                                <span className="ml-3 text-xs font-normal text-gray-500">（出勤者なし）</span>
+                              )}
+                            </div>
+                            {!isAllStores && (
+                              <button
+                                onClick={() => handleAddShiftFromGantt(dateStr)}
+                                className="no-print px-2.5 py-1 text-xs font-bold rounded-lg border bg-green-500 hover:bg-green-600 text-white border-green-600 shadow-sm"
+                                title={`${format(date, 'M/d(E)', { locale: ja })}に新規シフトを追加`}
+                              >
+                                ＋ 追加
+                              </button>
                             )}
                           </div>
 
