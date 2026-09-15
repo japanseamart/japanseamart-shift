@@ -2006,7 +2006,7 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
                     return (
                       <th key={date.toISOString()}
                         className={`px-2 py-3 text-center text-xs font-medium uppercase border-r border-b min-w-[80px] ${
-                          isHoliday ? 'bg-red-100 text-red-700' : dayOfWeek === 0 ? 'bg-red-50 text-red-600' : isWeekend ? 'bg-blue-50 text-blue-700' : 'bg-gray-50 text-gray-500'
+                          isHoliday ? 'bg-red-200 text-red-800' : dayOfWeek === 0 ? 'bg-red-50 text-red-600' : isWeekend ? 'bg-blue-50 text-blue-700' : 'bg-gray-50 text-gray-500'
                         }`} title={isHoliday ? specialDay?.name : undefined}>
                         <div className="font-bold">{format(date, 'd', { locale: ja })}</div>
                         <div className="text-[10px] mt-1">{format(date, 'E', { locale: ja })}</div>
@@ -2202,7 +2202,7 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
                       return (
                         <th key={date.toISOString()}
                           className={`px-1 py-2 text-center font-medium min-w-[40px] ${
-                            isHoliday ? 'bg-red-100 text-red-700' : dayOfWeek === 0 ? 'bg-red-50 text-red-600' : dayOfWeek === 6 ? 'bg-blue-50 text-blue-600' : 'text-gray-500'
+                            isHoliday ? 'bg-red-200 text-red-800' : dayOfWeek === 0 ? 'bg-red-50 text-red-600' : dayOfWeek === 6 ? 'bg-blue-50 text-blue-600' : 'text-gray-500'
                           }`} title={isHoliday ? specialDay?.name : undefined}>
                           <div>{format(date, 'd')}</div>
                           <div className="text-[9px]">{format(date, 'E', { locale: ja })}</div>

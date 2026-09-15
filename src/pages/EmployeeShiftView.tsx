@@ -486,7 +486,7 @@ export default function EmployeeShiftView() {
                     const dow = day.getDay();
                     const specialDay = getSpecialDayInfo(day);
                     const isHoliday = specialDay?.type === 1;
-                    const headerCls = isHoliday ? 'bg-red-100 text-red-700 border border-red-200' :
+                    const headerCls = isHoliday ? 'bg-red-200 text-red-800 border border-red-300' :
                                       dow === 0 ? 'bg-red-50 text-red-600' :
                                       dow === 6 ? 'bg-blue-50 text-blue-600' :
                                       'text-gray-700';

@@ -390,20 +390,23 @@ export default function OtherStoreShifts({ role, storeId, onLogout }: OtherStore
                     </th>
                     {periodDates.map(date => {
                       const specialDay = getSpecialDayInfo(date);
+                      const isHoliday = specialDay?.type === 1;
                       const dayOfWeek = date.getDay();
                       const staffCount = getDailyStaffCount(date);
                       return (
                         <th
                           key={date.toISOString()}
                           className={`px-2 py-3 text-center text-xs font-medium uppercase border-r border-b min-w-[80px] ${
-                            specialDay?.type === 1 ? 'bg-red-100 text-red-700' :
+                            isHoliday ? 'bg-red-200 text-red-800' :
                             dayOfWeek === 0 ? 'bg-red-50 text-red-600' :
                             dayOfWeek === 6 ? 'bg-blue-50 text-blue-700' :
                             'bg-gray-50 text-gray-500'
                           }`}
+                          title={isHoliday ? specialDay?.name : undefined}
                         >
                           <div className="font-bold">{format(date, 'd', { locale: ja })}</div>
                           <div className="text-[10px] mt-1">{format(date, 'E', { locale: ja })}</div>
+                          {isHoliday && <div className="text-[9px] font-bold text-red-800 truncate normal-case" title={specialDay?.name}>🎌{specialDay?.name}</div>}
                           <div className="text-[10px] text-gray-400 mt-1">{staffCount}名</div>
                         </th>
                       );
@@ -425,12 +428,13 @@ export default function OtherStoreShifts({ role, storeId, onLogout }: OtherStore
                         const dateStr = format(date, 'yyyy-MM-dd');
                         const shift = getShiftForEmployeeAndDate(employee.id, dateStr);
                         const specialDay = getSpecialDayInfo(date);
+                        const isHoliday = specialDay?.type === 1;
                         const dayOfWeek = date.getDay();
                         return (
                           <td
                             key={dateStr}
                             className={`px-2 py-2 border-r text-center ${
-                              specialDay?.type === 1 ? 'bg-red-50' :
+                              isHoliday ? 'bg-red-100' :
                               dayOfWeek === 0 ? 'bg-red-50' :
                               dayOfWeek === 6 ? 'bg-blue-50' : ''
                             }`}
@@ -467,14 +471,17 @@ export default function OtherStoreShifts({ role, storeId, onLogout }: OtherStore
                       <tr className="bg-gray-50">
                         <th className="sticky left-0 z-10 bg-gray-50 px-2 py-2 text-left font-medium text-gray-500 min-w-[60px]">時間</th>
                         {periodDates.map(date => {
+                          const specialDay = getSpecialDayInfo(date);
+                          const isHoliday = specialDay?.type === 1;
                           const dayOfWeek = date.getDay();
                           return (
                             <th key={date.toISOString()}
                               className={`px-1 py-2 text-center font-medium min-w-[40px] ${
-                                dayOfWeek === 0 ? 'bg-red-50 text-red-600' : dayOfWeek === 6 ? 'bg-blue-50 text-blue-600' : 'text-gray-500'
-                              }`}>
+                                isHoliday ? 'bg-red-200 text-red-800' : dayOfWeek === 0 ? 'bg-red-50 text-red-600' : dayOfWeek === 6 ? 'bg-blue-50 text-blue-600' : 'text-gray-500'
+                              }`} title={isHoliday ? specialDay?.name : undefined}>
                               <div>{format(date, 'd')}</div>
                               <div className="text-[9px]">{format(date, 'E', { locale: ja })}</div>
+                              {isHoliday && <div className="text-[8px] font-bold text-red-800">祝</div>}
                             </th>
                           );
                         })}
@@ -532,16 +539,18 @@ export default function OtherStoreShifts({ role, storeId, onLogout }: OtherStore
                       const dayShifts = shifts.filter(s => s.date === dateStr);
                       const dayCost = getDailyCost(date);
                       const specialDay = getSpecialDayInfo(date);
+                      const isHoliday = specialDay?.type === 1;
                       const dayOfWeek = date.getDay();
                       return (
                         <tr key={dateStr} className={`${
-                          specialDay?.type === 1 ? 'bg-red-50' : dayOfWeek === 0 ? 'bg-red-50' : dayOfWeek === 6 ? 'bg-blue-50' : ''
+                          isHoliday ? 'bg-red-100' : dayOfWeek === 0 ? 'bg-red-50' : dayOfWeek === 6 ? 'bg-blue-50' : ''
                         }`}>
                           <td className="px-4 py-3">
-                            <div className={`font-medium ${dayOfWeek === 0 ? 'text-red-600' : dayOfWeek === 6 ? 'text-blue-600' : 'text-gray-900'}`}>
+                            <div className={`font-medium ${isHoliday ? 'text-red-700' : dayOfWeek === 0 ? 'text-red-600' : dayOfWeek === 6 ? 'text-blue-600' : 'text-gray-900'}`}>
                               {format(date, 'M/d(E)', { locale: ja })}
+                              {isHoliday && <span className="ml-1">🎌</span>}
                             </div>
-                            {specialDay && <div className="text-xs text-red-600">{specialDay.name}</div>}
+                            {specialDay && <div className="text-xs text-red-700 font-medium">{specialDay.name}</div>}
                           </td>
                           <td className="px-4 py-3 text-center font-medium">{dayShifts.length}名</td>
                           <td className="px-4 py-3 text-right font-bold">¥{dayCost.toLocaleString()}</td>
