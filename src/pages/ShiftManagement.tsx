@@ -63,6 +63,7 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
   const [ganttMode, setGanttMode] = useState<'day' | 'period'>('day'); // 1日ガント or 期間ガント
   const [ganttSelectedDate, setGanttSelectedDate] = useState<string>(''); // 1日ガントの対象日
   const [ganttShowAll, setGanttShowAll] = useState<boolean>(false); // false=出勤者のみ, true=全員表示
+  const [openedFromGantt, setOpenedFromGantt] = useState<boolean>(false); // ガントから編集モーダルを開いたか（金額プレビュー抑制用）
   // const [requestsViewMode, setRequestsViewMode] = useState<'card' | 'table'>('card');
   
   // 従業員並び順（期間ごとにlocalStorageで保持）
@@ -590,6 +591,23 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
       end_time: shift.end_time,
       break_minutes: shift.break_minutes
     });
+    setOpenedFromGantt(false); // 通常編集
+    setShowShiftForm(true);
+  };
+
+  // ガントビューからの編集: 金額プレビュー抑制フラグを立てて開く
+  const handleEditShiftFromGantt = (shift: Shift) => {
+    if (isAllStores) return;
+    setBreakManuallySet(true);
+    setEditingShift({
+      id: shift.id,
+      employee_id: shift.employee_id,
+      date: shift.date,
+      start_time: shift.start_time,
+      end_time: shift.end_time,
+      break_minutes: shift.break_minutes
+    });
+    setOpenedFromGantt(true); // ガント経由 → 金額プレビュー非表示
     setShowShiftForm(true);
   };
 
@@ -620,6 +638,7 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
       setShowShiftForm(false);
       setEditingShift(null);
       setBreakManuallySet(false);
+      setOpenedFromGantt(false);
       fetchShifts();
     } catch (error) {
       console.error('シフト保存エラー:', error);
@@ -1299,9 +1318,14 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
               <div className="flex justify-between items-center mb-3">
                 <h3 className="font-bold text-gray-800 text-lg">
                   {editingShift.id ? '✏️ シフト編集' : '➕ シフト追加'}
+                  {openedFromGantt && (
+                    <span className="ml-2 text-xs font-normal text-gray-500">
+                      （📊 ガントから開いています）
+                    </span>
+                  )}
                 </h3>
                 <button 
-                  onClick={() => { setShowShiftForm(false); setEditingShift(null); setBreakManuallySet(false); }} 
+                  onClick={() => { setShowShiftForm(false); setEditingShift(null); setBreakManuallySet(false); setOpenedFromGantt(false); }} 
                   className="text-gray-500 hover:text-gray-700 text-2xl font-bold"
                 >
                   ×
@@ -1345,7 +1369,7 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
                     {saving ? '保存中...' : '💾 保存'}
                   </button>
                   {editingShift.id && (
-                    <button onClick={() => { handleDeleteShift(editingShift.id!); setShowShiftForm(false); setEditingShift(null); setBreakManuallySet(false); }} 
+                    <button onClick={() => { handleDeleteShift(editingShift.id!); setShowShiftForm(false); setEditingShift(null); setBreakManuallySet(false); setOpenedFromGantt(false); }} 
                       className="bg-red-500 hover:bg-red-600 text-white px-3 py-2 rounded-lg text-sm">
                       🗑️
                     </button>
@@ -1353,8 +1377,8 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
                 </div>
               </div>
 
-              {/* 💰 リアルタイム金額プレビュー */}
-              {shiftCostPreview && (
+              {/* 💰 リアルタイム金額プレビュー（ガント経由の場合は管理職ビュー制約のため非表示） */}
+              {shiftCostPreview && !openedFromGantt && (
                 <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
                   {/* このシフト単体の金額 */}
                   <div className={`rounded-lg p-3 border-2 ${
@@ -2193,18 +2217,34 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
                                   className="absolute top-0 bottom-0 w-px bg-gray-100"
                                   style={{ left: `${((h - GANTT_START_HOUR) / GANTT_HOURS) * 100}%` }}></div>
                               ))}
-                              {/* シフト棒 */}
+                              {/* シフト棒（クリックで編集） */}
                               {empShifts.map(shift => {
                                 const pos = calcBarPosition(shift.start_time, shift.end_time);
                                 if (!pos) return null;
+                                const clickable = !isAllStores;
                                 return (
                                   <div
                                     key={shift.id}
-                                    className={`absolute top-1 bottom-1 rounded border-2 flex items-center justify-center text-white text-[11px] font-medium overflow-hidden px-1 ${getEmploymentColor(employee.employment_type)}`}
+                                    role={clickable ? 'button' : undefined}
+                                    tabIndex={clickable ? 0 : undefined}
+                                    onClick={clickable ? () => handleEditShiftFromGantt(shift) : undefined}
+                                    onKeyDown={clickable ? (e) => {
+                                      if (e.key === 'Enter' || e.key === ' ') {
+                                        e.preventDefault();
+                                        handleEditShiftFromGantt(shift);
+                                      }
+                                    } : undefined}
+                                    className={`absolute top-1 bottom-1 rounded border-2 flex items-center justify-center text-white text-[11px] font-medium overflow-hidden px-1 transition-all ${getEmploymentColor(employee.employment_type)} ${
+                                      clickable
+                                        ? 'cursor-pointer hover:brightness-110 hover:shadow-lg hover:z-10 hover:scale-y-105 active:brightness-95'
+                                        : ''
+                                    }`}
                                     style={{ left: `${pos.leftPct}%`, width: `${pos.widthPct}%` }}
-                                    title={`${employee.name} ${shift.start_time.slice(0,5)}-${shift.end_time.slice(0,5)}`}
+                                    title={clickable
+                                      ? `クリックで編集: ${employee.name} ${shift.start_time.slice(0,5)}-${shift.end_time.slice(0,5)}`
+                                      : `${employee.name} ${shift.start_time.slice(0,5)}-${shift.end_time.slice(0,5)}`}
                                   >
-                                    <span className="truncate">
+                                    <span className="truncate pointer-events-none">
                                       {shift.start_time.slice(0,5)}-{shift.end_time.slice(0,5)}
                                     </span>
                                   </div>
@@ -2308,18 +2348,34 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
                                             className="absolute top-0 bottom-0 w-px bg-gray-100"
                                             style={{ left: `${((h - GANTT_START_HOUR) / GANTT_HOURS) * 100}%` }}></div>
                                         ))}
-                                        {/* シフト棒 */}
+                                        {/* シフト棒（クリックで編集） */}
                                         {empShifts.map(shift => {
                                           const pos = calcBarPosition(shift.start_time, shift.end_time);
                                           if (!pos) return null;
+                                          const clickable = !isAllStores;
                                           return (
                                             <div
                                               key={shift.id}
-                                              className={`absolute top-1 bottom-1 rounded border-2 flex items-center justify-center text-white text-[10px] font-medium overflow-hidden px-1 ${getEmploymentColor(employee.employment_type)}`}
+                                              role={clickable ? 'button' : undefined}
+                                              tabIndex={clickable ? 0 : undefined}
+                                              onClick={clickable ? () => handleEditShiftFromGantt(shift) : undefined}
+                                              onKeyDown={clickable ? (e) => {
+                                                if (e.key === 'Enter' || e.key === ' ') {
+                                                  e.preventDefault();
+                                                  handleEditShiftFromGantt(shift);
+                                                }
+                                              } : undefined}
+                                              className={`absolute top-1 bottom-1 rounded border-2 flex items-center justify-center text-white text-[10px] font-medium overflow-hidden px-1 transition-all ${getEmploymentColor(employee.employment_type)} ${
+                                                clickable
+                                                  ? 'cursor-pointer hover:brightness-110 hover:shadow-lg hover:z-10 hover:scale-y-105 active:brightness-95'
+                                                  : ''
+                                              }`}
                                               style={{ left: `${pos.leftPct}%`, width: `${pos.widthPct}%` }}
-                                              title={`${employee.name} ${format(date, 'M/d', { locale: ja })} ${shift.start_time.slice(0,5)}-${shift.end_time.slice(0,5)}`}
+                                              title={clickable
+                                                ? `クリックで編集: ${employee.name} ${format(date, 'M/d', { locale: ja })} ${shift.start_time.slice(0,5)}-${shift.end_time.slice(0,5)}`
+                                                : `${employee.name} ${format(date, 'M/d', { locale: ja })} ${shift.start_time.slice(0,5)}-${shift.end_time.slice(0,5)}`}
                                             >
-                                              <span className="truncate">
+                                              <span className="truncate pointer-events-none">
                                                 {shift.start_time.slice(0,5)}-{shift.end_time.slice(0,5)}
                                               </span>
                                             </div>
@@ -2341,6 +2397,7 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
 
               <div className="no-print mt-3 text-xs text-gray-500">
                 💡 このビューでは金額・総時間は表示されません（管理職の勤務確認用）
+                {!isAllStores && <span className="ml-2">／ シフトの棒をクリックすると勤務時間を編集できます</span>}
               </div>
             </div>
           );
