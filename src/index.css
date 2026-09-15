@@ -290,4 +290,16 @@ body {
   .gantt-view .w-32 {
     width: 22mm !important;
   }
+
+  /* 期間ガント: 各日ブロックごとに改ページ、ブロック内は分割禁止 */
+  .gantt-view .gantt-day-block {
+    page-break-after: always;
+    page-break-inside: avoid;
+    break-after: page;
+    break-inside: avoid;
+  }
+  .gantt-view .gantt-day-block:last-child {
+    page-break-after: auto;
+    break-after: auto;
+  }
 }
