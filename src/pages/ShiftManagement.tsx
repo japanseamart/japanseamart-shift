@@ -64,6 +64,17 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
   const [ganttSelectedDate, setGanttSelectedDate] = useState<string>(''); // 1日ガントの対象日
   const [ganttShowAll, setGanttShowAll] = useState<boolean>(false); // false=出勤者のみ, true=全員表示
   const [openedFromGantt, setOpenedFromGantt] = useState<boolean>(false); // ガントから編集モーダルを開いたか（金額プレビュー抑制用）
+  // ガント上のリサイズドラッグ用（バー左右端で開始/終了時刻を変更）
+  const [draggingShift, setDraggingShift] = useState<{
+    shiftId: number;
+    side: 'left' | 'right';
+    originalStart: string;
+    originalEnd: string;
+    currentStart: string;
+    currentEnd: string;
+    rowLeft: number;      // 行(時間軸コンテナ)のクライアントX(px)
+    rowWidth: number;     // 行の幅(px)
+  } | null>(null);
   // 正社員 公休日数表示（シフト未入力日=公休）
   const [showHolidays, setShowHolidays] = useState<boolean>(true); // 名前横に [公休N] を表示するか
   const [holidayRange, setHolidayRange] = useState<'period' | 'month'>('period'); // 集計範囲: 期間内 or 月全体
@@ -661,6 +672,189 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
       </span>
     );
   };
+
+  // ===== ガント操作ヘルパー（クリックで新規追加・バーリサイズ）=====
+  const GANTT_START_MIN = 6 * 60;   // 6:00
+  const GANTT_END_MIN = 24 * 60;    // 24:00
+  const GANTT_TOTAL_MIN = GANTT_END_MIN - GANTT_START_MIN; // 1080
+
+  // "HH:MM" or "HH:MM:SS" → 分数
+  const timeStrToMinutes = (t: string): number => {
+    const [h, m] = t.split(':').map(Number);
+    return h * 60 + (m || 0);
+  };
+
+  // 分数 → "HH:MM:SS"（DBスキーマに合わせる）
+  const minutesToTimeStr = (min: number): string => {
+    const clamped = Math.max(0, Math.min(24 * 60, min));
+    const h = Math.floor(clamped / 60);
+    const m = clamped % 60;
+    return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:00`;
+  };
+
+  // 30分単位にスナップ
+  const snapTo30 = (min: number): number => Math.round(min / 30) * 30;
+
+  // ガント行のクリック座標(px) → ガント上の分数（6:00起点）
+  const clickXToMinutes = (clickXFromRowLeft: number, rowWidthPx: number): number => {
+    if (rowWidthPx <= 0) return GANTT_START_MIN;
+    const ratio = Math.max(0, Math.min(1, clickXFromRowLeft / rowWidthPx));
+    const minFromGanttStart = ratio * GANTT_TOTAL_MIN;
+    return GANTT_START_MIN + minFromGanttStart;
+  };
+
+  // 空きエリアクリックで新規シフト追加（Q1=①: 位置から時刻推測、8時間デフォルト）
+  const handleGanttEmptyClick = (
+    e: React.MouseEvent<HTMLDivElement>,
+    employeeId: number,
+    date: string
+  ) => {
+    if (isAllStores) return;
+    // ドラッグ中や既存バークリックのpropagation誤爆を防ぐ
+    if (draggingShift) return;
+    // バー内クリックは stopPropagation されてくるはずだが、target=バーの場合は無視
+    const target = e.target as HTMLElement;
+    if (target.closest('[data-gantt-bar="1"]')) return;
+    if (target.closest('[data-gantt-resize="1"]')) return;
+
+    const container = e.currentTarget;
+    const rect = container.getBoundingClientRect();
+    const rawMin = clickXToMinutes(e.clientX - rect.left, rect.width);
+    const startMin = snapTo30(rawMin);
+    // 8時間デフォルト、ただし24:00を超えないようにクリップ
+    let endMin = startMin + 8 * 60;
+    if (endMin > 24 * 60) endMin = 24 * 60;
+    let realStart = startMin;
+    if (endMin - realStart < 30) realStart = endMin - 30; // 最低30分確保
+
+    setBreakManuallySet(false);
+    setEditingShift({
+      employee_id: employeeId,
+      date,
+      start_time: minutesToTimeStr(realStart),
+      end_time: minutesToTimeStr(endMin),
+      break_minutes: 60
+    });
+    setOpenedFromGantt(true);
+    setShowShiftForm(true);
+  };
+
+  // バー端のドラッグ開始（左端=開始時刻、右端=終了時刻を動かす）
+  const handleResizeStart = (
+    e: React.MouseEvent<HTMLDivElement>,
+    shift: Shift,
+    side: 'left' | 'right'
+  ) => {
+    if (isAllStores) return;
+    e.stopPropagation();
+    e.preventDefault();
+    // 行(時間軸コンテナ)の bounding rect を取得
+    const bar = e.currentTarget.parentElement; // バー本体
+    const row = bar?.parentElement;             // 時間軸コンテナ(flex-1 relative)
+    if (!row) return;
+    const rect = row.getBoundingClientRect();
+    setDraggingShift({
+      shiftId: shift.id,
+      side,
+      originalStart: shift.start_time,
+      originalEnd: shift.end_time,
+      currentStart: shift.start_time,
+      currentEnd: shift.end_time,
+      rowLeft: rect.left,
+      rowWidth: rect.width,
+    });
+  };
+
+  // グローバル mousemove / mouseup を追跡（リサイズ中のみ）
+  useEffect(() => {
+    if (!draggingShift) return;
+
+    const onMove = (ev: MouseEvent) => {
+      setDraggingShift(prev => {
+        if (!prev) return prev;
+        const rawMin = clickXToMinutes(ev.clientX - prev.rowLeft, prev.rowWidth);
+        const snapped = snapTo30(rawMin);
+        // 表示範囲内にクリップ
+        const clipped = Math.max(GANTT_START_MIN, Math.min(GANTT_END_MIN, snapped));
+        const origStartMin = timeStrToMinutes(prev.originalStart);
+        const origEndMin = timeStrToMinutes(prev.originalEnd);
+        if (prev.side === 'left') {
+          // 開始時刻を動かす: 終了時刻 - 30分 を上限
+          const maxStart = origEndMin - 30;
+          const newStartMin = Math.min(clipped, maxStart);
+          return {
+            ...prev,
+            currentStart: minutesToTimeStr(newStartMin),
+            currentEnd: minutesToTimeStr(origEndMin),
+          };
+        } else {
+          // 終了時刻を動かす: 開始時刻 + 30分 を下限
+          const minEnd = origStartMin + 30;
+          const newEndMin = Math.max(clipped, minEnd);
+          return {
+            ...prev,
+            currentStart: minutesToTimeStr(origStartMin),
+            currentEnd: minutesToTimeStr(newEndMin),
+          };
+        }
+      });
+    };
+
+    const onUp = async () => {
+      // 現在の値をコピー(setDragging(null) で消える前に)
+      const drag = draggingShift;
+      if (!drag) return;
+
+      // 変更なし → 何もせず終了
+      if (drag.currentStart === drag.originalStart && drag.currentEnd === drag.originalEnd) {
+        setDraggingShift(null);
+        return;
+      }
+      // 保存
+      const shift = shifts.find(s => s.id === drag.shiftId);
+      if (!shift || !selectedStoreId) {
+        setDraggingShift(null);
+        return;
+      }
+      const employee = employees.find(e => e.id === shift.employee_id);
+      if (!employee) {
+        setDraggingShift(null);
+        return;
+      }
+      try {
+        const updated = {
+          ...shift,
+          start_time: drag.currentStart,
+          end_time: drag.currentEnd,
+        };
+        const laborCost = calculateLaborCost(updated, employee);
+        const body = { ...updated, store_id: selectedStoreId, labor_cost: laborCost };
+        const res = await fetch(getApiUrl(`/api/shifts/${shift.id}`), {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify(body),
+        });
+        if (!res.ok) {
+          throw new Error(`保存失敗 (HTTP ${res.status})`);
+        }
+        await fetchShifts();
+      } catch (err) {
+        console.error('リサイズ保存エラー:', err);
+        alert(`シフト時間の変更に失敗しました。元に戻します。\n${err instanceof Error ? err.message : ''}`);
+        // 失敗時: 何もしない = 元のshifts stateのまま。fetchShiftsは呼ばない。
+      } finally {
+        setDraggingShift(null);
+      }
+    };
+
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+    return () => {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
+  }, [draggingShift, shifts, employees, selectedStoreId]);
 
   const handleSaveShift = async () => {
     if (!editingShift || !selectedStoreId) return;
@@ -2340,6 +2534,7 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
                       {/* 各従業員行 */}
                       {employeesToShow.map(employee => {
                         const empShifts = shifts.filter(s => s.employee_id === employee.id && s.date === targetDate);
+                        const rowClickable = !isAllStores;
                         return (
                           <div key={employee.id} className="flex border-b border-gray-200 hover:bg-gray-50">
                             <div className="w-32 shrink-0 border-r-2 border-gray-300 px-2 py-2 text-sm bg-white">
@@ -2350,24 +2545,33 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
                                 {employee.employment_type === 'part_time' && 'パート'}
                               </div>
                             </div>
-                            <div className="flex-1 relative h-12 bg-white">
+                            <div
+                              className={`flex-1 relative h-12 bg-white ${rowClickable ? 'cursor-pointer hover:bg-green-50' : ''}`}
+                              onClick={rowClickable ? (e) => handleGanttEmptyClick(e, employee.id, targetDate) : undefined}
+                              title={rowClickable ? `クリックでシフト追加: ${employee.name}` : undefined}
+                            >
                               {/* 時間目盛りの縦線 */}
                               {hourMarks.map(h => (
                                 <div key={h}
-                                  className="absolute top-0 bottom-0 w-px bg-gray-100"
+                                  className="absolute top-0 bottom-0 w-px bg-gray-100 pointer-events-none"
                                   style={{ left: `${((h - GANTT_START_HOUR) / GANTT_HOURS) * 100}%` }}></div>
                               ))}
-                              {/* シフト棒（クリックで編集） */}
+                              {/* シフト棒（クリックで編集 / 左右端ドラッグでリサイズ） */}
                               {empShifts.map(shift => {
-                                const pos = calcBarPosition(shift.start_time, shift.end_time);
+                                // ドラッグ中はリアルタイム値を優先
+                                const isDragging = draggingShift?.shiftId === shift.id;
+                                const dispStart = isDragging ? draggingShift!.currentStart : shift.start_time;
+                                const dispEnd = isDragging ? draggingShift!.currentEnd : shift.end_time;
+                                const pos = calcBarPosition(dispStart, dispEnd);
                                 if (!pos) return null;
                                 const clickable = !isAllStores;
                                 return (
                                   <div
                                     key={shift.id}
+                                    data-gantt-bar="1"
                                     role={clickable ? 'button' : undefined}
                                     tabIndex={clickable ? 0 : undefined}
-                                    onClick={clickable ? () => handleEditShiftFromGantt(shift) : undefined}
+                                    onClick={clickable ? (e) => { e.stopPropagation(); if (!draggingShift) handleEditShiftFromGantt(shift); } : undefined}
                                     onKeyDown={clickable ? (e) => {
                                       if (e.key === 'Enter' || e.key === ' ') {
                                         e.preventDefault();
@@ -2378,15 +2582,35 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
                                       clickable
                                         ? 'cursor-pointer hover:brightness-110 hover:shadow-lg hover:z-10 hover:scale-y-105 active:brightness-95'
                                         : ''
-                                    }`}
+                                    } ${isDragging ? 'opacity-60 ring-2 ring-yellow-300 z-20' : ''}`}
                                     style={{ left: `${pos.leftPct}%`, width: `${pos.widthPct}%` }}
                                     title={clickable
-                                      ? `クリックで編集: ${employee.name} ${shift.start_time.slice(0,5)}-${shift.end_time.slice(0,5)}`
-                                      : `${employee.name} ${shift.start_time.slice(0,5)}-${shift.end_time.slice(0,5)}`}
+                                      ? `クリックで編集 / 左右端ドラッグで時間変更: ${employee.name} ${dispStart.slice(0,5)}-${dispEnd.slice(0,5)}`
+                                      : `${employee.name} ${dispStart.slice(0,5)}-${dispEnd.slice(0,5)}`}
                                   >
                                     <span className="truncate pointer-events-none">
-                                      {shift.start_time.slice(0,5)}-{shift.end_time.slice(0,5)}
+                                      {dispStart.slice(0,5)}-{dispEnd.slice(0,5)}
                                     </span>
+                                    {/* 左端リサイズハンドル */}
+                                    {clickable && (
+                                      <div
+                                        data-gantt-resize="1"
+                                        onMouseDown={(e) => handleResizeStart(e, shift, 'left')}
+                                        onClick={(e) => e.stopPropagation()}
+                                        className="no-print absolute left-0 top-0 bottom-0 w-2 cursor-ew-resize hover:bg-white/40 z-10"
+                                        title="ドラッグで開始時刻を変更"
+                                      />
+                                    )}
+                                    {/* 右端リサイズハンドル */}
+                                    {clickable && (
+                                      <div
+                                        data-gantt-resize="1"
+                                        onMouseDown={(e) => handleResizeStart(e, shift, 'right')}
+                                        onClick={(e) => e.stopPropagation()}
+                                        className="no-print absolute right-0 top-0 bottom-0 w-2 cursor-ew-resize hover:bg-white/40 z-10"
+                                        title="ドラッグで終了時刻を変更"
+                                      />
+                                    )}
                                   </div>
                                 );
                               })}
@@ -2482,6 +2706,7 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
                                 {/* 各従業員行 */}
                                 {employeesToShow.map(employee => {
                                   const empShifts = shifts.filter(s => s.employee_id === employee.id && s.date === dateStr);
+                                  const rowClickable = !isAllStores;
                                   return (
                                     <div key={employee.id} className="flex border-b border-gray-100 hover:bg-gray-50">
                                       <div className="w-32 shrink-0 border-r-2 border-gray-300 px-2 py-1.5 text-xs bg-white">
@@ -2492,24 +2717,32 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
                                           {employee.employment_type === 'part_time' && 'パート'}
                                         </div>
                                       </div>
-                                      <div className="flex-1 relative h-10 bg-white">
+                                      <div
+                                        className={`flex-1 relative h-10 bg-white ${rowClickable ? 'cursor-pointer hover:bg-green-50' : ''}`}
+                                        onClick={rowClickable ? (e) => handleGanttEmptyClick(e, employee.id, dateStr) : undefined}
+                                        title={rowClickable ? `クリックでシフト追加: ${employee.name} ${format(date, 'M/d', { locale: ja })}` : undefined}
+                                      >
                                         {/* 時間目盛りの縦線 */}
                                         {hourMarks.map(h => (
                                           <div key={h}
-                                            className="absolute top-0 bottom-0 w-px bg-gray-100"
+                                            className="absolute top-0 bottom-0 w-px bg-gray-100 pointer-events-none"
                                             style={{ left: `${((h - GANTT_START_HOUR) / GANTT_HOURS) * 100}%` }}></div>
                                         ))}
-                                        {/* シフト棒（クリックで編集） */}
+                                        {/* シフト棒（クリックで編集 / 左右端ドラッグでリサイズ） */}
                                         {empShifts.map(shift => {
-                                          const pos = calcBarPosition(shift.start_time, shift.end_time);
+                                          const isDragging = draggingShift?.shiftId === shift.id;
+                                          const dispStart = isDragging ? draggingShift!.currentStart : shift.start_time;
+                                          const dispEnd = isDragging ? draggingShift!.currentEnd : shift.end_time;
+                                          const pos = calcBarPosition(dispStart, dispEnd);
                                           if (!pos) return null;
                                           const clickable = !isAllStores;
                                           return (
                                             <div
                                               key={shift.id}
+                                              data-gantt-bar="1"
                                               role={clickable ? 'button' : undefined}
                                               tabIndex={clickable ? 0 : undefined}
-                                              onClick={clickable ? () => handleEditShiftFromGantt(shift) : undefined}
+                                              onClick={clickable ? (e) => { e.stopPropagation(); if (!draggingShift) handleEditShiftFromGantt(shift); } : undefined}
                                               onKeyDown={clickable ? (e) => {
                                                 if (e.key === 'Enter' || e.key === ' ') {
                                                   e.preventDefault();
@@ -2520,15 +2753,33 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
                                                 clickable
                                                   ? 'cursor-pointer hover:brightness-110 hover:shadow-lg hover:z-10 hover:scale-y-105 active:brightness-95'
                                                   : ''
-                                              }`}
+                                              } ${isDragging ? 'opacity-60 ring-2 ring-yellow-300 z-20' : ''}`}
                                               style={{ left: `${pos.leftPct}%`, width: `${pos.widthPct}%` }}
                                               title={clickable
-                                                ? `クリックで編集: ${employee.name} ${format(date, 'M/d', { locale: ja })} ${shift.start_time.slice(0,5)}-${shift.end_time.slice(0,5)}`
-                                                : `${employee.name} ${format(date, 'M/d', { locale: ja })} ${shift.start_time.slice(0,5)}-${shift.end_time.slice(0,5)}`}
+                                                ? `クリックで編集 / 左右端ドラッグで時間変更: ${employee.name} ${format(date, 'M/d', { locale: ja })} ${dispStart.slice(0,5)}-${dispEnd.slice(0,5)}`
+                                                : `${employee.name} ${format(date, 'M/d', { locale: ja })} ${dispStart.slice(0,5)}-${dispEnd.slice(0,5)}`}
                                             >
                                               <span className="truncate pointer-events-none">
-                                                {shift.start_time.slice(0,5)}-{shift.end_time.slice(0,5)}
+                                                {dispStart.slice(0,5)}-{dispEnd.slice(0,5)}
                                               </span>
+                                              {clickable && (
+                                                <div
+                                                  data-gantt-resize="1"
+                                                  onMouseDown={(e) => handleResizeStart(e, shift, 'left')}
+                                                  onClick={(e) => e.stopPropagation()}
+                                                  className="no-print absolute left-0 top-0 bottom-0 w-2 cursor-ew-resize hover:bg-white/40 z-10"
+                                                  title="ドラッグで開始時刻を変更"
+                                                />
+                                              )}
+                                              {clickable && (
+                                                <div
+                                                  data-gantt-resize="1"
+                                                  onMouseDown={(e) => handleResizeStart(e, shift, 'right')}
+                                                  onClick={(e) => e.stopPropagation()}
+                                                  className="no-print absolute right-0 top-0 bottom-0 w-2 cursor-ew-resize hover:bg-white/40 z-10"
+                                                  title="ドラッグで終了時刻を変更"
+                                                />
+                                              )}
                                             </div>
                                           );
                                         })}
@@ -2548,7 +2799,11 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
 
               <div className="no-print mt-3 text-xs text-gray-500">
                 💡 このビューでは金額・総時間は表示されません（管理職の勤務確認用）
-                {!isAllStores && <span className="ml-2">／ シフトの棒をクリックすると勤務時間を編集できます</span>}
+                {!isAllStores && (
+                  <span className="ml-2">
+                    ／ 棒をクリック→編集 ／ 棒の<b>左右端をドラッグ</b>で時間を30分単位で調整（自動保存）／ 空きエリアをクリック→新規追加
+                  </span>
+                )}
               </div>
             </div>
           );
