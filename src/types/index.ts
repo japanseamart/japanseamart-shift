@@ -120,6 +120,29 @@ export interface AllStoresDeadlineStatus {
   }>;
 }
 
+// 全店舗公開状況ステータス（従業員お知らせ画面用）
+export interface AllStoresPublicationStatus {
+  generated_at: string;
+  periods: Array<{
+    year: number;
+    month: number;
+    period: 'first' | 'second';
+    week_start_date: string;
+  }>;
+  rows: Array<{
+    store_id: number;
+    store_name: string;
+    periods: Array<{
+      target_year: number;
+      target_month: number;
+      target_period: 'first' | 'second';
+      week_start_date: string;
+      is_published: boolean;
+      published_at: string | null;
+    }>;
+  }>;
+}
+
 // パスワード管理
 export interface Password {
   id: number;

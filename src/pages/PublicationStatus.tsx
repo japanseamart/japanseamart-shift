@@ -11,18 +11,6 @@ interface PublicationStatusProps {
   onLogout: () => void;
 }
 
-interface ShiftDeadline {
-  id: number;
-  store_id: number;
-  target_year: number;
-  target_month: number;
-  target_period: 'first' | 'second';
-  deadline_date: string;
-  notification_message: string | null;
-  is_changed: number;
-  change_count: number;
-}
-
 interface Publication {
   id: number;
   store_id: number;
@@ -33,22 +21,15 @@ interface Publication {
 
 interface StoreStatus {
   store: Store;
-  firstHalf: {
-    deadline: ShiftDeadline | null;
-    publication: Publication | null;
-  };
-  secondHalf: {
-    deadline: ShiftDeadline | null;
-    publication: Publication | null;
-  };
+  firstHalf: Publication | null;
+  secondHalf: Publication | null;
 }
 
 export default function PublicationStatus({ role, storeId, onLogout }: PublicationStatusProps) {
   const [, setStores] = useState<Store[]>([]);
-  const [, setDeadlines] = useState<ShiftDeadline[]>([]);
   const [storeStatuses, setStoreStatuses] = useState<StoreStatus[]>([]);
   const [loading, setLoading] = useState(true);
-  
+
   // 対象期間
   const today = new Date();
   const [targetYear, setTargetYear] = useState(today.getFullYear());
@@ -57,8 +38,6 @@ export default function PublicationStatus({ role, storeId, onLogout }: Publicati
   useEffect(() => {
     fetchData();
   }, [targetYear, targetMonth]);
-
-  // 【全店統一・自動計算】締切は常時自動計算されるため、手動の一括自動設定は廃止
 
   const fetchData = async () => {
     setLoading(true);
@@ -69,11 +48,6 @@ export default function PublicationStatus({ role, storeId, onLogout }: Publicati
       // 本部以外の店舗
       const filteredStores = storesData.filter(s => s.id !== 8);
       setStores(filteredStores);
-
-      // 締切一覧を取得
-      const deadlinesRes = await fetch(getApiUrl('/api/shift-deadlines'));
-      const deadlinesData: ShiftDeadline[] = await deadlinesRes.json();
-      setDeadlines(deadlinesData);
 
       // 各店舗の公開状態を取得
       const statuses: StoreStatus[] = await Promise.all(
@@ -92,24 +66,10 @@ export default function PublicationStatus({ role, storeId, onLogout }: Publicati
           );
           const secondHalfPub = await secondHalfPubRes.json();
 
-          // 締切を検索
-          const firstHalfDeadline = deadlinesData.find(
-            d => d.store_id === store.id && d.target_year === targetYear && d.target_month === targetMonth && d.target_period === 'first'
-          ) || null;
-          const secondHalfDeadline = deadlinesData.find(
-            d => d.store_id === store.id && d.target_year === targetYear && d.target_month === targetMonth && d.target_period === 'second'
-          ) || null;
-
           return {
             store,
-            firstHalf: {
-              deadline: firstHalfDeadline,
-              publication: firstHalfPub.id ? firstHalfPub : null,
-            },
-            secondHalf: {
-              deadline: secondHalfDeadline,
-              publication: secondHalfPub.id ? secondHalfPub : null,
-            },
+            firstHalf: firstHalfPub.id ? firstHalfPub : null,
+            secondHalf: secondHalfPub.id ? secondHalfPub : null,
           };
         })
       );
@@ -122,49 +82,18 @@ export default function PublicationStatus({ role, storeId, onLogout }: Publicati
     }
   };
 
-  const getDeadlineStatus = (deadline: ShiftDeadline | null) => {
-    if (!deadline) {
-      return { text: '未設定', color: 'text-gray-400', bg: 'bg-gray-100', icon: '⚪' };
-    }
-    const deadlineDate = new Date(deadline.deadline_date);
-    deadlineDate.setHours(23, 59, 59, 999); // 締切日の23:59:59まで有効
-    const now = new Date();
-    
-    if (deadlineDate < now) {
-      return { text: '締切済', color: 'text-gray-500', bg: 'bg-gray-200', icon: '⏰' };
-    }
-    
-    // 日数計算は0時基準で
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const deadlineDay = new Date(deadline.deadline_date);
-    deadlineDay.setHours(0, 0, 0, 0);
-    const diffDays = Math.ceil((deadlineDay.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-    
-    if (diffDays === 0) {
-      return { text: '本日締切', color: 'text-red-600', bg: 'bg-red-100', icon: '🔴' };
-    }
-    if (diffDays <= 3) {
-      return { text: `あと${diffDays}日`, color: 'text-red-600', bg: 'bg-red-100', icon: '🔴' };
-    }
-    if (diffDays <= 7) {
-      return { text: `あと${diffDays}日`, color: 'text-yellow-600', bg: 'bg-yellow-100', icon: '🟡' };
-    }
-    return { text: `あと${diffDays}日`, color: 'text-green-600', bg: 'bg-green-100', icon: '🟢' };
-  };
-
   const getPublicationStatus = (publication: Publication | null) => {
     if (!publication || publication.is_published !== 1) {
-      return { text: '未公開', color: 'text-orange-600', bg: 'bg-orange-100', icon: '🔒' };
+      return { text: '未公開', color: 'text-orange-700', bg: 'bg-orange-100', icon: '🔒' };
     }
-    return { text: '公開済', color: 'text-green-600', bg: 'bg-green-100', icon: '✅' };
+    return { text: '公開済', color: 'text-green-700', bg: 'bg-green-100', icon: '✅' };
   };
 
   return (
     <AdminLayout role={role} storeId={storeId} onLogout={onLogout}>
       <div className="space-y-6">
         <div className="flex justify-between items-center">
-          <h1 className="text-2xl font-bold text-gray-800">📋 シフト公開・締切設定状況</h1>
+          <h1 className="text-2xl font-bold text-gray-800">📋 シフト公開状況</h1>
         </div>
 
         {/* 期間選択 */}
@@ -186,11 +115,11 @@ export default function PublicationStatus({ role, storeId, onLogout }: Publicati
                 const now = new Date();
                 const endYear = now.getFullYear() + 1;
                 const endMonth = now.getMonth() + 1;
-                
+
                 const months: { year: number; month: number }[] = [];
                 let y = startYear;
                 let m = startMonth;
-                
+
                 while (y < endYear || (y === endYear && m <= endMonth)) {
                   months.push({ year: y, month: m });
                   m++;
@@ -199,7 +128,7 @@ export default function PublicationStatus({ role, storeId, onLogout }: Publicati
                     y++;
                   }
                 }
-                
+
                 return months.map(({ year, month }) => (
                   <option key={`${year}-${month}`} value={`${year}-${String(month).padStart(2, '0')}`}>
                     {year}年{month}月
@@ -218,16 +147,6 @@ export default function PublicationStatus({ role, storeId, onLogout }: Publicati
               今月
             </button>
           </div>
-          
-          {/* 自動設定ルール説明 */}
-          <div className="mt-4 text-xs text-gray-700 bg-ocean-50 border border-ocean-200 p-3 rounded-lg">
-            <div className="font-medium mb-1 text-ocean-800">📌 締切ルール（全店統一・自動計算）:</div>
-            <ul className="list-disc list-inside space-y-1 text-gray-700">
-              <li>前半（1〜15日）→ シフト開始日=1日の <b>6日前</b>（<b>前月26日 23:59</b>）</li>
-              <li>後半（16日〜末日）→ シフト開始日=16日の <b>6日前</b>（<b>同月10日 23:59</b>）</li>
-              <li>全店舗共通・店舗個別設定は不可</li>
-            </ul>
-          </div>
         </div>
 
         {/* 凡例 */}
@@ -235,15 +154,8 @@ export default function PublicationStatus({ role, storeId, onLogout }: Publicati
           <div className="flex flex-wrap gap-4 text-sm">
             <div className="flex items-center gap-2">
               <span className="font-medium text-gray-700">公開状態:</span>
-              <span className="px-2 py-1 rounded bg-green-100 text-green-600">✅ 公開済</span>
-              <span className="px-2 py-1 rounded bg-orange-100 text-orange-600">🔒 未公開</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="font-medium text-gray-700">締切状態:</span>
-              <span className="px-2 py-1 rounded bg-green-100 text-green-600">🟢 余裕あり</span>
-              <span className="px-2 py-1 rounded bg-yellow-100 text-yellow-600">🟡 1週間以内</span>
-              <span className="px-2 py-1 rounded bg-red-100 text-red-600">🔴 3日以内</span>
-              <span className="px-2 py-1 rounded bg-gray-100 text-gray-400">⚪ 未設定</span>
+              <span className="px-2 py-1 rounded bg-green-100 text-green-700 font-medium">✅ 公開済</span>
+              <span className="px-2 py-1 rounded bg-orange-100 text-orange-700 font-medium">🔒 未公開</span>
             </div>
           </div>
         </div>
@@ -258,78 +170,48 @@ export default function PublicationStatus({ role, storeId, onLogout }: Publicati
             <table className="min-w-full">
               <thead className="bg-gray-50">
                 <tr>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700 border-b" rowSpan={2}>
-                    店舗
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700 border-b">店舗</th>
+                  <th className="px-4 py-3 text-center text-sm font-semibold text-gray-700 border-b border-l">
+                    前半（1〜15日）
                   </th>
-                  <th className="px-4 py-3 text-center text-sm font-semibold text-gray-700 border-b border-l" colSpan={3}>
-                    前半（1日〜15日）
-                  </th>
-                  <th className="px-4 py-3 text-center text-sm font-semibold text-gray-700 border-b border-l" colSpan={3}>
+                  <th className="px-4 py-3 text-center text-sm font-semibold text-gray-700 border-b border-l">
                     後半（16日〜末日）
                   </th>
-                </tr>
-                <tr className="bg-gray-50">
-                  <th className="px-3 py-2 text-center text-xs font-medium text-gray-600 border-b border-l">公開</th>
-                  <th className="px-3 py-2 text-center text-xs font-medium text-gray-600 border-b">締切日</th>
-                  <th className="px-3 py-2 text-center text-xs font-medium text-gray-600 border-b">状態</th>
-                  <th className="px-3 py-2 text-center text-xs font-medium text-gray-600 border-b border-l">公開</th>
-                  <th className="px-3 py-2 text-center text-xs font-medium text-gray-600 border-b">締切日</th>
-                  <th className="px-3 py-2 text-center text-xs font-medium text-gray-600 border-b">状態</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
                 {storeStatuses.map((status) => {
-                  const firstPubStatus = getPublicationStatus(status.firstHalf.publication);
-                  const firstDeadlineStatus = getDeadlineStatus(status.firstHalf.deadline);
-                  const secondPubStatus = getPublicationStatus(status.secondHalf.publication);
-                  const secondDeadlineStatus = getDeadlineStatus(status.secondHalf.deadline);
+                  const firstPubStatus = getPublicationStatus(status.firstHalf);
+                  const secondPubStatus = getPublicationStatus(status.secondHalf);
 
                   return (
                     <tr key={status.store.id} className="hover:bg-gray-50">
                       <td className="px-4 py-3 font-medium text-gray-900">
                         {status.store.name}
                       </td>
-                      
-                      {/* 前半 */}
                       <td className="px-3 py-3 text-center border-l">
-                        <span className={`px-2 py-1 rounded text-xs font-medium ${firstPubStatus.bg} ${firstPubStatus.color}`}>
-                          {firstPubStatus.icon} {firstPubStatus.text}
-                        </span>
-                      </td>
-                      <td className="px-3 py-3 text-center text-sm">
-                        {status.firstHalf.deadline ? (
-                          <span className="font-mono">
-                            {format(new Date(status.firstHalf.deadline.deadline_date), 'M/d', { locale: ja })}
+                        <div className="flex flex-col items-center gap-1">
+                          <span className={`px-3 py-1 rounded-full text-xs font-medium ${firstPubStatus.bg} ${firstPubStatus.color}`}>
+                            {firstPubStatus.icon} {firstPubStatus.text}
                           </span>
-                        ) : (
-                          <span className="text-gray-400">-</span>
-                        )}
+                          {status.firstHalf?.published_at && (
+                            <span className="text-[10px] text-gray-500">
+                              {format(new Date(status.firstHalf.published_at), 'M/d H:mm', { locale: ja })} 公開
+                            </span>
+                          )}
+                        </div>
                       </td>
-                      <td className="px-3 py-3 text-center">
-                        <span className={`px-2 py-1 rounded text-xs font-medium ${firstDeadlineStatus.bg} ${firstDeadlineStatus.color}`}>
-                          {firstDeadlineStatus.icon} {firstDeadlineStatus.text}
-                        </span>
-                      </td>
-
-                      {/* 後半 */}
                       <td className="px-3 py-3 text-center border-l">
-                        <span className={`px-2 py-1 rounded text-xs font-medium ${secondPubStatus.bg} ${secondPubStatus.color}`}>
-                          {secondPubStatus.icon} {secondPubStatus.text}
-                        </span>
-                      </td>
-                      <td className="px-3 py-3 text-center text-sm">
-                        {status.secondHalf.deadline ? (
-                          <span className="font-mono">
-                            {format(new Date(status.secondHalf.deadline.deadline_date), 'M/d', { locale: ja })}
+                        <div className="flex flex-col items-center gap-1">
+                          <span className={`px-3 py-1 rounded-full text-xs font-medium ${secondPubStatus.bg} ${secondPubStatus.color}`}>
+                            {secondPubStatus.icon} {secondPubStatus.text}
                           </span>
-                        ) : (
-                          <span className="text-gray-400">-</span>
-                        )}
-                      </td>
-                      <td className="px-3 py-3 text-center">
-                        <span className={`px-2 py-1 rounded text-xs font-medium ${secondDeadlineStatus.bg} ${secondDeadlineStatus.color}`}>
-                          {secondDeadlineStatus.icon} {secondDeadlineStatus.text}
-                        </span>
+                          {status.secondHalf?.published_at && (
+                            <span className="text-[10px] text-gray-500">
+                              {format(new Date(status.secondHalf.published_at), 'M/d H:mm', { locale: ja })} 公開
+                            </span>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   );
@@ -341,29 +223,17 @@ export default function PublicationStatus({ role, storeId, onLogout }: Publicati
 
         {/* サマリー */}
         {!loading && (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 gap-4">
             <div className="card bg-gradient-to-br from-green-50 to-green-100">
               <div className="text-sm text-green-700">前半公開済</div>
               <div className="text-2xl font-bold text-green-900">
-                {storeStatuses.filter(s => s.firstHalf.publication?.is_published === 1).length} / {storeStatuses.length}
-              </div>
-            </div>
-            <div className="card bg-gradient-to-br from-blue-50 to-blue-100">
-              <div className="text-sm text-blue-700">前半締切設定済</div>
-              <div className="text-2xl font-bold text-blue-900">
-                {storeStatuses.filter(s => s.firstHalf.deadline).length} / {storeStatuses.length}
+                {storeStatuses.filter(s => s.firstHalf?.is_published === 1).length} / {storeStatuses.length}
               </div>
             </div>
             <div className="card bg-gradient-to-br from-green-50 to-green-100">
               <div className="text-sm text-green-700">後半公開済</div>
               <div className="text-2xl font-bold text-green-900">
-                {storeStatuses.filter(s => s.secondHalf.publication?.is_published === 1).length} / {storeStatuses.length}
-              </div>
-            </div>
-            <div className="card bg-gradient-to-br from-blue-50 to-blue-100">
-              <div className="text-sm text-blue-700">後半締切設定済</div>
-              <div className="text-2xl font-bold text-blue-900">
-                {storeStatuses.filter(s => s.secondHalf.deadline).length} / {storeStatuses.length}
+                {storeStatuses.filter(s => s.secondHalf?.is_published === 1).length} / {storeStatuses.length}
               </div>
             </div>
           </div>

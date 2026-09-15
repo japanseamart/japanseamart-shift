@@ -1106,6 +1106,91 @@ app.get('/weekly-publications', async (c) => {
   return c.json(publication)
 })
 
+// 従業員お知らせ用: 全店舗の公開状況(直近2期間)を一括取得
+// 締切バナーと同じ「直近2期間」で店舗別マトリクスを返す
+app.get('/weekly-publications/all-stores-status', async (c) => {
+  const now = new Date()
+  const nowTs = now.getTime()
+
+  // 締切前の直近2期間を計算(締切バナーと統一)
+  const currentYear = now.getFullYear()
+  const currentMonth = now.getMonth() + 1
+  const candidates: Array<{ year: number; month: number; period: 'first' | 'second' }> = []
+  for (let offset = 0; offset < 6; offset++) {
+    let y = currentYear
+    let m = currentMonth + offset
+    while (m > 12) { m -= 12; y += 1 }
+    candidates.push({ year: y, month: m, period: 'first' })
+    candidates.push({ year: y, month: m, period: 'second' })
+  }
+  const upcomingPeriods: Array<{ year: number; month: number; period: 'first' | 'second'; week_start_date: string }> = []
+  for (const cand of candidates) {
+    const deadlineDateStr = computeAutoDeadline(cand.year, cand.month, cand.period)
+    const dt = new Date(deadlineDateStr)
+    dt.setHours(23, 59, 59, 999)
+    if (dt.getTime() >= nowTs) {
+      const day = cand.period === 'first' ? 1 : 16
+      const weekStart = `${cand.year}-${String(cand.month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+      upcomingPeriods.push({ ...cand, week_start_date: weekStart })
+      if (upcomingPeriods.length >= 2) break
+    }
+  }
+
+  // 全店舗取得(本部除く)
+  const storesRes = await c.env.DB.prepare(
+    'SELECT id, name FROM stores WHERE id != 8 ORDER BY id ASC'
+  ).all()
+  const stores = storesRes.results || []
+
+  if (upcomingPeriods.length === 0 || stores.length === 0) {
+    return c.json({ generated_at: now.toISOString(), periods: [], rows: [] })
+  }
+
+  // 対象期間の公開レコードを一括取得
+  const weekStartDates = upcomingPeriods.map(p => p.week_start_date)
+  const placeholders = weekStartDates.map(() => '?').join(',')
+  const pubsRes = await c.env.DB.prepare(`
+    SELECT * FROM weekly_publications
+    WHERE week_start_date IN (${placeholders})
+  `).bind(...weekStartDates).all()
+  const publications = pubsRes.results || []
+
+  // 店舗×期間のマトリクス構築
+  const rows: any[] = []
+  for (const store of stores as any[]) {
+    const storeRow: any = {
+      store_id: store.id,
+      store_name: store.name,
+      periods: [],
+    }
+    for (const tp of upcomingPeriods) {
+      const found = publications.find((p: any) =>
+        p.store_id === store.id && p.week_start_date === tp.week_start_date
+      )
+      storeRow.periods.push({
+        target_year: tp.year,
+        target_month: tp.month,
+        target_period: tp.period,
+        week_start_date: tp.week_start_date,
+        is_published: found ? Boolean((found as any).is_published) : false,
+        published_at: found ? (found as any).published_at : null,
+      })
+    }
+    rows.push(storeRow)
+  }
+
+  return c.json({
+    generated_at: now.toISOString(),
+    periods: upcomingPeriods.map(p => ({
+      year: p.year,
+      month: p.month,
+      period: p.period,
+      week_start_date: p.week_start_date,
+    })),
+    rows,
+  })
+})
+
 // 週次公開状態の設定
 app.post('/weekly-publications', async (c) => {
   const { store_id, week_start_date, is_published } = await c.req.json()

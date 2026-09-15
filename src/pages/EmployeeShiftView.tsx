@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { format, startOfWeek, endOfWeek, eachDayOfInterval, addWeeks, subWeeks } from 'date-fns';
 import { ja } from 'date-fns/locale';
 import { Store, Employee, Shift, SpecialDay } from '../types';
-import type { AllStoresDeadlineStatus } from '../types';
+import type { AllStoresDeadlineStatus, AllStoresPublicationStatus } from '../types';
 import { getApiUrl } from '../config/api';
 import HelpPanel from '../components/HelpPanel';
 
@@ -14,6 +14,7 @@ export default function EmployeeShiftView() {
   const [shifts, setShifts] = useState<Shift[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [deadlineStatus, setDeadlineStatus] = useState<AllStoresDeadlineStatus | null>(null);
+  const [publicationStatus, setPublicationStatus] = useState<AllStoresPublicationStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [isPublished, setIsPublished] = useState(false);
   const [viewMode, setViewMode] = useState<'list' | 'table'>('list'); // リストビュー or テーブルビュー
@@ -23,6 +24,7 @@ export default function EmployeeShiftView() {
   useEffect(() => {
     fetchStores();
     fetchDeadlineStatus();
+    fetchPublicationStatus();
     fetchSpecialDays();
   }, []);
 
@@ -67,6 +69,17 @@ export default function EmployeeShiftView() {
     } catch (error) {
       console.error('締切ステータス取得エラー:', error);
       setDeadlineStatus(null);
+    }
+  };
+
+  const fetchPublicationStatus = async () => {
+    try {
+      const res = await fetch(getApiUrl('/api/weekly-publications/all-stores-status'));
+      const data = await res.json();
+      setPublicationStatus(data);
+    } catch (error) {
+      console.error('公開状況取得エラー:', error);
+      setPublicationStatus(null);
     }
   };
 
@@ -280,6 +293,71 @@ export default function EmployeeShiftView() {
             </div>
           );
         })()}
+
+        {/* 【全店統一】各店舗のシフト公開状況 */}
+        {publicationStatus && publicationStatus.rows.length > 0 && publicationStatus.periods.length > 0 && (
+          <div className="card">
+            <div className="flex items-center gap-2 mb-3">
+              <span className="text-lg">📢</span>
+              <h2 className="text-base sm:text-lg font-bold text-gray-800">
+                各店舗のシフト公開状況
+              </h2>
+            </div>
+            <div className="overflow-x-auto -mx-2 sm:mx-0">
+              <table className="min-w-full text-xs sm:text-sm">
+                <thead>
+                  <tr className="border-b-2 border-gray-200 text-gray-600 bg-gray-50">
+                    <th className="text-left py-2 px-2 sm:px-3 font-medium sticky left-0 bg-gray-50 z-10">店舗</th>
+                    {publicationStatus.periods.map((p) => (
+                      <th
+                        key={`${p.year}-${p.month}-${p.period}`}
+                        className="text-center py-2 px-2 sm:px-3 font-medium whitespace-nowrap"
+                      >
+                        <div className="text-[11px] sm:text-xs text-gray-500 font-normal">
+                          {p.year}年
+                        </div>
+                        <div>
+                          {p.month}月{p.period === 'first' ? '前半' : '後半'}
+                        </div>
+                        <div className="text-[10px] text-gray-400 font-normal">
+                          {p.period === 'first' ? `${p.month}/1-15` : `${p.month}/16-末`}
+                        </div>
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {publicationStatus.rows.map((row) => (
+                    <tr key={row.store_id} className="border-b border-gray-100 hover:bg-gray-50">
+                      <td className="py-2 px-2 sm:px-3 font-medium text-gray-800 whitespace-nowrap sticky left-0 bg-white z-10">
+                        {row.store_name}
+                      </td>
+                      {row.periods.map((p) => (
+                        <td
+                          key={`${row.store_id}-${p.target_year}-${p.target_month}-${p.target_period}`}
+                          className="py-2 px-2 sm:px-3 text-center"
+                        >
+                          {p.is_published ? (
+                            <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-green-100 text-green-700 font-medium text-[11px] sm:text-xs whitespace-nowrap">
+                              ✅ 公開済
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-orange-100 text-orange-700 font-medium text-[11px] sm:text-xs whitespace-nowrap">
+                              🔒 未公開
+                            </span>
+                          )}
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <p className="text-[11px] text-gray-500 mt-2 text-center">
+              ℹ️ 直近2期間の公開状況です。「未公開」の期間は店舗責任者が作成中です
+            </p>
+          </div>
+        )}
 
         {/* 店舗選択と週選択 */}
         <div className="card">
