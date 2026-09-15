@@ -58,7 +58,7 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
   const [printType, setPrintType] = useState<'shift' | 'requests'>('shift');
   
   // ビューモード
-  const [viewMode, setViewMode] = useState<'table' | 'list' | 'day' | 'heatmap' | 'cost' | 'gantt'>('table');
+  const [viewMode, setViewMode] = useState<'table' | 'list' | 'day' | 'heatmap' | 'cost' | 'gantt'>('gantt');
   // ガントビュー用の状態
   const [ganttMode, setGanttMode] = useState<'day' | 'period'>('day'); // 1日ガント or 期間ガント
   const [ganttSelectedDate, setGanttSelectedDate] = useState<string>(''); // 1日ガントの対象日
@@ -2353,6 +2353,70 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
             return 'bg-orange-500 border-orange-700';
           };
 
+          // 雇用形態別の色（希望シフト用: 半透明）
+          const getEmploymentBgColor = (type?: string) => {
+            if (type === 'full_time') return '#3b82f6'; // blue-500
+            if (type === 'part_time_insured') return '#22c55e'; // green-500
+            return '#f97316'; // orange-500
+          };
+
+          // 希望シフトのパターンから時間帯を取り出す
+          // 返り値: { ranges: [{start, end}], isOff: boolean }
+          //   - custom_start/custom_end があればそれを最優先
+          //   - patterns: morning=6-12, afternoon=12-17, evening=17-24, full=6-24
+          //   - off が含まれる場合は isOff=true
+          const parseShiftRequest = (req: ShiftRequest): { ranges: { start: string; end: string }[]; isOff: boolean } => {
+            try {
+              const patterns: string[] = JSON.parse(req.patterns);
+              if (patterns.includes('off')) return { ranges: [], isOff: true };
+              // カスタム時間があればそれを使う
+              if (req.custom_start && req.custom_end) {
+                return { ranges: [{ start: req.custom_start, end: req.custom_end }], isOff: false };
+              }
+              const patternMap: { [k: string]: { start: string; end: string } } = {
+                morning: { start: '06:00', end: '12:00' },
+                afternoon: { start: '12:00', end: '17:00' },
+                evening: { start: '17:00', end: '24:00' },
+                full: { start: '06:00', end: '24:00' },
+              };
+              const ranges = patterns.map(p => patternMap[p]).filter(Boolean);
+              return { ranges, isOff: false };
+            } catch {
+              return { ranges: [], isOff: false };
+            }
+          };
+
+          // 希望時間から新規追加モーダルを開く
+          const handleAddFromRequestBar = (employeeId: number, dateStr: string, start: string, end: string) => {
+            if (isAllStores) return;
+            const totalMin = timeToMinutes(end) - timeToMinutes(start);
+            const brk = totalMin / 60 >= 6 ? 60 : 0;
+            setEditingShift({
+              employee_id: employeeId,
+              date: dateStr,
+              start_time: start.length === 5 ? start + ':00' : start,
+              end_time: end.length === 5 ? end + ':00' : end,
+              break_minutes: brk,
+            });
+            setBreakManuallySet(false);
+            setShowShiftForm(true);
+          };
+
+          // 日別コスト計算（1日分の全シフトの合計、正社員は月給制のため0）
+          const calcDayCost = (dateStr: string): number => {
+            const dayShifts = shifts.filter(s => s.date === dateStr);
+            let total = 0;
+            for (const s of dayShifts) {
+              const emp = employees.find(e => e.id === s.employee_id);
+              if (!emp) continue;
+              total += calculateLaborCost(s, emp);
+            }
+            return total;
+          };
+
+          // 管理者のみ金額表示
+          const canSeeCost = role === 'admin';
+
           // 該当日にシフトが1件でもある従業員だけに絞るヘルパー
           const filterEmployeesForDay = (dateStr: string) =>
             orderedEmployees.filter(emp => shifts.some(s => s.employee_id === emp.id && s.date === dateStr));
@@ -2487,6 +2551,15 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
                   <span className="inline-block w-4 h-3 bg-orange-500 border border-orange-700 rounded-sm"></span>
                   パート
                 </span>
+                {/* 希望シフト凡例（印刷時非表示） */}
+                <span className="no-print flex items-center gap-1.5 ml-2 pl-2 border-l border-gray-300">
+                  <span className="inline-block w-4 h-3 rounded-sm border border-dashed border-blue-600" style={{ backgroundColor: '#3b82f6', opacity: 0.22 }}></span>
+                  出勤希望（うっすら）
+                </span>
+                <span className="no-print flex items-center gap-1.5">
+                  <span className="inline-block w-4 h-3 rounded-sm border border-red-300" style={{ background: 'repeating-linear-gradient(45deg, rgba(239, 68, 68, 0.35), rgba(239, 68, 68, 0.35) 3px, transparent 3px, transparent 6px)' }}></span>
+                  休み希望
+                </span>
               </div>
 
               {/* === 1日ガント === */}
@@ -2509,8 +2582,19 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
                 const hourMarks: number[] = [];
                 for (let h = GANTT_START_HOUR; h <= GANTT_END_HOUR; h++) hourMarks.push(h);
 
+                // 対象日の合計人件費（管理者のみ表示、印刷時は非表示）
+                const dayCost = canSeeCost ? calcDayCost(targetDate) : 0;
+
                 return (
                   <div className="overflow-x-auto">
+                    {/* 対象日の合計金額（管理者のみ、印刷時非表示） */}
+                    {canSeeCost && (
+                      <div className="gantt-day-cost no-print mb-2 flex items-center justify-end gap-2 text-sm">
+                        <span className="text-gray-600">💰 {format(new Date(targetDate), 'M/d(E)', { locale: ja })} 人件費:</span>
+                        <span className="font-bold text-red-700 text-base">¥{dayCost.toLocaleString()}</span>
+                        <span className="text-[10px] text-gray-400">(正社員は月給制のため除く)</span>
+                      </div>
+                    )}
                     <div className="min-w-[900px]">
                       {/* 時間軸ヘッダー */}
                       <div className="flex border-b-2 border-gray-300 sticky top-0 bg-white z-10">
@@ -2556,6 +2640,51 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
                                   className="absolute top-0 bottom-0 w-px bg-gray-100 pointer-events-none"
                                   style={{ left: `${((h - GANTT_START_HOUR) / GANTT_HOURS) * 100}%` }}></div>
                               ))}
+                              {/* 🕊️ 希望シフト（うっすら背景バー、印刷時非表示、クリックで新規追加） */}
+                              {(() => {
+                                const req = getShiftRequestForEmployeeAndDate(employee.id, targetDate);
+                                if (!req) return null;
+                                const parsed = parseShiftRequest(req);
+                                if (parsed.isOff) {
+                                  // 休み希望: 行全体に赤い斜線背景バー
+                                  return (
+                                    <div
+                                      className="gantt-shift-request no-print absolute inset-0 pointer-events-none flex items-center justify-center"
+                                      style={{
+                                        background: 'repeating-linear-gradient(45deg, rgba(239, 68, 68, 0.15), rgba(239, 68, 68, 0.15) 6px, transparent 6px, transparent 12px)',
+                                        zIndex: 0,
+                                      }}
+                                      title={`休み希望: ${employee.name}`}
+                                    >
+                                      <span className="text-[10px] text-red-700 font-bold opacity-70">🚫 休み希望</span>
+                                    </div>
+                                  );
+                                }
+                                // 出勤希望: 各時間帯を半透明バーで
+                                return parsed.ranges.map((r, i) => {
+                                  const p = calcBarPosition(r.start, r.end);
+                                  if (!p) return null;
+                                  return (
+                                    <div
+                                      key={`req-${req.id}-${i}`}
+                                      className="gantt-shift-request no-print absolute top-1 bottom-1 rounded border-2 border-dashed cursor-pointer hover:opacity-50 transition-opacity"
+                                      style={{
+                                        left: `${p.leftPct}%`,
+                                        width: `${p.widthPct}%`,
+                                        backgroundColor: getEmploymentBgColor(employee.employment_type),
+                                        borderColor: getEmploymentBgColor(employee.employment_type),
+                                        opacity: 0.22,
+                                        zIndex: 0,
+                                      }}
+                                      title={`希望: ${employee.name} ${r.start}-${r.end}（クリックで登録）`}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleAddFromRequestBar(employee.id, targetDate, r.start, r.end);
+                                      }}
+                                    />
+                                  );
+                                });
+                              })()}
                               {/* シフト棒（クリックで編集 / 左右端ドラッグでリサイズ） */}
                               {empShifts.map(shift => {
                                 // ドラッグ中はリアルタイム値を優先
@@ -2652,6 +2781,8 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
                             shifts.some(s => s.employee_id === emp.id && s.date === dateStr)
                           );
 
+                      const dayCost = canSeeCost ? calcDayCost(dateStr) : 0;
+
                       return (
                         <div key={dateStr} className="gantt-day-block border rounded-lg overflow-hidden">
                           {/* 日付ヘッダー */}
@@ -2660,10 +2791,18 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
                             dow === 6 ? 'bg-blue-50 text-blue-700 border-blue-200' :
                             'bg-gray-100 text-gray-800 border-gray-200'
                           }`}>
-                            <div>
-                              {format(date, 'yyyy年M月d日(E)', { locale: ja })}
-                              {employeesToShow.length === 0 && (
-                                <span className="ml-3 text-xs font-normal text-gray-500">（出勤者なし）</span>
+                            <div className="flex items-center gap-3">
+                              <span>
+                                {format(date, 'yyyy年M月d日(E)', { locale: ja })}
+                                {employeesToShow.length === 0 && (
+                                  <span className="ml-3 text-xs font-normal text-gray-500">（出勤者なし）</span>
+                                )}
+                              </span>
+                              {/* 💰 各日の人件費（管理者のみ、印刷時非表示） */}
+                              {canSeeCost && (
+                                <span className="gantt-day-cost no-print inline-flex items-center gap-1 text-xs font-normal bg-white/70 text-red-700 border border-red-200 px-2 py-0.5 rounded-full">
+                                  💰 ¥{dayCost.toLocaleString()}
+                                </span>
                               )}
                             </div>
                             {!isAllStores && (
@@ -2728,6 +2867,49 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
                                             className="absolute top-0 bottom-0 w-px bg-gray-100 pointer-events-none"
                                             style={{ left: `${((h - GANTT_START_HOUR) / GANTT_HOURS) * 100}%` }}></div>
                                         ))}
+                                        {/* 🕊️ 希望シフト（うっすら背景、印刷時非表示、クリックで新規追加） */}
+                                        {(() => {
+                                          const req = getShiftRequestForEmployeeAndDate(employee.id, dateStr);
+                                          if (!req) return null;
+                                          const parsed = parseShiftRequest(req);
+                                          if (parsed.isOff) {
+                                            return (
+                                              <div
+                                                className="gantt-shift-request no-print absolute inset-0 pointer-events-none flex items-center justify-center"
+                                                style={{
+                                                  background: 'repeating-linear-gradient(45deg, rgba(239, 68, 68, 0.15), rgba(239, 68, 68, 0.15) 5px, transparent 5px, transparent 10px)',
+                                                  zIndex: 0,
+                                                }}
+                                                title={`休み希望: ${employee.name}`}
+                                              >
+                                                <span className="text-[9px] text-red-700 font-bold opacity-70">🚫 休み希望</span>
+                                              </div>
+                                            );
+                                          }
+                                          return parsed.ranges.map((r, i) => {
+                                            const p = calcBarPosition(r.start, r.end);
+                                            if (!p) return null;
+                                            return (
+                                              <div
+                                                key={`req-${req.id}-${i}`}
+                                                className="gantt-shift-request no-print absolute top-1 bottom-1 rounded border border-dashed cursor-pointer hover:opacity-50 transition-opacity"
+                                                style={{
+                                                  left: `${p.leftPct}%`,
+                                                  width: `${p.widthPct}%`,
+                                                  backgroundColor: getEmploymentBgColor(employee.employment_type),
+                                                  borderColor: getEmploymentBgColor(employee.employment_type),
+                                                  opacity: 0.22,
+                                                  zIndex: 0,
+                                                }}
+                                                title={`希望: ${employee.name} ${r.start}-${r.end}（クリックで登録）`}
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  handleAddFromRequestBar(employee.id, dateStr, r.start, r.end);
+                                                }}
+                                              />
+                                            );
+                                          });
+                                        })()}
                                         {/* シフト棒（クリックで編集 / 左右端ドラッグでリサイズ） */}
                                         {empShifts.map(shift => {
                                           const isDragging = draggingShift?.shiftId === shift.id;
@@ -2798,12 +2980,13 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
               })()}
 
               <div className="no-print mt-3 text-xs text-gray-500">
-                💡 このビューでは金額・総時間は表示されません（管理職の勤務確認用）
+                💡 希望シフトは<b>うっすら背景</b>で表示（印刷時は非表示）／ 希望バーをクリック→希望時間で新規追加
                 {!isAllStores && (
                   <span className="ml-2">
                     ／ 棒をクリック→編集 ／ 棒の<b>左右端をドラッグ</b>で時間を30分単位で調整（自動保存）／ 空きエリアをクリック→新規追加
                   </span>
                 )}
+                {canSeeCost && <span className="ml-2 text-red-600">／ 💰 各日の人件費は<b>管理者のみ</b>表示（印刷時非表示）</span>}
               </div>
             </div>
           );

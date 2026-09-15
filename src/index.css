@@ -302,4 +302,14 @@ body {
     page-break-after: auto;
     break-after: auto;
   }
+
+  /* 希望シフト（うっすら表示）は印刷時に完全非表示 */
+  .gantt-shift-request {
+    display: none !important;
+  }
+
+  /* 各日の人件費バッジは印刷時に非表示（管理者のみ画面で表示、紙には出さない） */
+  .gantt-day-cost {
+    display: none !important;
+  }
 }
