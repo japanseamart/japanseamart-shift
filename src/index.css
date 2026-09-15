@@ -247,4 +247,47 @@ body {
   body.print-mode-requests .no-print {
     display: none !important;
   }
+
+  /* ========== 📊 ガントビュー 印刷スタイル ========== */
+  /* ガントビュー内はテーブルではなくflexレイアウトなので、
+     グローバルな table 用ルールを個別に打ち消す */
+  .gantt-view {
+    font-size: 9pt !important;
+  }
+  .gantt-view .overflow-x-auto {
+    overflow: visible !important;
+  }
+  .gantt-view .min-w-\[900px\] {
+    min-width: 0 !important;
+    width: 100% !important;
+  }
+  /* シフト棒の色を確実に印刷する（カラー印刷が有効な前提で背景色を強制） */
+  .gantt-view .bg-blue-500 {
+    background-color: #3b82f6 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+  .gantt-view .bg-green-500 {
+    background-color: #22c55e !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+  .gantt-view .bg-orange-500 {
+    background-color: #f97316 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+  .gantt-view .bg-gray-50,
+  .gantt-view .bg-red-50\/30,
+  .gantt-view .bg-blue-50\/30 {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+  .gantt-view [class*="text-white"] {
+    color: white !important;
+  }
+  /* 従業員名列を印刷時は少し狭く */
+  .gantt-view .w-32 {
+    width: 22mm !important;
+  }
 }

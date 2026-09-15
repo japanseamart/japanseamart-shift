@@ -58,7 +58,11 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
   const [printType, setPrintType] = useState<'shift' | 'requests'>('shift');
   
   // ビューモード
-  const [viewMode, setViewMode] = useState<'table' | 'list' | 'day' | 'heatmap' | 'cost'>('table');
+  const [viewMode, setViewMode] = useState<'table' | 'list' | 'day' | 'heatmap' | 'cost' | 'gantt'>('table');
+  // ガントビュー用の状態
+  const [ganttMode, setGanttMode] = useState<'day' | 'period'>('day'); // 1日ガント or 期間ガント
+  const [ganttSelectedDate, setGanttSelectedDate] = useState<string>(''); // 1日ガントの対象日
+  const [ganttShowAll, setGanttShowAll] = useState<boolean>(false); // false=出勤者のみ, true=全員表示
   // const [requestsViewMode, setRequestsViewMode] = useState<'card' | 'table'>('card');
   
   // 従業員並び順（期間ごとにlocalStorageで保持）
@@ -89,6 +93,17 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
       fetchAllEmployees();
     }
   }, []);
+
+  // ガント表示対象日：期間が変わったら初日にリセット、期間外なら初日に補正
+  useEffect(() => {
+    if (periodDates.length === 0) return;
+    const firstDateStr = format(periodDates[0], 'yyyy-MM-dd');
+    const lastDateStr = format(periodDates[periodDates.length - 1], 'yyyy-MM-dd');
+    if (!ganttSelectedDate || ganttSelectedDate < firstDateStr || ganttSelectedDate > lastDateStr) {
+      setGanttSelectedDate(firstDateStr);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [targetYear, targetMonth, targetPeriod]);
 
   useEffect(() => {
     if (isAllStores) {
@@ -1258,13 +1273,14 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
           </div>
 
           {/* ビューモード切り替え */}
-          <div className="mt-4 grid grid-cols-3 md:grid-cols-5 gap-2 no-print">
+          <div className="mt-4 grid grid-cols-3 md:grid-cols-6 gap-2 no-print">
             {[
               { mode: 'table', label: '📅 表', desc: '' },
               { mode: 'list', label: '👥 従業員', desc: '' },
               { mode: 'day', label: '📆 日別', desc: '' },
               { mode: 'heatmap', label: '🔥 ヒート', desc: '' },
-              { mode: 'cost', label: '💰 人件費', desc: '' }
+              { mode: 'cost', label: '💰 人件費', desc: '' },
+              { mode: 'gantt', label: '📊 ガント', desc: '' }
             ].map(({ mode, label }) => (
               <button key={mode} onClick={() => setViewMode(mode as typeof viewMode)}
                 className={`h-12 rounded-lg text-sm font-medium transition-all ${
@@ -1957,6 +1973,301 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
             </div>
           </div>
         )}
+
+        {/* 📊 ガントビュー（金額・総時間は一切表示しない） */}
+        {viewMode === 'gantt' && (() => {
+          // 表示範囲: 6:00〜24:00 (18時間)
+          const GANTT_START_HOUR = 6;
+          const GANTT_END_HOUR = 24;
+          const GANTT_HOURS = GANTT_END_HOUR - GANTT_START_HOUR;
+
+          // 時間文字列 → 開始からの分数
+          const timeToMinutes = (t: string): number => {
+            const [h, m] = t.split(':').map(Number);
+            return h * 60 + (m || 0);
+          };
+
+          // シフト時間帯を 6:00〜24:00 の範囲でクリップして左位置と幅(%)を計算
+          const calcBarPosition = (startTime: string, endTime: string) => {
+            const startMin = Math.max(timeToMinutes(startTime), GANTT_START_HOUR * 60);
+            const endMin = Math.min(timeToMinutes(endTime), GANTT_END_HOUR * 60);
+            if (endMin <= startMin) return null;
+            const totalMin = GANTT_HOURS * 60;
+            const leftPct = ((startMin - GANTT_START_HOUR * 60) / totalMin) * 100;
+            const widthPct = ((endMin - startMin) / totalMin) * 100;
+            return { leftPct, widthPct };
+          };
+
+          // 雇用形態別の色クラス
+          const getEmploymentColor = (type?: string) => {
+            if (type === 'full_time') return 'bg-blue-500 border-blue-700';
+            if (type === 'part_time_insured') return 'bg-green-500 border-green-700';
+            return 'bg-orange-500 border-orange-700';
+          };
+
+          // 該当日にシフトが1件でもある従業員だけに絞るヘルパー
+          const filterEmployeesForDay = (dateStr: string) =>
+            orderedEmployees.filter(emp => shifts.some(s => s.employee_id === emp.id && s.date === dateStr));
+
+          // 期間全体に1件でもシフトがある従業員だけに絞るヘルパー
+          const filterEmployeesForPeriod = () =>
+            orderedEmployees.filter(emp => shifts.some(s => s.employee_id === emp.id));
+
+          return (
+            <div className="card gantt-view">
+              {/* ヘッダー（切替UIは印刷しない） */}
+              <div className="no-print flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-4">
+                <h3 className="text-lg font-bold text-gray-800">📊 ガントチャート</h3>
+                <div className="flex flex-wrap gap-2">
+                  {/* 1日 / 期間 切替 */}
+                  <div className="inline-flex rounded-lg border overflow-hidden">
+                    <button onClick={() => setGanttMode('day')}
+                      className={`px-3 py-1.5 text-sm font-medium ${ganttMode === 'day' ? 'bg-ocean-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-50'}`}>
+                      📆 1日
+                    </button>
+                    <button onClick={() => setGanttMode('period')}
+                      className={`px-3 py-1.5 text-sm font-medium border-l ${ganttMode === 'period' ? 'bg-ocean-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-50'}`}>
+                      🗓️ 期間
+                    </button>
+                  </div>
+                  {/* 出勤者のみ / 全員 切替 */}
+                  <div className="inline-flex rounded-lg border overflow-hidden">
+                    <button onClick={() => setGanttShowAll(false)}
+                      className={`px-3 py-1.5 text-sm font-medium ${!ganttShowAll ? 'bg-ocean-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-50'}`}>
+                      出勤者のみ
+                    </button>
+                    <button onClick={() => setGanttShowAll(true)}
+                      className={`px-3 py-1.5 text-sm font-medium border-l ${ganttShowAll ? 'bg-ocean-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-50'}`}>
+                      全員表示
+                    </button>
+                  </div>
+                  {/* 1日ガントの日付ピッカー */}
+                  {ganttMode === 'day' && (
+                    <input
+                      type="date"
+                      value={ganttSelectedDate}
+                      min={format(periodDates[0], 'yyyy-MM-dd')}
+                      max={format(periodDates[periodDates.length - 1], 'yyyy-MM-dd')}
+                      onChange={(e) => setGanttSelectedDate(e.target.value)}
+                      className="input-field text-sm py-1.5"
+                    />
+                  )}
+                </div>
+              </div>
+
+              {/* 印刷用タイトル（画面では非表示、印刷時のみ表示） */}
+              <div className="hidden print:block mb-3">
+                <div className="text-xl font-bold">
+                  {selectedStore?.name || ''} シフト表（ガント）
+                  {ganttMode === 'day' && ganttSelectedDate && (
+                    <span className="ml-3 text-base">
+                      {format(new Date(ganttSelectedDate), 'yyyy年M月d日(E)', { locale: ja })}
+                    </span>
+                  )}
+                  {ganttMode === 'period' && (
+                    <span className="ml-3 text-base">
+                      {targetYear}年{targetMonth}月 {targetPeriod === 'first' ? '前半' : '後半'}
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* 雇用形態の凡例 */}
+              <div className="flex flex-wrap gap-3 mb-3 text-xs text-gray-700">
+                <span className="flex items-center gap-1.5">
+                  <span className="inline-block w-4 h-3 bg-blue-500 border border-blue-700 rounded-sm"></span>
+                  正社員
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <span className="inline-block w-4 h-3 bg-green-500 border border-green-700 rounded-sm"></span>
+                  社保パート
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <span className="inline-block w-4 h-3 bg-orange-500 border border-orange-700 rounded-sm"></span>
+                  パート
+                </span>
+              </div>
+
+              {/* === 1日ガント === */}
+              {ganttMode === 'day' && (() => {
+                const targetDate = ganttSelectedDate;
+                const employeesToShow = ganttShowAll ? orderedEmployees : filterEmployeesForDay(targetDate);
+
+                if (!targetDate) {
+                  return <div className="p-8 text-center text-gray-500">対象日を選択してください</div>;
+                }
+                if (employeesToShow.length === 0) {
+                  return (
+                    <div className="p-8 text-center text-gray-500">
+                      {ganttShowAll ? '従業員が登録されていません' : `${format(new Date(targetDate), 'M月d日', { locale: ja })} は出勤者がいません`}
+                    </div>
+                  );
+                }
+
+                // 時間軸の目盛り（1時間刻み）
+                const hourMarks: number[] = [];
+                for (let h = GANTT_START_HOUR; h <= GANTT_END_HOUR; h++) hourMarks.push(h);
+
+                return (
+                  <div className="overflow-x-auto">
+                    <div className="min-w-[900px]">
+                      {/* 時間軸ヘッダー */}
+                      <div className="flex border-b-2 border-gray-300 sticky top-0 bg-white z-10">
+                        <div className="w-32 shrink-0 border-r-2 border-gray-300 px-2 py-2 font-bold text-gray-700 text-sm bg-gray-50">
+                          従業員
+                        </div>
+                        <div className="flex-1 relative h-10 bg-gray-50">
+                          {hourMarks.map(h => (
+                            <div key={h}
+                              className="absolute top-0 bottom-0 text-[11px] text-gray-600 font-medium"
+                              style={{ left: `${((h - GANTT_START_HOUR) / GANTT_HOURS) * 100}%` }}>
+                              <div className="absolute top-0 -translate-x-1/2 whitespace-nowrap pt-1">
+                                {h}:00
+                              </div>
+                              <div className="absolute bottom-0 left-0 w-px h-2 bg-gray-400"></div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* 各従業員行 */}
+                      {employeesToShow.map(employee => {
+                        const empShifts = shifts.filter(s => s.employee_id === employee.id && s.date === targetDate);
+                        return (
+                          <div key={employee.id} className="flex border-b border-gray-200 hover:bg-gray-50">
+                            <div className="w-32 shrink-0 border-r-2 border-gray-300 px-2 py-2 text-sm bg-white">
+                              <div className="font-medium text-gray-800 truncate">{employee.name}</div>
+                              <div className="text-[10px] text-gray-500">
+                                {employee.employment_type === 'full_time' && '正社員'}
+                                {employee.employment_type === 'part_time_insured' && '社保パート'}
+                                {employee.employment_type === 'part_time' && 'パート'}
+                              </div>
+                            </div>
+                            <div className="flex-1 relative h-12 bg-white">
+                              {/* 時間目盛りの縦線 */}
+                              {hourMarks.map(h => (
+                                <div key={h}
+                                  className="absolute top-0 bottom-0 w-px bg-gray-100"
+                                  style={{ left: `${((h - GANTT_START_HOUR) / GANTT_HOURS) * 100}%` }}></div>
+                              ))}
+                              {/* シフト棒 */}
+                              {empShifts.map(shift => {
+                                const pos = calcBarPosition(shift.start_time, shift.end_time);
+                                if (!pos) return null;
+                                return (
+                                  <div
+                                    key={shift.id}
+                                    className={`absolute top-1 bottom-1 rounded border-2 flex items-center justify-center text-white text-[11px] font-medium overflow-hidden px-1 ${getEmploymentColor(employee.employment_type)}`}
+                                    style={{ left: `${pos.leftPct}%`, width: `${pos.widthPct}%` }}
+                                    title={`${employee.name} ${shift.start_time.slice(0,5)}-${shift.end_time.slice(0,5)}`}
+                                  >
+                                    <span className="truncate">
+                                      {shift.start_time.slice(0,5)}-{shift.end_time.slice(0,5)}
+                                    </span>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* === 期間ガント === */}
+              {ganttMode === 'period' && (() => {
+                const employeesToShow = ganttShowAll ? orderedEmployees : filterEmployeesForPeriod();
+
+                if (employeesToShow.length === 0) {
+                  return (
+                    <div className="p-8 text-center text-gray-500">
+                      {ganttShowAll ? '従業員が登録されていません' : 'この期間に出勤者がいません'}
+                    </div>
+                  );
+                }
+
+                return (
+                  <div className="overflow-x-auto">
+                    <div className="min-w-[900px]">
+                      {/* 日付ヘッダー */}
+                      <div className="flex border-b-2 border-gray-300 sticky top-0 bg-white z-10">
+                        <div className="w-32 shrink-0 border-r-2 border-gray-300 px-2 py-2 font-bold text-gray-700 text-sm bg-gray-50">
+                          従業員
+                        </div>
+                        <div className="flex-1 flex bg-gray-50">
+                          {periodDates.map(date => {
+                            const dow = date.getDay();
+                            return (
+                              <div key={date.toISOString()}
+                                className={`flex-1 text-center py-2 border-r border-gray-200 ${
+                                  dow === 0 ? 'text-red-600 bg-red-50' :
+                                  dow === 6 ? 'text-blue-600 bg-blue-50' :
+                                  'text-gray-700'
+                                }`}>
+                                <div className="text-xs font-bold">{format(date, 'd')}</div>
+                                <div className="text-[10px]">{format(date, 'E', { locale: ja })}</div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      {/* 各従業員行 */}
+                      {employeesToShow.map(employee => (
+                        <div key={employee.id} className="flex border-b border-gray-200 hover:bg-gray-50">
+                          <div className="w-32 shrink-0 border-r-2 border-gray-300 px-2 py-2 text-sm bg-white">
+                            <div className="font-medium text-gray-800 truncate">{employee.name}</div>
+                            <div className="text-[10px] text-gray-500">
+                              {employee.employment_type === 'full_time' && '正社員'}
+                              {employee.employment_type === 'part_time_insured' && '社保パート'}
+                              {employee.employment_type === 'part_time' && 'パート'}
+                            </div>
+                          </div>
+                          <div className="flex-1 flex bg-white">
+                            {periodDates.map(date => {
+                              const dateStr = format(date, 'yyyy-MM-dd');
+                              const dayShifts = shifts.filter(s => s.employee_id === employee.id && s.date === dateStr);
+                              const dow = date.getDay();
+                              return (
+                                <div key={date.toISOString()}
+                                  className={`flex-1 relative border-r border-gray-100 min-h-[40px] ${
+                                    dow === 0 ? 'bg-red-50/30' : dow === 6 ? 'bg-blue-50/30' : ''
+                                  }`}>
+                                  {dayShifts.map(shift => {
+                                    const pos = calcBarPosition(shift.start_time, shift.end_time);
+                                    if (!pos) return null;
+                                    return (
+                                      <div
+                                        key={shift.id}
+                                        className={`absolute top-1 bottom-1 rounded border ${getEmploymentColor(employee.employment_type)} flex items-center justify-center overflow-hidden`}
+                                        style={{ left: `${pos.leftPct}%`, width: `${pos.widthPct}%` }}
+                                        title={`${employee.name} ${format(date, 'M/d', { locale: ja })} ${shift.start_time.slice(0,5)}-${shift.end_time.slice(0,5)}`}
+                                      >
+                                        <span className="text-white text-[9px] font-medium whitespace-nowrap">
+                                          {shift.start_time.slice(0,5)}-{shift.end_time.slice(0,5)}
+                                        </span>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
+
+              <div className="no-print mt-3 text-xs text-gray-500">
+                💡 このビューでは金額・総時間は表示されません（管理職の勤務確認用）
+              </div>
+            </div>
+          );
+        })()}
       </div>
     </AdminLayout>
   );
