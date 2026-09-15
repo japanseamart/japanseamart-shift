@@ -13,12 +13,47 @@ interface SpecialDayManagementProps {
 export default function SpecialDayManagement({ role, onLogout }: SpecialDayManagementProps) {
   const [specialDays, setSpecialDays] = useState<SpecialDay[]>([]);
   const [isCreating, setIsCreating] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const [syncMessage, setSyncMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [formData, setFormData] = useState({
     date: format(new Date(), 'yyyy-MM-dd'),
     type: 1 as 1 | 2 | 3,
     name: '',
     description: '',
   });
+
+  // 🎌 日本の祝日を自動同期
+  const handleSyncJapanHolidays = async () => {
+    const currentYear = new Date().getFullYear();
+    const nextYear = currentYear + 1;
+    if (!confirm(`${currentYear}年と${nextYear}年の日本の祝日を取り込みます。\n\n・データ源: holidays-jp（内閣府CSV由来）\n・同じ日付の既存の特別日は上書きされます\n・手動で登録した祝日でも、同じ日付なら公式の名前に上書きされます\n\n実行してもよろしいですか？`)) {
+      return;
+    }
+    setSyncing(true);
+    setSyncMessage(null);
+    try {
+      const res = await fetch(getApiUrl('/api/special-days/sync-japan-holidays'), {
+        method: 'POST',
+        credentials: 'include',
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setSyncMessage({ type: 'error', text: data.error || '同期に失敗しました' });
+      } else {
+        setSyncMessage({
+          type: 'success',
+          text: `✅ 同期完了: ${data.total}件（新規${data.inserted}件 / 更新${data.updated}件） 対象年: ${data.years.join(', ')}`,
+        });
+        fetchSpecialDays();
+      }
+    } catch (error: any) {
+      setSyncMessage({ type: 'error', text: `通信エラー: ${error?.message || String(error)}` });
+    } finally {
+      setSyncing(false);
+      // 8秒後にメッセージを消す
+      setTimeout(() => setSyncMessage(null), 8000);
+    }
+  };
 
   useEffect(() => {
     fetchSpecialDays();
@@ -124,15 +159,40 @@ export default function SpecialDayManagement({ role, onLogout }: SpecialDayManag
   return (
     <AdminLayout role={role} storeId={null} onLogout={onLogout}>
       <div className="space-y-6">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between flex-wrap gap-3">
           <h1 className="text-3xl font-bold text-gray-800">特別日設定</h1>
-          <button
-            onClick={() => setIsCreating(true)}
-            className="btn-primary"
-          >
-            + 新規特別日追加
-          </button>
+          <div className="flex gap-2 flex-wrap">
+            <button
+              onClick={handleSyncJapanHolidays}
+              disabled={syncing}
+              className={`px-4 py-2 rounded-lg font-medium border-2 transition-all ${
+                syncing
+                  ? 'bg-gray-200 text-gray-500 border-gray-300 cursor-not-allowed'
+                  : 'bg-red-500 hover:bg-red-600 text-white border-red-600 shadow-sm hover:shadow-md'
+              }`}
+              title="内閣府データを源とする日本の祝日を今年+来年ぶん取り込みます"
+            >
+              {syncing ? '⏳ 同期中…' : '🎌 日本の祝日を同期'}
+            </button>
+            <button
+              onClick={() => setIsCreating(true)}
+              className="btn-primary"
+            >
+              + 新規特別日追加
+            </button>
+          </div>
         </div>
+
+        {/* 同期結果メッセージ */}
+        {syncMessage && (
+          <div className={`rounded-lg px-4 py-3 border-2 ${
+            syncMessage.type === 'success'
+              ? 'bg-green-50 border-green-300 text-green-800'
+              : 'bg-red-50 border-red-300 text-red-800'
+          }`}>
+            {syncMessage.text}
+          </div>
+        )}
 
         {/* 説明カード */}
         <div className="card bg-ocean-50">

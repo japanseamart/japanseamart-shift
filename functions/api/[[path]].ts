@@ -1056,6 +1056,86 @@ app.delete('/special-days/:id', async (c) => {
   return c.json({ success: true })
 })
 
+// ==================== 🎌 日本の祝日を自動同期 ====================
+// 内閣府「国民の祝日」CSV（syukujitsu.csv）を源とする holidays-jp を利用。
+// holidays-jp.github.io は内閣府CSVを日次バッチでJSON化した公開サービス。
+// 内閣府CSV自体はShift_JISのためCloudflare Workers上のTextDecoderで扱えないため、
+// UTF-8 JSONで提供される同等データを利用する。ソースURLは切替可能。
+//
+// 挙動:
+//  - 現在年 + 来年 の祝日のみ抽出
+//  - date (YYYY-MM-DD) が既存の special_days に存在すれば UPDATE、なければ INSERT
+//  - type は常に 1 (祝日・休日) を設定
+//  - description に "自動同期 (holidays-jp)" を記録して手動登録と区別しやすくする
+app.post('/special-days/sync-japan-holidays', async (c) => {
+  const HOLIDAYS_JP_URL = 'https://holidays-jp.github.io/api/v1/date.json'
+  try {
+    const now = new Date()
+    const thisYear = now.getFullYear()
+    const nextYear = thisYear + 1
+
+    // 1) 祝日データ取得
+    const res = await fetch(HOLIDAYS_JP_URL, {
+      headers: { 'User-Agent': 'japanseamart-shift/1.0' },
+    })
+    if (!res.ok) {
+      return c.json({ error: `祝日データ取得失敗 (HTTP ${res.status})` }, 502)
+    }
+    const holidayMap = await res.json() as Record<string, string>
+
+    // 2) 対象年フィルタ + パース
+    const targetHolidays: Array<{ date: string; name: string }> = []
+    for (const [dateStr, name] of Object.entries(holidayMap)) {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) continue
+      const y = parseInt(dateStr.slice(0, 4), 10)
+      if (y !== thisYear && y !== nextYear) continue
+      targetHolidays.push({ date: dateStr, name })
+    }
+    targetHolidays.sort((a, b) => a.date.localeCompare(b.date))
+
+    if (targetHolidays.length === 0) {
+      return c.json({ error: '対象年の祝日データが空でした', years: [thisYear, nextYear] }, 500)
+    }
+
+    // 3) UPSERT ループ (D1 は ON CONFLICT に date のUNIQUE制約が必要な場合があるため
+    //    存在チェック → INSERT or UPDATE で実装)
+    let inserted = 0
+    let updated = 0
+    const description = '自動同期 (holidays-jp / 内閣府CSV由来)'
+
+    for (const h of targetHolidays) {
+      const existing = await c.env.DB.prepare(
+        'SELECT id FROM special_days WHERE date = ?'
+      ).bind(h.date).first<{ id: number }>()
+
+      if (existing) {
+        await c.env.DB.prepare(`
+          UPDATE special_days SET type = 1, name = ?, description = ? WHERE id = ?
+        `).bind(h.name, description, existing.id).run()
+        updated++
+      } else {
+        await c.env.DB.prepare(`
+          INSERT INTO special_days (date, type, name, description) VALUES (?, 1, ?, ?)
+        `).bind(h.date, h.name, description).run()
+        inserted++
+      }
+    }
+
+    return c.json({
+      success: true,
+      years: [thisYear, nextYear],
+      total: targetHolidays.length,
+      inserted,
+      updated,
+      source: HOLIDAYS_JP_URL,
+      holidays: targetHolidays,
+    })
+  } catch (error: any) {
+    console.error('祝日同期エラー:', error)
+    return c.json({ error: `祝日同期に失敗しました: ${error?.message || String(error)}` }, 500)
+  }
+})
+
 // ==================== 週次公開状態API ====================
 
 // 週次公開状態の取得
