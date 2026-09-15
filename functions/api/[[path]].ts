@@ -1106,35 +1106,42 @@ app.get('/weekly-publications', async (c) => {
   return c.json(publication)
 })
 
-// 従業員お知らせ用: 全店舗の公開状況(直近2期間)を一括取得
-// 締切バナーと同じ「直近2期間」で店舗別マトリクスを返す
+// 従業員お知らせ用: 全店舗の公開状況(現在期間+次期間)を一括取得
+// ロジック: 今日から見て「今属している期間」+「その次の期間」
+// - 1〜15日  → 今月前半 + 今月後半
+// - 16日〜末日 → 今月後半 + 来月前半
 app.get('/weekly-publications/all-stores-status', async (c) => {
   const now = new Date()
-  const nowTs = now.getTime()
-
-  // 締切前の直近2期間を計算(締切バナーと統一)
   const currentYear = now.getFullYear()
   const currentMonth = now.getMonth() + 1
-  const candidates: Array<{ year: number; month: number; period: 'first' | 'second' }> = []
-  for (let offset = 0; offset < 6; offset++) {
-    let y = currentYear
-    let m = currentMonth + offset
-    while (m > 12) { m -= 12; y += 1 }
-    candidates.push({ year: y, month: m, period: 'first' })
-    candidates.push({ year: y, month: m, period: 'second' })
+  const currentDay = now.getDate()
+  const currentPeriod: 'first' | 'second' = currentDay <= 15 ? 'first' : 'second'
+
+  // 次期間を計算
+  let nextYear = currentYear
+  let nextMonth = currentMonth
+  let nextPeriod: 'first' | 'second'
+  if (currentPeriod === 'first') {
+    nextPeriod = 'second'
+  } else {
+    nextPeriod = 'first'
+    nextMonth = currentMonth === 12 ? 1 : currentMonth + 1
+    nextYear = currentMonth === 12 ? currentYear + 1 : currentYear
   }
-  const upcomingPeriods: Array<{ year: number; month: number; period: 'first' | 'second'; week_start_date: string }> = []
-  for (const cand of candidates) {
-    const deadlineDateStr = computeAutoDeadline(cand.year, cand.month, cand.period)
-    const dt = new Date(deadlineDateStr)
-    dt.setHours(23, 59, 59, 999)
-    if (dt.getTime() >= nowTs) {
-      const day = cand.period === 'first' ? 1 : 16
-      const weekStart = `${cand.year}-${String(cand.month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
-      upcomingPeriods.push({ ...cand, week_start_date: weekStart })
-      if (upcomingPeriods.length >= 2) break
+
+  const buildPeriod = (y: number, m: number, p: 'first' | 'second') => {
+    const day = p === 'first' ? 1 : 16
+    return {
+      year: y,
+      month: m,
+      period: p,
+      week_start_date: `${y}-${String(m).padStart(2, '0')}-${String(day).padStart(2, '0')}`,
     }
   }
+  const upcomingPeriods = [
+    buildPeriod(currentYear, currentMonth, currentPeriod),
+    buildPeriod(nextYear, nextMonth, nextPeriod),
+  ]
 
   // 全店舗取得(本部除く)
   const storesRes = await c.env.DB.prepare(
