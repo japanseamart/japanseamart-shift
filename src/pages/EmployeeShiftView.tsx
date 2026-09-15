@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { format, startOfWeek, endOfWeek, eachDayOfInterval, addWeeks, subWeeks } from 'date-fns';
 import { ja } from 'date-fns/locale';
-import { Store, Employee, Shift } from '../types';
+import { Store, Employee, Shift, SpecialDay } from '../types';
 import type { AllStoresDeadlineStatus } from '../types';
 import { getApiUrl } from '../config/api';
 import HelpPanel from '../components/HelpPanel';
@@ -18,11 +18,29 @@ export default function EmployeeShiftView() {
   const [isPublished, setIsPublished] = useState(false);
   const [viewMode, setViewMode] = useState<'list' | 'table'>('list'); // リストビュー or テーブルビュー
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<number | null>(null); // フィルター用
+  const [specialDays, setSpecialDays] = useState<SpecialDay[]>([]);
 
   useEffect(() => {
     fetchStores();
     fetchDeadlineStatus();
+    fetchSpecialDays();
   }, []);
+
+  const fetchSpecialDays = async () => {
+    try {
+      const res = await fetch(getApiUrl('/api/special-days'));
+      const data = await res.json();
+      setSpecialDays(data);
+    } catch (error) {
+      console.error('特別日取得エラー:', error);
+    }
+  };
+
+  // 特別日情報を取得（type=1=祝日, 2=繁忙, 3=イベント）
+  const getSpecialDayInfo = (date: Date) => {
+    const dateStr = format(date, 'yyyy-MM-dd');
+    return specialDays.find(sd => sd.date === dateStr);
+  };
 
   useEffect(() => {
     if (selectedStoreId) {
@@ -386,13 +404,30 @@ export default function EmployeeShiftView() {
                 const filteredShifts = selectedEmployeeId 
                   ? dayShifts.filter(s => s.employee_id === selectedEmployeeId)
                   : dayShifts;
+                const dow = day.getDay();
+                const specialDay = getSpecialDayInfo(day);
+                const isHoliday = specialDay?.type === 1;
+                // 日付ヘッダーの背景色
+                const headerBg = isHoliday ? 'bg-red-600' :
+                                 dow === 0 ? 'bg-red-500' :
+                                 dow === 6 ? 'bg-blue-500' :
+                                 'bg-ocean-500';
+                const borderColor = isHoliday ? 'border-red-300' :
+                                    dow === 0 ? 'border-red-200' :
+                                    dow === 6 ? 'border-blue-200' :
+                                    'border-gray-200';
 
                 return (
-                  <div key={dateStr} className="border-2 border-gray-200 rounded-lg overflow-hidden">
+                  <div key={dateStr} className={`border-2 ${borderColor} rounded-lg overflow-hidden`}>
                     {/* 日付ヘッダー */}
-                    <div className="bg-ocean-500 text-white px-4 py-3">
-                      <h3 className="text-lg font-bold">
-                        📅 {format(day, 'M月d日(E)', { locale: ja })}
+                    <div className={`${headerBg} text-white px-4 py-3`}>
+                      <h3 className="text-lg font-bold flex items-center gap-2 flex-wrap">
+                        <span>📅 {format(day, 'M月d日(E)', { locale: ja })}</span>
+                        {isHoliday && (
+                          <span className="text-sm bg-white/25 px-2 py-0.5 rounded font-medium">
+                            🎌 {specialDay!.name}
+                          </span>
+                        )}
                       </h3>
                     </div>
 
@@ -447,11 +482,26 @@ export default function EmployeeShiftView() {
                 {/* ヘッダー */}
                 <div className="grid grid-cols-8 gap-2 mb-2">
                   <div className="font-semibold text-gray-700 p-2 text-xs sm:text-sm">従業員名</div>
-                  {weekDays.map((day) => (
-                    <div key={day.toISOString()} className="text-center">
-                      <div className="font-semibold text-gray-700 text-xs sm:text-sm">{format(day, 'M/d (E)', { locale: ja })}</div>
-                    </div>
-                  ))}
+                  {weekDays.map((day) => {
+                    const dow = day.getDay();
+                    const specialDay = getSpecialDayInfo(day);
+                    const isHoliday = specialDay?.type === 1;
+                    const headerCls = isHoliday ? 'bg-red-100 text-red-700 border border-red-200' :
+                                      dow === 0 ? 'bg-red-50 text-red-600' :
+                                      dow === 6 ? 'bg-blue-50 text-blue-600' :
+                                      'text-gray-700';
+                    return (
+                      <div key={day.toISOString()} className={`text-center rounded p-1 ${headerCls}`} title={specialDay ? specialDay.name : undefined}>
+                        <div className="font-semibold text-xs sm:text-sm">
+                          {format(day, 'M/d (E)', { locale: ja })}
+                          {isHoliday && <span className="ml-0.5">🎌</span>}
+                        </div>
+                        {isHoliday && (
+                          <div className="text-[10px] font-medium truncate">{specialDay!.name}</div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
 
                 {/* シフト表 */}
@@ -465,8 +515,15 @@ export default function EmployeeShiftView() {
                       </div>
                       {weekDays.map((day) => {
                         const dayShifts = getShiftsForDay(day, employee.id);
+                        const dow = day.getDay();
+                        const specialDay = getSpecialDayInfo(day);
+                        const isHoliday = specialDay?.type === 1;
+                        const cellBg = isHoliday ? 'bg-red-50' :
+                                       dow === 0 ? 'bg-red-50/60' :
+                                       dow === 6 ? 'bg-blue-50/60' :
+                                       '';
                         return (
-                          <div key={day.toISOString()} className="gantt-cell p-1 sm:p-2">
+                          <div key={day.toISOString()} className={`gantt-cell p-1 sm:p-2 rounded ${cellBg}`}>
                             {dayShifts.length === 0 ? (
                               <div className="text-center text-gray-400 text-xs sm:text-sm">-</div>
                             ) : (

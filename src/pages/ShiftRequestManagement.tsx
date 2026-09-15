@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { format, eachDayOfInterval, getDaysInMonth } from 'date-fns';
 import { ja } from 'date-fns/locale';
-import { Role, Employee, ShiftRequest, Store } from '../types';
+import { Role, Employee, ShiftRequest, Store, SpecialDay } from '../types';
 import AdminLayout from '../components/AdminLayout';
 import { getApiUrl } from '../config/api';
 import { getPeriodDates } from '../utils/dateUtils';
@@ -44,6 +44,7 @@ export default function ShiftRequestManagement({ role, storeId, onLogout }: Shif
   
   const [submissionStatuses, setSubmissionStatuses] = useState<EmployeeSubmissionStatus[]>([]);
   const [loading, setLoading] = useState(false);
+  const [specialDays, setSpecialDays] = useState<SpecialDay[]>([]);
   
   // 締切関連
   const [deadline, setDeadline] = useState<ShiftDeadline | null>(null);
@@ -59,10 +60,21 @@ export default function ShiftRequestManagement({ role, storeId, onLogout }: Shif
 
   useEffect(() => {
     fetchStores();
+    fetchSpecialDays();
     if (role === 'admin') {
       fetchAllEmployees();
     }
   }, []);
+
+  const fetchSpecialDays = async () => {
+    try {
+      const res = await fetch(getApiUrl('/api/special-days'));
+      const data = await res.json();
+      setSpecialDays(data);
+    } catch (error) {
+      console.error('特別日取得エラー:', error);
+    }
+  };
 
   useEffect(() => {
     if (selectedStoreId !== null) {
@@ -564,14 +576,27 @@ export default function ShiftRequestManagement({ role, storeId, onLogout }: Shif
                           </td>
                           <td className="px-4 py-3">
                             <div className="flex flex-wrap gap-1">
-                              {status.missingDates.map(date => (
-                                <span
-                                  key={date}
-                                  className="inline-block px-2 py-1 text-xs font-medium bg-red-100 text-red-700 rounded"
-                                >
-                                  {format(new Date(date), 'M/d(E)', { locale: ja })}
-                                </span>
-                              ))}
+                              {status.missingDates.map(date => {
+                                const dt = new Date(date);
+                                const dow = dt.getDay();
+                                const sd = specialDays.find(s => s.date === date);
+                                const isHoliday = sd?.type === 1;
+                                return (
+                                  <span
+                                    key={date}
+                                    className={`inline-block px-2 py-1 text-xs font-medium rounded ${
+                                      isHoliday ? 'bg-red-200 text-red-800 border border-red-300' :
+                                      dow === 0 ? 'bg-red-100 text-red-700' :
+                                      dow === 6 ? 'bg-blue-100 text-blue-700' :
+                                      'bg-gray-100 text-gray-700'
+                                    }`}
+                                    title={sd ? sd.name : undefined}
+                                  >
+                                    {format(dt, 'M/d(E)', { locale: ja })}
+                                    {isHoliday && <span className="ml-0.5">🎌</span>}
+                                  </span>
+                                );
+                              })}
                             </div>
                           </td>
                         </tr>
@@ -615,16 +640,24 @@ export default function ShiftRequestManagement({ role, storeId, onLogout }: Shif
               <div className="flex flex-wrap gap-2">
                 {periodDates.map(date => {
                   const dayOfWeek = date.getDay();
+                  const dateStr = format(date, 'yyyy-MM-dd');
+                  const specialDay = specialDays.find(sd => sd.date === dateStr);
+                  const isHoliday = specialDay?.type === 1;
                   return (
                     <div
                       key={date.toISOString()}
                       className={`px-4 py-2 rounded-lg text-sm ${
+                        isHoliday ? 'bg-red-200 text-red-800 font-semibold border border-red-300' :
                         dayOfWeek === 0 ? 'bg-red-100 text-red-700' :
                         dayOfWeek === 6 ? 'bg-blue-100 text-blue-700' :
                         'bg-gray-100 text-gray-700'
                       }`}
+                      title={specialDay ? specialDay.name : undefined}
                     >
                       {format(date, 'M/d(E)', { locale: ja })}
+                      {isHoliday && (
+                        <span className="ml-1 text-xs">🎌 {specialDay!.name}</span>
+                      )}
                     </div>
                   );
                 })}
