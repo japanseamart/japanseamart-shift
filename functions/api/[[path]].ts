@@ -24,6 +24,28 @@ app.use('*', cors({
   allowHeaders: ['Content-Type', 'X-Session-ID'],
 }))
 
+// ==================== 日本時間(JST)ヘルパー ====================
+// Cloudflare Workers は UTC で動作するため、日本時間で「今日」を判定する必要がある箇所は
+// この関数を使うこと。native の new Date() は日本時間 9時以降に UTC で日付が変わり
+// 期間判定にズレが発生する。
+function getJstNow(): Date {
+  const nowUtcMs = Date.now()
+  const jstMs = nowUtcMs + 9 * 60 * 60 * 1000
+  // getUTC*() 系で読み出せば JST として扱える擬似日時
+  return new Date(jstMs)
+}
+function jstParts() {
+  const d = getJstNow()
+  return {
+    year: d.getUTCFullYear(),
+    month: d.getUTCMonth() + 1, // 1-12
+    day: d.getUTCDate(),
+    // 「JSTでの日付の 00:00 UTC」を基準にした比較用タイムスタンプ
+    // (期間判定は日単位で十分なので時刻部分は捨てる)
+    dayStartTs: Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()),
+  }
+}
+
 // ==================== 締切自動計算ヘルパー ====================
 // 仕様: シフト開始日の6日前 23:59 を締切とする (全店統一)
 // - 前半(1-15日): 開始日=1日 → 締切=前月26日
@@ -828,14 +850,15 @@ app.post('/shift-deadlines/auto-setup', async (c) => {
 app.get('/shift-deadlines/for-employee', async (c) => {
   const storeId = c.req.query('store_id') // 互換のため受け取るが使用しない
   
-  const now = new Date()
-  const nowTs = now.getTime()
+  // JST基準の「今日」で判定
+  const jst = jstParts()
+  const nowDayTs = jst.dayStartTs
   
   // 直近から順に候補期間を生成
   // 起点: 今月前半 → 今月後半 → 来月前半 → 来月後半 → 再来月前半 …
   const candidates: Array<{ year: number; month: number; period: 'first' | 'second' }> = []
-  const currentYear = now.getFullYear()
-  const currentMonth = now.getMonth() + 1
+  const currentYear = jst.year
+  const currentMonth = jst.month
   for (let offset = 0; offset < 6; offset++) {
     let y = currentYear
     let m = currentMonth + offset
@@ -845,12 +868,13 @@ app.get('/shift-deadlines/for-employee', async (c) => {
   }
   
   // 締切がまだ来ていないものだけ抽出し、最初の2つを返す
+  // 締切日=JSTの23:59まで有効 → JST日付が締切日以下なら"まだ間に合う"
   const upcoming = []
   for (const cand of candidates) {
     const deadlineDateStr = computeAutoDeadline(cand.year, cand.month, cand.period)
-    const dt = new Date(deadlineDateStr)
-    dt.setHours(23, 59, 59, 999)
-    if (dt.getTime() >= nowTs) {
+    const [dy, dm, dd] = deadlineDateStr.split('-').map(Number)
+    const deadlineDayTs = Date.UTC(dy, dm - 1, dd)
+    if (deadlineDayTs >= nowDayTs) {
       upcoming.push({
         id: 0, // ダミー
         store_id: storeId ? parseInt(storeId) : 0,
@@ -876,12 +900,13 @@ app.get('/shift-deadlines/for-employee', async (c) => {
 // 【自動締切化】: 全店統一なので、全店分に同じ自動計算値を返す
 // 「締切前の直近2期間」を返す(Q8-3仕様)
 app.get('/shift-deadlines/all-stores-status', async (c) => {
-  const now = new Date()
-  const nowTs = now.getTime()
+  // JST基準の「今日」で判定
+  const jst = jstParts()
+  const nowDayTs = jst.dayStartTs
 
   // 締切前の直近2期間を計算
-  const currentYear = now.getFullYear()
-  const currentMonth = now.getMonth() + 1
+  const currentYear = jst.year
+  const currentMonth = jst.month
   const candidates: Array<{ year: number; month: number; period: 'first' | 'second' }> = []
   for (let offset = 0; offset < 6; offset++) {
     let y = currentYear
@@ -893,9 +918,9 @@ app.get('/shift-deadlines/all-stores-status', async (c) => {
   const upcomingPeriods: Array<{ year: number; month: number; period: 'first' | 'second'; deadline_date: string }> = []
   for (const cand of candidates) {
     const deadlineDateStr = computeAutoDeadline(cand.year, cand.month, cand.period)
-    const dt = new Date(deadlineDateStr)
-    dt.setHours(23, 59, 59, 999)
-    if (dt.getTime() >= nowTs) {
+    const [dy, dm, dd] = deadlineDateStr.split('-').map(Number)
+    const deadlineDayTs = Date.UTC(dy, dm - 1, dd)
+    if (deadlineDayTs >= nowDayTs) {
       upcomingPeriods.push({ ...cand, deadline_date: deadlineDateStr })
       if (upcomingPeriods.length >= 2) break
     }
@@ -934,7 +959,7 @@ app.get('/shift-deadlines/all-stores-status', async (c) => {
   }
 
   return c.json({
-    generated_at: now.toISOString(),
+    generated_at: new Date().toISOString(),
     auto: true,
     unified: true,
     periods: upcomingPeriods.map(p => ({ year: p.year, month: p.month, period: p.period })),
@@ -1111,10 +1136,11 @@ app.get('/weekly-publications', async (c) => {
 // - 1〜15日  → 今月前半 + 今月後半
 // - 16日〜末日 → 今月後半 + 来月前半
 app.get('/weekly-publications/all-stores-status', async (c) => {
-  const now = new Date()
-  const currentYear = now.getFullYear()
-  const currentMonth = now.getMonth() + 1
-  const currentDay = now.getDate()
+  // JST基準の「今日」で判定 (UTCだと日本時間9時以降に日付がズレるため)
+  const jst = jstParts()
+  const currentYear = jst.year
+  const currentMonth = jst.month
+  const currentDay = jst.day
   const currentPeriod: 'first' | 'second' = currentDay <= 15 ? 'first' : 'second'
 
   // 次期間を計算
@@ -1150,7 +1176,7 @@ app.get('/weekly-publications/all-stores-status', async (c) => {
   const stores = storesRes.results || []
 
   if (upcomingPeriods.length === 0 || stores.length === 0) {
-    return c.json({ generated_at: now.toISOString(), periods: [], rows: [] })
+    return c.json({ generated_at: new Date().toISOString(), periods: [], rows: [] })
   }
 
   // 対象期間の公開レコードを一括取得
@@ -1187,7 +1213,7 @@ app.get('/weekly-publications/all-stores-status', async (c) => {
   }
 
   return c.json({
-    generated_at: now.toISOString(),
+    generated_at: new Date().toISOString(),
     periods: upcomingPeriods.map(p => ({
       year: p.year,
       month: p.month,

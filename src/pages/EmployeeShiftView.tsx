@@ -343,7 +343,7 @@ export default function EmployeeShiftView() {
                             </span>
                           ) : (
                             <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-orange-100 text-orange-700 font-medium text-[11px] sm:text-xs whitespace-nowrap">
-                              🔒 未公開
+                              🔒 未公開 (作成中)
                             </span>
                           )}
                         </td>

@@ -84,7 +84,7 @@ export default function PublicationStatus({ role, storeId, onLogout }: Publicati
 
   const getPublicationStatus = (publication: Publication | null) => {
     if (!publication || publication.is_published !== 1) {
-      return { text: '未公開', color: 'text-orange-700', bg: 'bg-orange-100', icon: '🔒' };
+      return { text: '未公開 (作成中)', color: 'text-orange-700', bg: 'bg-orange-100', icon: '🔒' };
     }
     return { text: '公開済', color: 'text-green-700', bg: 'bg-green-100', icon: '✅' };
   };
