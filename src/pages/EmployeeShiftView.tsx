@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { format, startOfWeek, endOfWeek, eachDayOfInterval, addWeeks, subWeeks } from 'date-fns';
 import { ja } from 'date-fns/locale';
 import { Store, Employee, Shift, SpecialDay } from '../types';
-import type { AllStoresDeadlineStatus, AllStoresPublicationStatus } from '../types';
+import type { AllStoresDeadlineStatus, AllStoresPublicationStatus, ShiftSubmissionStatus } from '../types';
 import { getApiUrl } from '../config/api';
 import HelpPanel from '../components/HelpPanel';
 
@@ -15,6 +15,7 @@ export default function EmployeeShiftView() {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [deadlineStatus, setDeadlineStatus] = useState<AllStoresDeadlineStatus | null>(null);
   const [publicationStatus, setPublicationStatus] = useState<AllStoresPublicationStatus | null>(null);
+  const [submissionStatus, setSubmissionStatus] = useState<ShiftSubmissionStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [isPublished, setIsPublished] = useState(false);
   const [viewMode, setViewMode] = useState<'list' | 'table'>('list'); // リストビュー or テーブルビュー
@@ -25,6 +26,7 @@ export default function EmployeeShiftView() {
     fetchStores();
     fetchDeadlineStatus();
     fetchPublicationStatus();
+    fetchSubmissionStatus();
     fetchSpecialDays();
   }, []);
 
@@ -80,6 +82,17 @@ export default function EmployeeShiftView() {
     } catch (error) {
       console.error('公開状況取得エラー:', error);
       setPublicationStatus(null);
+    }
+  };
+
+  const fetchSubmissionStatus = async () => {
+    try {
+      const res = await fetch(getApiUrl('/api/shift-requests/submission-status'));
+      const data = await res.json();
+      setSubmissionStatus(data);
+    } catch (error) {
+      console.error('提出状況取得エラー:', error);
+      setSubmissionStatus(null);
     }
   };
 
@@ -358,6 +371,79 @@ export default function EmployeeShiftView() {
             </p>
           </div>
         )}
+
+        {/* 【全店統一】シフト希望 提出状況(締切前の直近1期間) */}
+        {submissionStatus && submissionStatus.period && submissionStatus.rows.length > 0 && (() => {
+          const p = submissionStatus.period;
+          const periodLabel = `${p.year}年${p.month}月${p.period === 'first' ? '前半' : '後半'}`;
+          const periodRange = p.period === 'first' ? `${p.month}/1-${p.month}/15` : `${p.month}/16-末`;
+          // 提出率アイコン算出
+          const iconFor = (submitted: number, total: number) => {
+            if (total === 0) return { icon: '—', color: 'text-gray-400' };
+            const rate = submitted / total;
+            if (rate >= 1) return { icon: '✅', color: 'text-green-600' };
+            if (rate >= 0.5) return { icon: '⚠️', color: 'text-amber-600' };
+            return { icon: '🚨', color: 'text-red-600' };
+          };
+          return (
+            <div className="card">
+              <div className="flex items-center gap-2 mb-3 flex-wrap">
+                <span className="text-lg">📝</span>
+                <h2 className="text-base sm:text-lg font-bold text-gray-800">
+                  シフト希望 提出状況
+                </h2>
+                <span className="text-[10px] sm:text-xs px-2 py-0.5 bg-ocean-100 text-ocean-700 rounded-full font-bold">
+                  {periodLabel}({periodRange})
+                </span>
+              </div>
+              <div className="overflow-x-auto -mx-2 sm:mx-0">
+                <table className="min-w-full text-xs sm:text-sm">
+                  <thead>
+                    <tr className="border-b-2 border-gray-200 text-gray-600 bg-gray-50">
+                      <th className="text-left py-2 px-2 sm:px-3 font-medium sticky left-0 bg-gray-50 z-10">店舗</th>
+                      <th className="text-center py-2 px-2 sm:px-3 font-medium whitespace-nowrap">状況</th>
+                      <th className="text-center py-2 px-2 sm:px-3 font-medium whitespace-nowrap text-green-700">
+                        提出済
+                      </th>
+                      <th className="text-center py-2 px-2 sm:px-3 font-medium whitespace-nowrap text-orange-700">
+                        未提出
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {submissionStatus.rows.map((row) => {
+                      const ic = iconFor(row.submitted, row.total);
+                      return (
+                        <tr key={row.store_id} className="border-b border-gray-100 hover:bg-gray-50">
+                          <td className="py-2 px-2 sm:px-3 font-medium text-gray-800 whitespace-nowrap sticky left-0 bg-white z-10">
+                            {row.store_name}
+                          </td>
+                          <td className={`py-2 px-2 sm:px-3 text-center text-xl ${ic.color}`}>
+                            {ic.icon}
+                          </td>
+                          <td className="py-2 px-2 sm:px-3 text-center font-bold text-green-700 whitespace-nowrap">
+                            {row.submitted}人
+                          </td>
+                          <td className="py-2 px-2 sm:px-3 text-center font-bold text-orange-700 whitespace-nowrap">
+                            {row.not_submitted}人
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              <div className="text-[11px] text-gray-500 mt-2 space-y-0.5">
+                <p className="text-center">
+                  ℹ️ 締切: {format(new Date(p.deadline_date), 'M月d日(E)', { locale: ja })} 23:59まで
+                </p>
+                <p className="text-center">
+                  ✅ 全員提出済 / ⚠️ 一部未提出(50%以上) / 🚨 過半数未提出
+                </p>
+              </div>
+            </div>
+          );
+        })()}
 
         {/* 店舗選択と週選択 */}
         <div className="card">

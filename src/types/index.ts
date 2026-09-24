@@ -143,6 +143,26 @@ export interface AllStoresPublicationStatus {
   }>;
 }
 
+// シフト希望提出状況(全店・締切前の直近1期間)
+export interface ShiftSubmissionStatus {
+  generated_at: string;
+  period: {
+    year: number;
+    month: number;
+    period: 'first' | 'second';
+    start_date: string;
+    end_date: string;
+    deadline_date: string;
+  } | null;
+  rows: Array<{
+    store_id: number;
+    store_name: string;
+    total: number;
+    submitted: number;
+    not_submitted: number;
+  }>;
+}
+
 // パスワード管理
 export interface Password {
   id: number;

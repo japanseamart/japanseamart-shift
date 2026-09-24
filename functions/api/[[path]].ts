@@ -1224,6 +1224,110 @@ app.get('/weekly-publications/all-stores-status', async (c) => {
   })
 })
 
+// 従業員お知らせ用: 全店舗のシフト希望提出状況(締切前の直近1期間)を一括取得
+// - 対象期間: 締切がまだ来ていない最も直近の1期間
+// - 対象従業員: 各店舗の全従業員(本部除く)
+// - 提出済判定: 期間内に1日でも shift_requests があれば提出済
+// - 個人情報: 人数のみ(氏名なし)
+app.get('/shift-requests/submission-status', async (c) => {
+  const jst = jstParts()
+  const nowDayTs = jst.dayStartTs
+  const currentYear = jst.year
+  const currentMonth = jst.month
+
+  // 締切前の直近1期間を計算
+  const candidates: Array<{ year: number; month: number; period: 'first' | 'second' }> = []
+  for (let offset = 0; offset < 6; offset++) {
+    let y = currentYear
+    let m = currentMonth + offset
+    while (m > 12) { m -= 12; y += 1 }
+    candidates.push({ year: y, month: m, period: 'first' })
+    candidates.push({ year: y, month: m, period: 'second' })
+  }
+  let targetPeriod: { year: number; month: number; period: 'first' | 'second'; deadline_date: string } | null = null
+  for (const cand of candidates) {
+    const deadlineDateStr = computeAutoDeadline(cand.year, cand.month, cand.period)
+    const [dy, dm, dd] = deadlineDateStr.split('-').map(Number)
+    const deadlineDayTs = Date.UTC(dy, dm - 1, dd)
+    if (deadlineDayTs >= nowDayTs) {
+      targetPeriod = { ...cand, deadline_date: deadlineDateStr }
+      break
+    }
+  }
+
+  if (!targetPeriod) {
+    return c.json({ generated_at: new Date().toISOString(), period: null, rows: [] })
+  }
+
+  // 対象期間の日付範囲を算出
+  const y = targetPeriod.year
+  const m = targetPeriod.month
+  let startDate: string, endDate: string
+  if (targetPeriod.period === 'first') {
+    startDate = `${y}-${String(m).padStart(2, '0')}-01`
+    endDate = `${y}-${String(m).padStart(2, '0')}-15`
+  } else {
+    const lastDay = new Date(Date.UTC(y, m, 0)).getUTCDate()
+    startDate = `${y}-${String(m).padStart(2, '0')}-16`
+    endDate = `${y}-${String(m).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`
+  }
+
+  // 全店舗取得(本部除く)
+  const storesRes = await c.env.DB.prepare(
+    'SELECT id, name FROM stores WHERE id != 8 ORDER BY id ASC'
+  ).all()
+  const stores = storesRes.results || []
+
+  // 各店舗の従業員数を一括取得
+  const empCountRes = await c.env.DB.prepare(`
+    SELECT store_id, COUNT(*) as total
+    FROM employees
+    GROUP BY store_id
+  `).all()
+  const empCountMap = new Map<number, number>()
+  for (const r of (empCountRes.results || []) as any[]) {
+    empCountMap.set(r.store_id, r.total)
+  }
+
+  // 各店舗の「対象期間中に1日でも希望を出した従業員」の distinct count を一括取得
+  const submittedRes = await c.env.DB.prepare(`
+    SELECT store_id, COUNT(DISTINCT employee_id) as submitted
+    FROM shift_requests
+    WHERE date >= ? AND date <= ?
+    GROUP BY store_id
+  `).bind(startDate, endDate).all()
+  const submittedMap = new Map<number, number>()
+  for (const r of (submittedRes.results || []) as any[]) {
+    submittedMap.set(r.store_id, r.submitted)
+  }
+
+  const rows = (stores as any[]).map(store => {
+    const total = empCountMap.get(store.id) || 0
+    const submitted = submittedMap.get(store.id) || 0
+    const notSubmitted = Math.max(0, total - submitted)
+    return {
+      store_id: store.id,
+      store_name: store.name,
+      total,
+      submitted,
+      not_submitted: notSubmitted,
+    }
+  })
+
+  return c.json({
+    generated_at: new Date().toISOString(),
+    period: {
+      year: targetPeriod.year,
+      month: targetPeriod.month,
+      period: targetPeriod.period,
+      start_date: startDate,
+      end_date: endDate,
+      deadline_date: targetPeriod.deadline_date,
+    },
+    rows,
+  })
+})
+
 // 週次公開状態の設定
 app.post('/weekly-publications', async (c) => {
   const { store_id, week_start_date, is_published } = await c.req.json()
