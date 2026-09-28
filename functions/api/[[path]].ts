@@ -789,7 +789,40 @@ app.get('/shift-deadlines', async (c) => {
   
   query += ' ORDER BY target_year DESC, target_month DESC, target_period'
   
-  const { results } = await c.env.DB.prepare(query).bind(...params).all()
+  let { results } = await c.env.DB.prepare(query).bind(...params).all()
+  
+  // 【自動生成】: target_year/month/period が指定されているのに該当レコードが0件なら、
+  // 全店統一ルール(開始日6日前23:59)で全店(本部id=8を除く)に自動INSERTしてから再取得
+  if ((!results || results.length === 0) && targetYear && targetMonth && targetPeriod) {
+    const yearNum = Number(targetYear)
+    const monthNum = Number(targetMonth)
+    const periodStr = String(targetPeriod) as 'first' | 'second'
+    if (
+      Number.isInteger(yearNum) && yearNum >= 2000 && yearNum <= 2100 &&
+      Number.isInteger(monthNum) && monthNum >= 1 && monthNum <= 12 &&
+      (periodStr === 'first' || periodStr === 'second')
+    ) {
+      const autoDate = computeAutoDeadline(yearNum, monthNum, periodStr)
+      const notice = '【全店自動設定】シフト開始日の6日前 23:59 が締切です'
+      // 常に全店(本部id=8を除く)分を作成（store_id指定があっても他店分も一括生成し、全店統一を担保）
+      const storesRes = await c.env.DB.prepare(
+        'SELECT id FROM stores WHERE id != 8 ORDER BY id ASC'
+      ).all()
+      const targetStoreIds: number[] = (storesRes.results || []).map((r: any) => Number(r.id))
+      // INSERT OR IGNORE で全店分作成(既存レコードは維持)
+      for (const sid of targetStoreIds) {
+        await c.env.DB.prepare(
+          `INSERT OR IGNORE INTO shift_deadlines
+           (store_id, target_year, target_month, target_period, deadline_date, notification_message, is_changed, change_count)
+           VALUES (?, ?, ?, ?, ?, ?, 0, 0)`
+        ).bind(sid, yearNum, monthNum, periodStr, autoDate, notice).run()
+      }
+      // 再取得
+      const re = await c.env.DB.prepare(query).bind(...params).all()
+      results = re.results
+    }
+  }
+  
   // 全レコードを自動計算値で上書き
   const overridden = (results || []).map(overrideDeadlineWithAuto)
   return c.json(overridden)
