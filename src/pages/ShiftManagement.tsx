@@ -60,9 +60,9 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
   // ビューモード
   const [viewMode, setViewMode] = useState<'table' | 'list' | 'day' | 'heatmap' | 'cost' | 'gantt'>('gantt');
   // ガントビュー用の状態
-  const [ganttMode, setGanttMode] = useState<'day' | 'period'>('day'); // 1日ガント or 期間ガント
+  const [ganttMode, setGanttMode] = useState<'day' | 'period'>('period'); // 1日ガント or 期間ガント（デフォルト:期間）
   const [ganttSelectedDate, setGanttSelectedDate] = useState<string>(''); // 1日ガントの対象日
-  const [ganttShowAll, setGanttShowAll] = useState<boolean>(false); // false=出勤者のみ, true=全員表示
+  const [ganttShowAll, setGanttShowAll] = useState<boolean>(true); // false=出勤者のみ, true=全員表示（デフォルト:全員）
   const [openedFromGantt, setOpenedFromGantt] = useState<boolean>(false); // ガントから編集モーダルを開いたか（金額プレビュー抑制用）
   // ガント上のリサイズドラッグ用（バー左右端で開始/終了時刻を変更）
   const [draggingShift, setDraggingShift] = useState<{
@@ -1665,12 +1665,14 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
                   <label className="block text-xs font-medium text-gray-700 mb-1">開始</label>
                   <input type="time" value={editingShift.start_time}
                     onChange={(e) => setEditingShift({ ...editingShift, start_time: e.target.value })} 
+                    step={1800}
                     className="input-field text-sm py-2" />
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-gray-700 mb-1">終了</label>
                   <input type="time" value={editingShift.end_time}
                     onChange={(e) => setEditingShift({ ...editingShift, end_time: e.target.value })} 
+                    step={1800}
                     className="input-field text-sm py-2" />
                 </div>
                 <div>
@@ -2600,9 +2602,15 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
                   );
                 }
 
-                // 時間軸の目盛り（1時間刻み）
+                // 時間軸の目盛り（1時間刻み・ラベル用）
                 const hourMarks: number[] = [];
                 for (let h = GANTT_START_HOUR; h <= GANTT_END_HOUR; h++) hourMarks.push(h);
+                // 30分刻みの目盛り（区切り線用: 0=正時, 1=30分）
+                const halfHourMarks: { hour: number; isHalf: boolean }[] = [];
+                for (let h = GANTT_START_HOUR; h <= GANTT_END_HOUR; h++) {
+                  halfHourMarks.push({ hour: h, isHalf: false });
+                  if (h < GANTT_END_HOUR) halfHourMarks.push({ hour: h + 0.5, isHalf: true });
+                }
 
                 // 対象日の合計人件費（管理者のみ表示、印刷時は非表示）
                 const dayCost = canSeeCost ? calcDayCost(targetDate) : 0;
@@ -2680,11 +2688,15 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
                               onClick={rowClickable ? (e) => handleGanttEmptyClick(e, employee.id, targetDate) : undefined}
                               title={rowClickable ? `クリックでシフト追加: ${employee.name}` : undefined}
                             >
-                              {/* 時間目盛りの縦線 */}
-                              {hourMarks.map(h => (
-                                <div key={h}
-                                  className="absolute top-0 bottom-0 w-px bg-gray-100 pointer-events-none"
-                                  style={{ left: `${((h - GANTT_START_HOUR) / GANTT_HOURS) * 100}%` }}></div>
+                              {/* 時間目盛りの縦線（1時間=濃いめ、30分=薄い破線） */}
+                              {halfHourMarks.map(m => (
+                                <div key={m.hour}
+                                  className={`absolute top-0 bottom-0 w-px pointer-events-none ${m.isHalf ? 'bg-gray-200/70' : 'bg-gray-300'}`}
+                                  style={{
+                                    left: `${((m.hour - GANTT_START_HOUR) / GANTT_HOURS) * 100}%`,
+                                    borderLeft: m.isHalf ? '1px dashed rgba(156,163,175,0.4)' : undefined,
+                                    background: m.isHalf ? 'transparent' : undefined,
+                                  }}></div>
                               ))}
                               {/* 🕊️ 希望シフト（うっすら背景バー、印刷時非表示、クリックで新規追加） */}
                               {(() => {
@@ -2814,6 +2826,12 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
                 // 時間軸の目盛り（1時間刻み、1日ガントと同じ）
                 const hourMarks: number[] = [];
                 for (let h = GANTT_START_HOUR; h <= GANTT_END_HOUR; h++) hourMarks.push(h);
+                // 30分刻みの目盛り（区切り線用）
+                const halfHourMarks: { hour: number; isHalf: boolean }[] = [];
+                for (let h = GANTT_START_HOUR; h <= GANTT_END_HOUR; h++) {
+                  halfHourMarks.push({ hour: h, isHalf: false });
+                  if (h < GANTT_END_HOUR) halfHourMarks.push({ hour: h + 0.5, isHalf: true });
+                }
 
                 return (
                   <div className="space-y-4">
@@ -2915,11 +2933,14 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
                                         onClick={rowClickable ? (e) => handleGanttEmptyClick(e, employee.id, dateStr) : undefined}
                                         title={rowClickable ? `クリックでシフト追加: ${employee.name} ${format(date, 'M/d', { locale: ja })}` : undefined}
                                       >
-                                        {/* 時間目盛りの縦線 */}
-                                        {hourMarks.map(h => (
-                                          <div key={h}
-                                            className="absolute top-0 bottom-0 w-px bg-gray-100 pointer-events-none"
-                                            style={{ left: `${((h - GANTT_START_HOUR) / GANTT_HOURS) * 100}%` }}></div>
+                                        {/* 時間目盛りの縦線（1時間=濃いめ、30分=薄い破線） */}
+                                        {halfHourMarks.map(m => (
+                                          <div key={m.hour}
+                                            className={`absolute top-0 bottom-0 w-px pointer-events-none ${m.isHalf ? '' : 'bg-gray-300'}`}
+                                            style={{
+                                              left: `${((m.hour - GANTT_START_HOUR) / GANTT_HOURS) * 100}%`,
+                                              borderLeft: m.isHalf ? '1px dashed rgba(156,163,175,0.4)' : undefined,
+                                            }}></div>
                                         ))}
                                         {/* 🕊️ 希望シフト（うっすら背景、印刷時非表示、クリックで新規追加） */}
                                         {(() => {
