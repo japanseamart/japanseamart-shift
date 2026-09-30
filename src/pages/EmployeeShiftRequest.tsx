@@ -76,6 +76,19 @@ export default function EmployeeShiftRequest() {
   const { start: periodStart, end: periodEnd } = getPeriodDates(targetYear, targetMonth, targetPeriod);
   const periodDates = eachDayOfInterval({ start: periodStart, end: periodEnd });
 
+  // 未入力日リスト(パターン未選択の日)を算出
+  // 提出済みリクエストも「入力済み」とみなす(=編集不要の日はスキップ可)
+  const missingDates = periodDates.filter(day => {
+    const dateStr = format(day, 'yyyy-MM-dd');
+    const patterns = selectedPatterns.get(dateStr);
+    const existing = requests.get(dateStr);
+    // ローカルで選択済み、または既に提出済みならOK
+    if (patterns && patterns.length > 0) return false;
+    if (existing) return false;
+    return true;
+  });
+  const isIncomplete = missingDates.length > 0;
+
   useEffect(() => {
     fetchStores();
     fetchSpecialDays();
@@ -365,6 +378,24 @@ export default function EmployeeShiftRequest() {
         setMessage({ type: 'error', text: 'シフト希望の締切が過ぎています' });
         return;
       }
+    }
+
+    // 未入力日チェック（不完全な状態では提出させない）
+    if (missingDates.length > 0) {
+      const preview = missingDates
+        .slice(0, 5)
+        .map(d => format(d, 'M/d(E)', { locale: ja }))
+        .join('、');
+      const suffix = missingDates.length > 5 ? ` 他${missingDates.length - 5}日` : '';
+      setMessage({
+        type: 'error',
+        text: `未入力の日があります（${missingDates.length}日）: ${preview}${suffix}。出勤しない日は「休み希望」を選択してください。`,
+      });
+      // 未入力日の先頭までスクロール
+      const firstMissing = format(missingDates[0], 'yyyy-MM-dd');
+      const el = document.getElementById(`date-row-${firstMissing}`);
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      return;
     }
 
     setSaving(true);
@@ -901,13 +932,19 @@ export default function EmployeeShiftRequest() {
                 const hasSelection = dayPatterns.length > 0;
                 const dayOfWeek = day.getDay();
                 const isHoliday = specialDay?.type === 1;
+                const isMissing = !hasSelection && !existingRequest;
 
                 return (
-                  <div key={dateStr} className={`card ${
-                    isHoliday ? 'border-l-4 border-red-500 bg-red-50/30' :
-                    dayOfWeek === 0 ? 'border-l-4 border-red-400 bg-red-50/20' :
-                    dayOfWeek === 6 ? 'border-l-4 border-blue-400 bg-blue-50/20' : ''
-                  }`}>
+                  <div
+                    key={dateStr}
+                    id={`date-row-${dateStr}`}
+                    className={`card ${
+                      isMissing ? 'border-l-4 border-amber-500 bg-amber-50/40 ring-1 ring-amber-300' :
+                      isHoliday ? 'border-l-4 border-red-500 bg-red-50/30' :
+                      dayOfWeek === 0 ? 'border-l-4 border-red-400 bg-red-50/20' :
+                      dayOfWeek === 6 ? 'border-l-4 border-blue-400 bg-blue-50/20' : ''
+                    }`}
+                  >
                     {/* 日付ヘッダー */}
                     <div className="flex items-center justify-between mb-3 pb-3 border-b border-gray-200">
                       <div className="flex items-center gap-2 flex-wrap">
@@ -1032,12 +1069,28 @@ export default function EmployeeShiftRequest() {
                       {message.text}
                     </div>
                   )}
+                  {isIncomplete && !message && (
+                    <div className="mb-3 p-3 rounded-lg text-sm bg-amber-100 text-amber-800 border border-amber-300">
+                      ⚠️ 未入力の日が <strong>{missingDates.length}日</strong> あります
+                      （{missingDates.slice(0, 3).map(d => format(d, 'M/d', { locale: ja })).join('、')}
+                      {missingDates.length > 3 ? ` 他${missingDates.length - 3}日` : ''}）。
+                      全ての日に希望を入力してください。出勤しない日は「休み希望」を選択。
+                    </div>
+                  )}
                   <button
                     onClick={handleSubmit}
-                    disabled={saving}
-                    className="w-full btn-primary h-14 text-lg font-bold"
+                    disabled={saving || isIncomplete}
+                    className={`w-full h-14 text-lg font-bold rounded-lg transition ${
+                      saving || isIncomplete
+                        ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                        : 'btn-primary'
+                    }`}
                   >
-                    {saving ? '送信中...' : '📤 シフト希望を提出する'}
+                    {saving
+                      ? '送信中...'
+                      : isIncomplete
+                        ? `📝 未入力: あと${missingDates.length}日`
+                        : '📤 シフト希望を提出する'}
                   </button>
                 </div>
               </div>
