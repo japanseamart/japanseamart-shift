@@ -19,6 +19,19 @@ interface ShiftInput {
   start_time: string;
   end_time: string;
   break_minutes: number;
+  /** 'work' = 通常勤務, 'holiday' = 公休 */
+  shift_type?: 'work' | 'holiday';
+}
+
+// 時刻選択肢を生成（fromMin〜toMin, stepMin刻み, "HH:MM"文字列配列）
+function generateTimeOptions(fromMin: number, toMin: number, stepMin: number): string[] {
+  const opts: string[] = [];
+  for (let m = fromMin; m <= toMin; m += stepMin) {
+    const h = Math.floor(m / 60);
+    const min = m % 60;
+    opts.push(`${String(h).padStart(2, '0')}:${String(min).padStart(2, '0')}`);
+  }
+  return opts;
 }
 
 export default function ShiftManagement({ role, storeId, onLogout }: ShiftManagementProps) {
@@ -75,7 +88,7 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
     rowLeft: number;      // 行(時間軸コンテナ)のクライアントX(px)
     rowWidth: number;     // 行の幅(px)
   } | null>(null);
-  // 正社員 公休日数表示（シフト未入力日=公休）
+  // 公休日数表示（シフト種別=公休 の日をカウント）
   const [showHolidays, setShowHolidays] = useState<boolean>(true); // 名前横に [公休N] を表示するか
   const [holidayRange, setHolidayRange] = useState<'period' | 'month'>('period'); // 集計範囲: 期間内 or 月全体
   // const [requestsViewMode, setRequestsViewMode] = useState<'card' | 'table'>('card');
@@ -416,6 +429,8 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
   };
 
   const calculateLaborCost = (shift: Shift | ShiftInput, employee: Employee): number => {
+    // 公休は人件費0
+    if (shift.shift_type === 'holiday') return 0;
     // 正社員は月給制のため人件費計算から除外
     if (employee.employment_type === 'full_time') return 0;
     if (!selectedStore) return 0;
@@ -641,10 +656,9 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
     setShowShiftForm(true);
   };
 
-  // 正社員の公休日数を計算（シフトが入っていない日数）
+  // 公休日数を計算（明示的に「公休」入力された日のみをカウント）
   // holidayRange = 'period' → 現在の期間内, 'month' → 対象月全体
   const calcHolidaysCount = (employee: Employee): number => {
-    if (employee.employment_type !== 'full_time') return 0;
     const dates: Date[] = holidayRange === 'period'
       ? periodDates
       : eachDayOfInterval({
@@ -654,18 +668,19 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
     let count = 0;
     for (const date of dates) {
       const dateStr = format(date, 'yyyy-MM-dd');
-      const hasShift = shifts.some(s => s.employee_id === employee.id && s.date === dateStr);
-      if (!hasShift) count += 1;
+      const hasHoliday = shifts.some(
+        s => s.employee_id === employee.id && s.date === dateStr && s.shift_type === 'holiday'
+      );
+      if (hasHoliday) count += 1;
     }
     return count;
   };
 
-  // 名前横に付与する [公休N] バッジ（0日・非正社員・OFF時は非表示）
+  // 名前横に付与する [公休N] バッジ（0日・OFF時は非表示、全雇用形態対象）
   const renderHolidayBadge = (employee: Employee) => {
     if (!showHolidays) return null;
-    if (employee.employment_type !== 'full_time') return null;
     const count = calcHolidaysCount(employee);
-    if (count === 0) return null; // Q4: 公休0日は非表示
+    if (count === 0) return null; // 公休0日は非表示
     return (
       <span className="ml-1 text-[10px] font-medium text-purple-700 bg-purple-100 border border-purple-200 rounded px-1 py-0.5 whitespace-nowrap align-middle">
         [公休{count}]
@@ -1572,7 +1587,7 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
                   ? 'bg-purple-100 text-purple-700 border-purple-300 hover:bg-purple-200'
                   : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
               }`}
-              title="正社員の名前横にシフト未入力日数（公休）を表示します"
+              title="従業員の名前横に「公休」入力した日数を表示します"
             >
               🏠 公休表示 {showHolidays ? 'ON' : 'OFF'}
             </button>
@@ -1604,7 +1619,7 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
             )}
             {showHolidays && (
               <span className="text-xs text-gray-500">
-                ※ 正社員の名前横にシフト未入力日数を表示
+                ※ 名前横に「公休」入力した日数を表示
               </span>
             )}
           </div>
@@ -1630,6 +1645,50 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
                   ×
                 </button>
               </div>
+              {/* 種別切替（勤務 / 公休） */}
+              <div className="mb-3 flex items-center gap-4 flex-wrap">
+                <span className="text-xs font-medium text-gray-700">種別:</span>
+                <label className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border-2 cursor-pointer text-sm font-medium transition ${
+                  (editingShift.shift_type ?? 'work') === 'work'
+                    ? 'bg-blue-500 text-white border-blue-600'
+                    : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                }`}>
+                  <input
+                    type="radio"
+                    name="shift_type"
+                    className="sr-only"
+                    checked={(editingShift.shift_type ?? 'work') === 'work'}
+                    onChange={() => setEditingShift({ ...editingShift, shift_type: 'work' })}
+                  />
+                  🕒 勤務
+                </label>
+                <label className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border-2 cursor-pointer text-sm font-medium transition ${
+                  editingShift.shift_type === 'holiday'
+                    ? 'bg-purple-500 text-white border-purple-600'
+                    : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                }`}>
+                  <input
+                    type="radio"
+                    name="shift_type"
+                    className="sr-only"
+                    checked={editingShift.shift_type === 'holiday'}
+                    onChange={() => setEditingShift({
+                      ...editingShift,
+                      shift_type: 'holiday',
+                      start_time: '00:00',
+                      end_time: '00:00',
+                      break_minutes: 0,
+                    })}
+                  />
+                  🏠 公休
+                </label>
+                {editingShift.shift_type === 'holiday' && (
+                  <span className="text-xs text-purple-700 bg-purple-50 border border-purple-200 rounded px-2 py-1">
+                    ※ 公休は時間・休憩・人件費が0として登録されます
+                  </span>
+                )}
+              </div>
+
               <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
                 <div>
                   <label className="block text-xs font-medium text-gray-700 mb-1">従業員</label>
@@ -1661,32 +1720,54 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
                   <label className="block text-xs font-medium text-gray-700 mb-1">日付</label>
                   <div className="input-field bg-white text-sm py-2">{format(new Date(editingShift.date), 'M/d(E)', { locale: ja })}</div>
                 </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1">開始</label>
-                  <input type="time" value={editingShift.start_time}
-                    onChange={(e) => setEditingShift({ ...editingShift, start_time: e.target.value })} 
-                    step={1800}
-                    className="input-field text-sm py-2" />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1">終了</label>
-                  <input type="time" value={editingShift.end_time}
-                    onChange={(e) => setEditingShift({ ...editingShift, end_time: e.target.value })} 
-                    step={1800}
-                    className="input-field text-sm py-2" />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1">
-                    休憩(分)
-                    {!breakManuallySet && <span className="text-[10px] text-blue-500 ml-1">自動</span>}
-                  </label>
-                  <input type="number" value={editingShift.break_minutes}
-                    onChange={(e) => {
-                      setBreakManuallySet(true); // 手動変更フラグを設定
-                      setEditingShift({ ...editingShift, break_minutes: Number(e.target.value) });
-                    }}
-                    className="input-field text-sm py-2" min="0" step="15" />
-                </div>
+                {editingShift.shift_type !== 'holiday' ? (
+                  <>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">開始</label>
+                      <select
+                        value={(editingShift.start_time || '').slice(0, 5)}
+                        onChange={(e) => setEditingShift({ ...editingShift, start_time: e.target.value })}
+                        className="input-field text-sm py-2"
+                      >
+                        {generateTimeOptions(6 * 60, 24 * 60, 30).map(t => (
+                          <option key={t} value={t}>{t}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">終了</label>
+                      <select
+                        value={(editingShift.end_time || '').slice(0, 5)}
+                        onChange={(e) => setEditingShift({ ...editingShift, end_time: e.target.value })}
+                        className="input-field text-sm py-2"
+                      >
+                        {generateTimeOptions(6 * 60, 24 * 60, 30).map(t => (
+                          <option key={t} value={t}>{t}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">
+                        休憩(分)
+                        {!breakManuallySet && <span className="text-[10px] text-blue-500 ml-1">自動</span>}
+                      </label>
+                      <input type="number" value={editingShift.break_minutes}
+                        onChange={(e) => {
+                          setBreakManuallySet(true); // 手動変更フラグを設定
+                          setEditingShift({ ...editingShift, break_minutes: Number(e.target.value) });
+                        }}
+                        className="input-field text-sm py-2" min="0" step="15" />
+                    </div>
+                  </>
+                ) : (
+                  <div className="col-span-2 md:col-span-3 flex items-center">
+                    <div className="w-full bg-purple-50 border-2 border-purple-200 rounded-lg p-3 text-center">
+                      <div className="text-2xl mb-1">🏠</div>
+                      <div className="text-sm font-bold text-purple-800">公休</div>
+                      <div className="text-[10px] text-purple-600 mt-0.5">（時間入力は不要）</div>
+                    </div>
+                  </div>
+                )}
                 <div className="flex items-end gap-2">
                   <button onClick={handleSaveShift} disabled={saving} className="btn-primary flex-1 py-2 text-sm">
                     {saving ? '保存中...' : '💾 保存'}
@@ -2043,12 +2124,19 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
                             specialDay?.type === 1 ? 'bg-red-50' : dayOfWeek === 0 ? 'bg-red-50' : dayOfWeek === 6 ? 'bg-blue-50' : ''
                           }`}>
                           {shift ? (
-                            <div onClick={() => handleEditShift(shift)}
-                              className={`${isAllStores ? '' : 'cursor-pointer hover:bg-ocean-700'} bg-ocean-600 text-white rounded px-1 py-1 text-xs transition-colors`}>
-                              <div className="font-medium">{shift.start_time.slice(0, 5)}-{shift.end_time.slice(0, 5)}</div>
-                              {shift.break_minutes > 0 && <div className="text-[9px] opacity-75">休{shift.break_minutes}分</div>}
-                              <div className="text-[10px] opacity-90" data-salary>¥{calculateLaborCost(shift, employee).toLocaleString()}</div>
-                            </div>
+                            shift.shift_type === 'holiday' ? (
+                              <div onClick={() => handleEditShift(shift)}
+                                className={`${isAllStores ? '' : 'cursor-pointer hover:bg-purple-700'} bg-purple-500 text-white rounded px-1 py-1 text-xs transition-colors`}>
+                                <div className="font-bold">🏠 公休</div>
+                              </div>
+                            ) : (
+                              <div onClick={() => handleEditShift(shift)}
+                                className={`${isAllStores ? '' : 'cursor-pointer hover:bg-ocean-700'} bg-ocean-600 text-white rounded px-1 py-1 text-xs transition-colors`}>
+                                <div className="font-medium">{shift.start_time.slice(0, 5)}-{shift.end_time.slice(0, 5)}</div>
+                                {shift.break_minutes > 0 && <div className="text-[9px] opacity-75">休{shift.break_minutes}分</div>}
+                                <div className="text-[10px] opacity-90" data-salary>¥{calculateLaborCost(shift, employee).toLocaleString()}</div>
+                              </div>
+                            )
                           ) : (
                             !isAllStores && (
                               <button onClick={() => handleAddShift(employee.id, dateStr)}
@@ -2071,6 +2159,8 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
           <div className="space-y-4">
             {orderedEmployees.map(employee => {
               const employeeShifts = shifts.filter(s => s.employee_id === employee.id);
+              const workCount = employeeShifts.filter(s => s.shift_type !== 'holiday').length;
+              const holidayCount = employeeShifts.filter(s => s.shift_type === 'holiday').length;
               const totalCost = employeeShifts.reduce((sum, s) => sum + calculateLaborCost(s, employee), 0);
               const employeeStore = isAllStores ? stores.find(s => s.id === employee.store_id) : null;
               return (
@@ -2082,8 +2172,13 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
                       <p className="text-sm opacity-90">時給 ¥{employee.hourly_wage?.toLocaleString()}</p>
                     </div>
                     <div className="text-right">
-                      <div className="text-sm">シフト数</div>
-                      <div className="text-2xl font-bold">{employeeShifts.length}日</div>
+                      <div className="text-sm">勤務 / 公休</div>
+                      <div className="text-2xl font-bold">
+                        {workCount}日
+                        {holidayCount > 0 && (
+                          <span className="text-base font-normal opacity-90 ml-1">/ 🏠{holidayCount}</span>
+                        )}
+                      </div>
                       <div className="text-sm" data-salary>¥{totalCost.toLocaleString()}</div>
                     </div>
                   </div>
@@ -2101,13 +2196,19 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
                           className={`p-3 rounded-lg border-2 flex justify-between items-center ${borderColor} ${isAllStores ? '' : 'hover:border-ocean-400 cursor-pointer'}`}>
                           <div>
                             <div className={`font-bold ${dateColor}`}>{format(date, 'M/d(E)', { locale: ja })}{isHoliday && <span className="ml-1 text-xs">🎌{specialDay?.name}</span>}</div>
-                            <div className="text-ocean-700">
-                              {shift.start_time.slice(0, 5)} - {shift.end_time.slice(0, 5)}
-                              {shift.break_minutes > 0 && <span className="text-gray-500 text-xs ml-2">休{shift.break_minutes}分</span>}
-                            </div>
+                            {shift.shift_type === 'holiday' ? (
+                              <div className="text-purple-700 font-bold">🏠 公休</div>
+                            ) : (
+                              <div className="text-ocean-700">
+                                {shift.start_time.slice(0, 5)} - {shift.end_time.slice(0, 5)}
+                                {shift.break_minutes > 0 && <span className="text-gray-500 text-xs ml-2">休{shift.break_minutes}分</span>}
+                              </div>
+                            )}
                           </div>
                           <div className="text-right">
-                            <div className="font-bold" data-salary>¥{calculateLaborCost(shift, employee).toLocaleString()}</div>
+                            {shift.shift_type !== 'holiday' && (
+                              <div className="font-bold" data-salary>¥{calculateLaborCost(shift, employee).toLocaleString()}</div>
+                            )}
                             {!isAllStores && (
                               <button onClick={(e) => { e.stopPropagation(); handleDeleteShift(shift.id); }}
                                 className="text-xs text-red-600 hover:text-red-800">削除</button>
@@ -2142,8 +2243,15 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
                       {specialDay && <p className="text-sm opacity-90">{specialDay.name}</p>}
                     </div>
                     <div className="text-right">
-                      <div className="text-sm">出勤</div>
-                      <div className="text-2xl font-bold">{dayShifts.length}名</div>
+                      <div className="text-sm">出勤 / 公休</div>
+                      <div className="text-2xl font-bold">
+                        {dayShifts.filter(s => s.shift_type !== 'holiday').length}名
+                        {dayShifts.some(s => s.shift_type === 'holiday') && (
+                          <span className="text-base font-normal opacity-90 ml-1">
+                            / 🏠{dayShifts.filter(s => s.shift_type === 'holiday').length}
+                          </span>
+                        )}
+                      </div>
                       <div className="text-sm" data-salary>¥{totalDayCost.toLocaleString()}</div>
                     </div>
                   </div>
@@ -2157,20 +2265,28 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
                         const empStore = isAllStores ? stores.find(s => s.id === emp.store_id) : null;
                         return (
                           <div key={shift.id} onClick={() => handleEditShift(shift)}
-                            className={`p-3 rounded-lg border-2 border-gray-200 flex justify-between items-center ${isAllStores ? '' : 'hover:border-ocean-400 cursor-pointer'}`}>
+                            className={`p-3 rounded-lg border-2 flex justify-between items-center ${
+                              shift.shift_type === 'holiday' ? 'border-purple-200 bg-purple-50' : 'border-gray-200'
+                            } ${isAllStores ? '' : 'hover:border-ocean-400 cursor-pointer'}`}>
                             <div>
                               <div className="font-bold">
                                 {emp.name}
                                 {renderHolidayBadge(emp)}
                                 {isAllStores && empStore && <span className="text-sm font-normal text-ocean-600 ml-2">[{empStore.name}]</span>}
                               </div>
-                              <div className="text-ocean-700">
-                                {shift.start_time.slice(0, 5)} - {shift.end_time.slice(0, 5)}
-                                {shift.break_minutes > 0 && <span className="text-gray-500 text-xs ml-2">休{shift.break_minutes}分</span>}
-                              </div>
+                              {shift.shift_type === 'holiday' ? (
+                                <div className="text-purple-700 font-bold">🏠 公休</div>
+                              ) : (
+                                <div className="text-ocean-700">
+                                  {shift.start_time.slice(0, 5)} - {shift.end_time.slice(0, 5)}
+                                  {shift.break_minutes > 0 && <span className="text-gray-500 text-xs ml-2">休{shift.break_minutes}分</span>}
+                                </div>
+                              )}
                             </div>
                             <div className="text-right">
-                              <div className="font-bold" data-salary>¥{calculateLaborCost(shift, emp).toLocaleString()}</div>
+                              {shift.shift_type !== 'holiday' && (
+                                <div className="font-bold" data-salary>¥{calculateLaborCost(shift, emp).toLocaleString()}</div>
+                              )}
                               {!isAllStores && (
                                 <button onClick={(e) => { e.stopPropagation(); handleDeleteShift(shift.id); }}
                                   className="text-xs text-red-600 hover:text-red-800">削除</button>
@@ -2289,7 +2405,7 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
                     const dailyBudget = periodBudget > 0 ? Math.round(periodBudget / periodDates.length) : 0;
                     return periodDates.map(date => {
                       const dateStr = format(date, 'yyyy-MM-dd');
-                      const dayShifts = shifts.filter(s => s.date === dateStr);
+                      const dayShifts = shifts.filter(s => s.date === dateStr && s.shift_type !== 'holiday');
                       const dayCost = getDailyCost(date);
                       const specialDay = getSpecialDayInfo(date);
                       const dayOfWeek = date.getDay();
@@ -2441,13 +2557,17 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
           // 管理者のみ金額表示
           const canSeeCost = role === 'admin';
 
-          // 該当日にシフトが1件でもある従業員だけに絞るヘルパー
+          // 該当日に勤務シフトが1件でもある従業員だけに絞るヘルパー（公休のみは除外）
           const filterEmployeesForDay = (dateStr: string) =>
-            orderedEmployees.filter(emp => shifts.some(s => s.employee_id === emp.id && s.date === dateStr));
+            orderedEmployees.filter(emp =>
+              shifts.some(s => s.employee_id === emp.id && s.date === dateStr && s.shift_type !== 'holiday')
+            );
 
-          // 期間全体に1件でもシフトがある従業員だけに絞るヘルパー
+          // 期間全体に1件でも勤務シフトがある従業員だけに絞るヘルパー（公休のみは除外）
           const filterEmployeesForPeriod = () =>
-            orderedEmployees.filter(emp => shifts.some(s => s.employee_id === emp.id));
+            orderedEmployees.filter(emp =>
+              shifts.some(s => s.employee_id === emp.id && s.shift_type !== 'holiday')
+            );
 
           return (
             <div className="card gantt-view">
@@ -2745,6 +2865,23 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
                               })()}
                               {/* シフト棒（クリックで編集 / 左右端ドラッグでリサイズ） */}
                               {empShifts.map(shift => {
+                                // 公休は時間バーではなく行全体を紫色で塗り「🏠 公休」ラベル
+                                if (shift.shift_type === 'holiday') {
+                                  const clickable = !isAllStores;
+                                  return (
+                                    <div
+                                      key={shift.id}
+                                      data-gantt-bar="1"
+                                      role={clickable ? 'button' : undefined}
+                                      tabIndex={clickable ? 0 : undefined}
+                                      onClick={clickable ? (e) => { e.stopPropagation(); handleEditShiftFromGantt(shift); } : undefined}
+                                      className={`absolute inset-1 rounded border-2 border-purple-500 bg-purple-100 flex items-center justify-center text-purple-800 text-xs font-bold overflow-hidden ${clickable ? 'cursor-pointer hover:bg-purple-200' : ''}`}
+                                      title={clickable ? `クリックで編集: 公休 ${employee.name}` : `公休: ${employee.name}`}
+                                    >
+                                      🏠 公休
+                                    </div>
+                                  );
+                                }
                                 // ドラッグ中はリアルタイム値を優先
                                 const isDragging = draggingShift?.shiftId === shift.id;
                                 const dispStart = isDragging ? draggingShift!.currentStart : shift.start_time;
@@ -2840,11 +2977,11 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
                       const dow = date.getDay();
                       const specialDay = getSpecialDayInfo(date);
                       const isHoliday = specialDay?.type === 1;
-                      // その日に出勤する従業員だけに絞る（全員表示ONの時は全員）
+                      // その日に勤務シフトがある従業員だけに絞る（公休のみは除外、全員表示ONの時は全員）
                       const employeesToShow = ganttShowAll
                         ? orderedEmployees
                         : orderedEmployees.filter(emp =>
-                            shifts.some(s => s.employee_id === emp.id && s.date === dateStr)
+                            shifts.some(s => s.employee_id === emp.id && s.date === dateStr && s.shift_type !== 'holiday')
                           );
 
                       const dayCost = canSeeCost ? calcDayCost(dateStr) : 0;
@@ -2987,6 +3124,23 @@ export default function ShiftManagement({ role, storeId, onLogout }: ShiftManage
                                         })()}
                                         {/* シフト棒（クリックで編集 / 左右端ドラッグでリサイズ） */}
                                         {empShifts.map(shift => {
+                                          // 公休は行全体を紫色バーで表示
+                                          if (shift.shift_type === 'holiday') {
+                                            const clickable = !isAllStores;
+                                            return (
+                                              <div
+                                                key={shift.id}
+                                                data-gantt-bar="1"
+                                                role={clickable ? 'button' : undefined}
+                                                tabIndex={clickable ? 0 : undefined}
+                                                onClick={clickable ? (e) => { e.stopPropagation(); handleEditShiftFromGantt(shift); } : undefined}
+                                                className={`absolute inset-1 rounded border-2 border-purple-500 bg-purple-100 flex items-center justify-center text-purple-800 text-[11px] font-bold overflow-hidden ${clickable ? 'cursor-pointer hover:bg-purple-200' : ''}`}
+                                                title={clickable ? `クリックで編集: 公休 ${employee.name}` : `公休: ${employee.name}`}
+                                              >
+                                                🏠 公休
+                                              </div>
+                                            );
+                                          }
                                           const isDragging = draggingShift?.shiftId === shift.id;
                                           const dispStart = isDragging ? draggingShift!.currentStart : shift.start_time;
                                           const dispEnd = isDragging ? draggingShift!.currentEnd : shift.end_time;

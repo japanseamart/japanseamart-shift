@@ -77,6 +77,8 @@ export interface Shift {
   end_time: string;
   break_minutes: number;
   labor_cost: number;
+  /** 'work' = 通常勤務, 'holiday' = 明示公休（時間・コストは0） */
+  shift_type?: 'work' | 'holiday';
   created_at: string;
   updated_at: string;
 }

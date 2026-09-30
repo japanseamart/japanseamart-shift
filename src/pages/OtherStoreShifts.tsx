@@ -140,6 +140,8 @@ export default function OtherStoreShifts({ role, storeId, onLogout }: OtherStore
 
   // 人件費計算（シフトに保存されたlabor_costを優先、なければ計算）
   const calculateLaborCost = (shift: Shift, employee: Employee): number => {
+    // 公休は人件費0
+    if (shift.shift_type === 'holiday') return 0;
     // 正社員は月給制のため人件費計算から除外
     if (employee.employment_type === 'full_time') return 0;
     // シフトに保存されたlabor_costがあれば使用
@@ -440,14 +442,20 @@ export default function OtherStoreShifts({ role, storeId, onLogout }: OtherStore
                             }`}
                           >
                             {shift ? (
-                              <div className="bg-ocean-600 text-white rounded px-1 py-1 text-xs">
-                                <div className="font-medium">
-                                  {shift.start_time.slice(0, 5)}-{shift.end_time.slice(0, 5)}
+                              shift.shift_type === 'holiday' ? (
+                                <div className="bg-purple-500 text-white rounded px-1 py-1 text-xs">
+                                  <div className="font-bold">🏠 公休</div>
                                 </div>
-                                {shift.break_minutes > 0 && (
-                                  <div className="text-[9px] opacity-75">休{shift.break_minutes}分</div>
-                                )}
-                              </div>
+                              ) : (
+                                <div className="bg-ocean-600 text-white rounded px-1 py-1 text-xs">
+                                  <div className="font-medium">
+                                    {shift.start_time.slice(0, 5)}-{shift.end_time.slice(0, 5)}
+                                  </div>
+                                  {shift.break_minutes > 0 && (
+                                    <div className="text-[9px] opacity-75">休{shift.break_minutes}分</div>
+                                  )}
+                                </div>
+                              )
                             ) : (
                               <span className="text-gray-300">-</span>
                             )}

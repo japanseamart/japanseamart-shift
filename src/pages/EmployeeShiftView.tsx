@@ -619,17 +619,26 @@ export default function EmployeeShiftView() {
                                         {employee?.name}
                                       </span>
                                     </div>
-                                    <div className="flex items-center gap-2 text-ocean-700">
-                                      <span className="text-xl">🕐</span>
-                                      <span className="font-bold text-lg">
-                                        {shift.start_time.slice(0, 5)} - {shift.end_time.slice(0, 5)}
-                                      </span>
-                                    </div>
-                                    {shift.break_minutes > 0 && (
-                                      <div className="flex items-center gap-2 text-gray-600 text-sm mt-1">
-                                        <span>💤</span>
-                                        <span>休憩 {shift.break_minutes}分</span>
+                                    {shift.shift_type === 'holiday' ? (
+                                      <div className="flex items-center gap-2 text-purple-700">
+                                        <span className="text-xl">🏠</span>
+                                        <span className="font-bold text-lg">公休</span>
                                       </div>
+                                    ) : (
+                                      <>
+                                        <div className="flex items-center gap-2 text-ocean-700">
+                                          <span className="text-xl">🕐</span>
+                                          <span className="font-bold text-lg">
+                                            {shift.start_time.slice(0, 5)} - {shift.end_time.slice(0, 5)}
+                                          </span>
+                                        </div>
+                                        {shift.break_minutes > 0 && (
+                                          <div className="flex items-center gap-2 text-gray-600 text-sm mt-1">
+                                            <span>💤</span>
+                                            <span>休憩 {shift.break_minutes}分</span>
+                                          </div>
+                                        )}
+                                      </>
                                     )}
                                   </div>
                                 </div>
@@ -696,12 +705,21 @@ export default function EmployeeShiftView() {
                               <div className="text-center text-gray-400 text-xs sm:text-sm">-</div>
                             ) : (
                               dayShifts.map((shift) => (
-                                <div
-                                  key={shift.id}
-                                  className="bg-ocean-500 text-white text-xs p-1 sm:p-2 rounded mb-1"
-                                >
-                                  <div className="font-semibold">{shift.start_time.slice(0, 5)} - {shift.end_time.slice(0, 5)}</div>
-                                </div>
+                                shift.shift_type === 'holiday' ? (
+                                  <div
+                                    key={shift.id}
+                                    className="bg-purple-500 text-white text-xs p-1 sm:p-2 rounded mb-1"
+                                  >
+                                    <div className="font-semibold">🏠 公休</div>
+                                  </div>
+                                ) : (
+                                  <div
+                                    key={shift.id}
+                                    className="bg-ocean-500 text-white text-xs p-1 sm:p-2 rounded mb-1"
+                                  >
+                                    <div className="font-semibold">{shift.start_time.slice(0, 5)} - {shift.end_time.slice(0, 5)}</div>
+                                  </div>
+                                )
                               ))
                             )}
                           </div>

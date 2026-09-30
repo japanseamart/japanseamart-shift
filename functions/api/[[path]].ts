@@ -476,12 +476,20 @@ app.get('/shifts/:id', async (c) => {
 
 // シフト追加
 app.post('/shifts', async (c) => {
-  const { store_id, employee_id, date, start_time, end_time, break_minutes, labor_cost } = await c.req.json()
+  const { store_id, employee_id, date, start_time, end_time, break_minutes, labor_cost, shift_type } = await c.req.json()
+  
+  // shift_type='holiday'の場合は時間/休憩/コストを0扱いに正規化
+  const isHoliday = shift_type === 'holiday'
+  const st = isHoliday ? '00:00' : start_time
+  const et = isHoliday ? '00:00' : end_time
+  const brk = isHoliday ? 0 : (break_minutes || 0)
+  const cost = isHoliday ? 0 : (labor_cost || 0)
+  const type = isHoliday ? 'holiday' : 'work'
   
   const result = await c.env.DB.prepare(`
-    INSERT INTO shifts (store_id, employee_id, date, start_time, end_time, break_minutes, labor_cost)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-  `).bind(store_id, employee_id, date, start_time, end_time, break_minutes || 0, labor_cost || 0).run()
+    INSERT INTO shifts (store_id, employee_id, date, start_time, end_time, break_minutes, labor_cost, shift_type)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `).bind(store_id, employee_id, date, st, et, brk, cost, type).run()
 
   const newShift = await c.env.DB.prepare('SELECT * FROM shifts WHERE id = ?')
     .bind(result.meta.last_row_id).first()
@@ -492,7 +500,14 @@ app.post('/shifts', async (c) => {
 // シフト更新
 app.put('/shifts/:id', async (c) => {
   const id = c.req.param('id')
-  const { store_id, employee_id, date, start_time, end_time, break_minutes, labor_cost } = await c.req.json()
+  const { store_id, employee_id, date, start_time, end_time, break_minutes, labor_cost, shift_type } = await c.req.json()
+  
+  const isHoliday = shift_type === 'holiday'
+  const st = isHoliday ? '00:00' : start_time
+  const et = isHoliday ? '00:00' : end_time
+  const brk = isHoliday ? 0 : (break_minutes || 0)
+  const cost = isHoliday ? 0 : (labor_cost || 0)
+  const type = isHoliday ? 'holiday' : 'work'
   
   await c.env.DB.prepare(`
     UPDATE shifts SET 
@@ -503,9 +518,10 @@ app.put('/shifts/:id', async (c) => {
       end_time = ?,
       break_minutes = ?,
       labor_cost = ?,
+      shift_type = ?,
       updated_at = CURRENT_TIMESTAMP
     WHERE id = ?
-  `).bind(store_id, employee_id, date, start_time, end_time, break_minutes, labor_cost, id).run()
+  `).bind(store_id, employee_id, date, st, et, brk, cost, type, id).run()
 
   const updatedShift = await c.env.DB.prepare('SELECT * FROM shifts WHERE id = ?')
     .bind(id).first()
