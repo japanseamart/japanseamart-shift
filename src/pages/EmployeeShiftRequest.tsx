@@ -723,16 +723,7 @@ export default function EmployeeShiftRequest() {
                   </p>
                 )}
               </div>
-            ) : (
-              <div className="p-3 sm:p-4 rounded-lg bg-gray-50 border-2 border-gray-300">
-                <p className="text-sm sm:text-base font-medium text-gray-700">
-                  ℹ️ {targetMonth}月{targetPeriod === 'first' ? '前半' : '後半'}の提出締切は設定されていません
-                </p>
-                <p className="text-xs text-gray-600 mt-1">
-                  いつでもシフト希望を提出できます
-                </p>
-              </div>
-            )}
+            ) : null}
           </div>
         </div>
 
